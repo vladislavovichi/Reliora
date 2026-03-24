@@ -1,0 +1,1 @@
+"""Business contracts and protocols."""

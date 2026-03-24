@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+    command: ["poetry", "run", "python", "-m", "app.main"]
+    environment:
+      PYTHONPATH: /app/src
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES__DATABASE:-helpdesk}
+      POSTGRES_USER: ${POSTGRES__USER:-helpdesk}
+      POSTGRES_PASSWORD: ${POSTGRES__PASSWORD:-helpdesk}
+    ports:
+      - "${POSTGRES_EXPOSE_PORT:-5432}:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES__USER:-helpdesk} -d ${POSTGRES__DATABASE:-helpdesk}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_EXPOSE_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
