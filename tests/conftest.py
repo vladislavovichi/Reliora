@@ -9,8 +9,8 @@ from infrastructure.config import Settings
 def sample_settings() -> Settings:
     return Settings(
         app={"dry_run": True},
-        telegram={"token": ""},
-        postgres={
+        bot={"token": ""},
+        database={
             "host": "postgres",
             "port": 5432,
             "user": "helpdesk",
@@ -22,4 +22,5 @@ def sample_settings() -> Settings:
             "port": 6379,
             "db": 2,
         },
+        logging={"level": "DEBUG"},
     )

@@ -7,6 +7,7 @@ from infrastructure.db.session import (
     dispose_engine,
     get_engine,
     get_session_factory,
+    provide_session,
     session_scope,
 )
 
@@ -18,5 +19,6 @@ __all__ = [
     "get_engine",
     "get_session_factory",
     "metadata",
+    "provide_session",
     "session_scope",
 ]

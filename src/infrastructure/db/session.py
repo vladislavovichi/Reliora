@@ -6,10 +6,10 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from infrastructure.config import PostgresConfig, get_settings
+from infrastructure.config import DatabaseConfig, get_settings
 
 
-def build_engine(config: PostgresConfig) -> AsyncEngine:
+def build_engine(config: DatabaseConfig) -> AsyncEngine:
     return create_async_engine(
         config.sqlalchemy_url,
         echo=config.echo,
@@ -24,7 +24,7 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
     settings = get_settings()
-    return build_engine(settings.postgres)
+    return build_engine(settings.database)
 
 
 @lru_cache(maxsize=1)
@@ -45,6 +45,14 @@ async def session_scope(
         except Exception:
             await session.rollback()
             raise
+
+
+async def provide_session(
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> AsyncIterator[AsyncSession]:
+    factory = session_factory or get_session_factory()
+    async with factory() as session:
+        yield session
 
 
 async def dispose_engine(engine: AsyncEngine | None = None) -> None:

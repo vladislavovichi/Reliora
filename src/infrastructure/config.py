@@ -10,15 +10,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AppConfig(BaseModel):
     name: str = "tg-helpdesk"
     environment: str = "dev"
-    log_level: str = "INFO"
     dry_run: bool = True
 
 
-class TelegramConfig(BaseModel):
+class BotConfig(BaseModel):
     token: str = ""
 
 
-class PostgresConfig(BaseModel):
+class DatabaseConfig(BaseModel):
     url: str | None = None
     host: str = "postgres"
     port: int = 5432
@@ -58,6 +57,11 @@ class RedisConfig(BaseModel):
         return f"redis://{self.host}:{self.port}/{self.db}"
 
 
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+    structured: bool = True
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -67,9 +71,22 @@ class Settings(BaseSettings):
     )
 
     app: AppConfig = Field(default_factory=AppConfig)
-    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
+    bot: BotConfig = Field(default_factory=BotConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+
+    @property
+    def telegram(self) -> BotConfig:
+        return self.bot
+
+    @property
+    def postgres(self) -> DatabaseConfig:
+        return self.database
+
+
+TelegramConfig = BotConfig
+PostgresConfig = DatabaseConfig
 
 
 @lru_cache(maxsize=1)

@@ -11,3 +11,11 @@ def build_redis_client(config: RedisConfig) -> Redis:
         encoding="utf-8",
         decode_responses=True,
     )
+
+
+async def ping_redis_client(client: Redis) -> bool:
+    return bool(await client.ping())
+
+
+async def close_redis_client(client: Redis) -> None:
+    await client.aclose()
