@@ -1,44 +1,259 @@
 # tg-helpdesk
 
-Production-style starter for a Telegram helpdesk platform built with Python 3.12, `aiogram`, PostgreSQL, Redis, Poetry, and Docker.
+`tg-helpdesk` is a production-minded starter template for a Telegram helpdesk platform.
+Clients send messages to a bot, those messages create support tickets, and operators work with tickets through Telegram commands and callback actions.
 
-The repository currently focuses on infrastructure and project layout:
+The repository already includes:
 
-- modular `src/` package layout with clear boundaries
-- async-ready SQLAlchemy and Alembic scaffolding
-- Redis client factory for future coordination and workflow primitives
-- Poetry-based dependency management
-- Docker, Docker Compose, pytest, Ruff, mypy, and pre-commit
+- async `aiogram` bootstrap and router separation
+- SQLAlchemy 2.x async models, repositories, and Alembic migrations
+- Redis primitives for locks, rate limiting, operator presence, streams, and SLA placeholders
+- explicit `domain -> application -> infrastructure -> bot` layering
+- Poetry, Docker Compose, Ruff, mypy, pytest, and pre-commit integration
 
-Ticket workflows, persistence models, and business logic are intentionally left for later stages.
+The project is intentionally still early-stage. It is meant to be a strong starter template that is pleasant to extend, not a finished helpdesk product.
 
-## Quick start
+## Project Purpose
+
+The long-term goal is a Telegram-native helpdesk where:
+
+- clients write to the bot and create support tickets
+- operators work inside Telegram
+- ticket assignment, SLA handling, rate limiting, and queue mechanics remain infrastructure-ready from the start
+
+The current codebase already supports:
+
+- client message -> persisted ticket creation
+- operator placeholder actions for taking and closing tickets
+- Redis-backed coordination primitives prepared for future workflow expansion
+
+## Architecture
+
+The repository uses a `src/` layout with clear boundaries:
+
+```text
+src/
+  app/             process bootstrap and runtime assembly
+  bot/             aiogram dispatcher, routers, handlers, middlewares
+  domain/          enums, entity contracts, repository contracts
+  application/     use cases and service orchestration
+  infrastructure/  config, db, redis, logging, adapters
+tests/             lightweight project test suite
+migrations/        Alembic environment and revisions
+```
+
+Request flow today:
+
+1. Telegram update enters the `aiogram` dispatcher.
+2. Thin bot handlers delegate work to the application service layer.
+3. Application services execute use cases against repository contracts.
+4. SQLAlchemy repositories persist data in PostgreSQL.
+5. Redis primitives support rate limiting, locks, stream publishing, presence, and SLA deadline placeholders.
+
+## Local Startup
+
+Prerequisites:
+
+- Python 3.12
+- Poetry
+- PostgreSQL
+- Redis
+
+Setup:
 
 ```bash
 cp .env.example .env
 poetry install
+```
+
+Apply migrations:
+
+```bash
+make migrate
+```
+
+Start the app locally:
+
+```bash
 make run
 ```
 
-`APP__DRY_RUN=true` is enabled by default, so the process boots, configures logging, and stays alive without starting Telegram polling.
-
-The project uses Poetry for dependency management only. It is not configured as an installable application package at this stage.
-
-To run the full container stack:
+The local startup command is:
 
 ```bash
-docker compose up --build
+PYTHONPATH=src poetry run python -m app.main
 ```
 
-## Project layout
+Notes:
 
-```text
-src/
-  app/             # process bootstrap and entrypoints
-  bot/             # aiogram routers, handlers, middlewares
-  domain/          # entities, enums, contracts
-  application/     # use cases and services
-  infrastructure/  # config, db, redis, logging
-tests/             # test suite
-alembic/           # migration environment placeholder
+- `.env.example` enables `APP__DRY_RUN=true` by default.
+- Even in dry-run mode, the runtime still initializes Redis and database wiring.
+- Set `BOT__TOKEN` and `APP__DRY_RUN=false` to enable real Telegram polling.
+
+## Docker Compose Usage
+
+Start the full stack:
+
+```bash
+make docker-up
 ```
+
+Stop it:
+
+```bash
+make docker-down
+```
+
+Tail app logs:
+
+```bash
+make logs
+```
+
+Compose services:
+
+- `app`
+- `postgres`
+- `redis`
+
+The container command matches the local entrypoint:
+
+```bash
+poetry run python -m app.main
+```
+
+## Environment Variables
+
+Configuration uses `pydantic-settings` with nested groups:
+
+- `app`
+- `bot`
+- `database`
+- `redis`
+- `logging`
+
+Important variables:
+
+```dotenv
+APP__NAME=tg-helpdesk
+APP__ENVIRONMENT=dev
+APP__DRY_RUN=true
+
+BOT__TOKEN=
+
+DATABASE__URL=
+DATABASE__HOST=postgres
+DATABASE__PORT=5432
+DATABASE__USER=helpdesk
+DATABASE__PASSWORD=helpdesk
+DATABASE__DATABASE=helpdesk
+DATABASE__ECHO=false
+
+REDIS__URL=
+REDIS__HOST=redis
+REDIS__PORT=6379
+REDIS__DB=0
+REDIS__PASSWORD=
+
+LOGGING__LEVEL=INFO
+LOGGING__STRUCTURED=true
+```
+
+Port publishing variables:
+
+- `POSTGRES_EXPOSE_PORT`
+- `REDIS_EXPOSE_PORT`
+
+## Migration Commands
+
+Apply all migrations:
+
+```bash
+make migrate
+```
+
+Create a new autogenerated migration:
+
+```bash
+make make-migration name=add_some_table
+```
+
+Direct Alembic commands are also available:
+
+```bash
+PYTHONPATH=src poetry run alembic current
+PYTHONPATH=src poetry run alembic history
+PYTHONPATH=src poetry run alembic upgrade head
+```
+
+## Development Workflow
+
+Install dependencies:
+
+```bash
+make install
+```
+
+Format code:
+
+```bash
+make format
+```
+
+Run linting and type checks:
+
+```bash
+make lint
+```
+
+Run tests:
+
+```bash
+make test
+```
+
+Run the standard local quality gate:
+
+```bash
+make check
+```
+
+Install pre-commit hooks:
+
+```bash
+make pre-commit-install
+```
+
+Run pre-commit across the whole repository:
+
+```bash
+make pre-commit-run
+```
+
+## Practical Make Targets
+
+- `make install`
+- `make format`
+- `make lint`
+- `make test`
+- `make check`
+- `make run`
+- `make migrate`
+- `make make-migration name=...`
+- `make docker-up`
+- `make docker-down`
+- `make logs`
+
+## Current Starter Capabilities
+
+- client text messages create persisted tickets
+- operator actions can assign and close tickets
+- repository and service layers are already split cleanly
+- Redis abstractions are ready for future queue, lock, and SLA workflow expansion
+
+## Suggested Next Steps
+
+- add real operator reply flows and FSM support
+- introduce background workers for Redis streams and SLA timeout handling
+- add integration tests against a dedicated PostgreSQL test database
+- expand operator tooling and audit/event processing

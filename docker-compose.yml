@@ -19,16 +19,16 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES__DATABASE:-helpdesk}
-      POSTGRES_USER: ${POSTGRES__USER:-helpdesk}
-      POSTGRES_PASSWORD: ${POSTGRES__PASSWORD:-helpdesk}
+      POSTGRES_DB: ${DATABASE__DATABASE:-helpdesk}
+      POSTGRES_USER: ${DATABASE__USER:-helpdesk}
+      POSTGRES_PASSWORD: ${DATABASE__PASSWORD:-helpdesk}
     ports:
       - "${POSTGRES_EXPOSE_PORT:-5432}:5432"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES__USER:-helpdesk} -d ${POSTGRES__DATABASE:-helpdesk}",
+          "pg_isready -U ${DATABASE__USER:-helpdesk} -d ${DATABASE__DATABASE:-helpdesk}",
         ]
       interval: 10s
       timeout: 5s

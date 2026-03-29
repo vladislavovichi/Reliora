@@ -3,6 +3,7 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-merge-conflict
+      - id: check-toml
       - id: check-yaml
       - id: end-of-file-fixer
       - id: trailing-whitespace
@@ -19,5 +20,10 @@ repos:
       - id: mypy
         name: mypy
         entry: poetry run mypy src tests
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest
         language: system
         pass_filenames: false

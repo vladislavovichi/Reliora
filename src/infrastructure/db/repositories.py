@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,9 @@ class SqlAlchemyTicketRepository(TicketRepository):
         priority: TicketPriority = TicketPriority.NORMAL,
     ) -> Ticket:
         ticket = Ticket(
+            public_id=uuid4(),
             client_chat_id=client_chat_id,
+            status=TicketStatus.NEW,
             subject=subject,
             priority=priority,
         )

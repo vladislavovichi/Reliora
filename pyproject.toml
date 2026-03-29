@@ -21,6 +21,7 @@ pre-commit = "^4.3.0"
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-q"
 
 [tool.ruff]
 line-length = 100
