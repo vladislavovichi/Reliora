@@ -18,9 +18,7 @@ COPY pyproject.toml README.md ./
 RUN poetry install --only main
 
 COPY alembic.ini ./
-COPY alembic ./alembic
+COPY migrations ./migrations
 COPY src ./src
-
-RUN poetry install --only main
 
 CMD ["poetry", "run", "python", "-m", "app.main"]

@@ -40,3 +40,9 @@ dist/
 # Local Docker data
 postgres_data/
 redis_data/
+
+# Codex
+.codex
+
+# Benchmark results
+.benchmarks/

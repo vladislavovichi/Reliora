@@ -47,7 +47,7 @@ strict_equality = true
 check_untyped_defs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-exclude = ["^alembic/"]
+exclude = ["^migrations/"]
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
