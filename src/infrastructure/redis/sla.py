@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
@@ -36,7 +36,7 @@ class RedisSLATimeoutProcessor(SLATimeoutProcessor):
 
     async def run_once(self, *, limit: int = 100) -> int:
         due_ticket_ids = await self.scheduler.get_due(
-            until=datetime.now(timezone.utc),
+            until=datetime.now(UTC),
             limit=limit,
         )
         # TODO: fan out SLA timeout events into queue/stream processing when workflow workers exist.

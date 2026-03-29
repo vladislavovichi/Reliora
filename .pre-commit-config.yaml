@@ -19,11 +19,11 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: poetry run mypy src tests
+        entry: env POETRY_VIRTUALENVS_IN_PROJECT=true PYTHONPATH=src poetry run mypy src tests
         language: system
         pass_filenames: false
       - id: pytest
         name: pytest
-        entry: poetry run pytest
+        entry: env POETRY_VIRTUALENVS_IN_PROJECT=true PYTHONPATH=src poetry run pytest
         language: system
         pass_filenames: false

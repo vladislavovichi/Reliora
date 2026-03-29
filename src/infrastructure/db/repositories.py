@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -13,12 +14,14 @@ from domain.contracts.repositories import (
     TicketMessageRepository,
     TicketRepository,
 )
+from domain.entities.ticket import Ticket as TicketEntity
 from domain.enums.tickets import TicketMessageSenderType, TicketPriority, TicketStatus
-from infrastructure.db.models import Operator, Tag, Ticket, TicketMessage
+from infrastructure.db.models import Operator, Tag, TicketMessage
+from infrastructure.db.models import Ticket as TicketModel
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class SqlAlchemyTicketRepository(TicketRepository):
@@ -31,8 +34,8 @@ class SqlAlchemyTicketRepository(TicketRepository):
         client_chat_id: int,
         subject: str,
         priority: TicketPriority = TicketPriority.NORMAL,
-    ) -> Ticket:
-        ticket = Ticket(
+    ) -> TicketEntity:
+        ticket = TicketModel(
             public_id=uuid4(),
             client_chat_id=client_chat_id,
             status=TicketStatus.NEW,
@@ -41,14 +44,17 @@ class SqlAlchemyTicketRepository(TicketRepository):
         )
         self.session.add(ticket)
         await self.session.flush()
-        return ticket
+        return cast(TicketEntity, ticket)
 
-    async def get_by_public_id(self, public_id: UUID) -> Ticket | None:
-        statement = select(Ticket).where(Ticket.public_id == public_id)
+    async def get_by_public_id(self, public_id: UUID) -> TicketEntity | None:
+        statement = select(TicketModel).where(TicketModel.public_id == public_id)
         result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
+        ticket = result.scalar_one_or_none()
+        return cast(TicketEntity | None, ticket)
 
-    async def assign_to_operator(self, *, ticket_public_id: UUID, operator_id: int) -> Ticket | None:
+    async def assign_to_operator(
+        self, *, ticket_public_id: UUID, operator_id: int
+    ) -> TicketEntity | None:
         ticket = await self.get_by_public_id(ticket_public_id)
         if ticket is None:
             return None
@@ -58,7 +64,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         await self.session.flush()
         return ticket
 
-    async def close(self, *, ticket_public_id: UUID) -> Ticket | None:
+    async def close(self, *, ticket_public_id: UUID) -> TicketEntity | None:
         ticket = await self.get_by_public_id(ticket_public_id)
         if ticket is None:
             return None
@@ -69,7 +75,9 @@ class SqlAlchemyTicketRepository(TicketRepository):
         return ticket
 
     async def count_by_status(self) -> Mapping[TicketStatus, int]:
-        statement = select(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status)
+        statement = select(TicketModel.status, func.count(TicketModel.id)).group_by(
+            TicketModel.status
+        )
         result = await self.session.execute(statement)
         return {status: count for status, count in result.all()}
 

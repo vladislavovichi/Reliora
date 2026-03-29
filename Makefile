@@ -1,6 +1,8 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose
-ALEMBIC ?= PYTHONPATH=src $(POETRY) run alembic
+export POETRY_VIRTUALENVS_IN_PROJECT ?= true
+export PYTHONPATH ?= src
+ALEMBIC ?= $(POETRY) run alembic
 APP_MODULE ?= app.main
 
 .PHONY: help install lint format typecheck test check run migrate make-migration docker-up docker-down logs up down pre-commit-install pre-commit-run
@@ -15,7 +17,7 @@ help:
 	@printf "  run                Start the application locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
 	@printf "  make-migration     Create a new Alembic revision (use name=...)\n"
-	@printf "  docker-up          Start the Docker Compose stack\n"
+	@printf "  docker-up          Start the Docker Compose stack in the background\n"
 	@printf "  docker-down        Stop the Docker Compose stack\n"
 	@printf "  logs               Tail application logs from Docker Compose\n"
 	@printf "  pre-commit-install Install pre-commit hooks\n"
@@ -39,7 +41,7 @@ test:
 	$(POETRY) run pytest
 
 run:
-	PYTHONPATH=src $(POETRY) run python -m $(APP_MODULE)
+	$(POETRY) run python -m $(APP_MODULE)
 
 migrate:
 	$(ALEMBIC) upgrade head
@@ -51,7 +53,7 @@ make-migration:
 check: lint test
 
 docker-up:
-	$(COMPOSE) up --build
+	$(COMPOSE) up --build -d
 
 docker-down:
 	$(COMPOSE) down

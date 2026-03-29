@@ -21,7 +21,9 @@ class TicketRepository(Protocol):
     async def get_by_public_id(self, public_id: UUID) -> Ticket | None:
         """Return a ticket by its public identifier."""
 
-    async def assign_to_operator(self, *, ticket_public_id: UUID, operator_id: int) -> Ticket | None:
+    async def assign_to_operator(
+        self, *, ticket_public_id: UUID, operator_id: int
+    ) -> Ticket | None:
         """Assign a ticket to an operator and update its status."""
 
     async def close(self, *, ticket_public_id: UUID) -> Ticket | None:

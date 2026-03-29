@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from enum import Enum as PythonEnum
-from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -15,7 +15,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -29,7 +30,7 @@ from infrastructure.db.base import Base
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def enum_values(enum_cls: type[PythonEnum]) -> list[str]:
@@ -59,16 +60,24 @@ class Operator(CreatedAtMixin, Base):
     __tablename__ = "operators"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_user_id: Mapped[int] = mapped_column(
+        BigInteger, unique=True, nullable=False, index=True
+    )
     username: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_active: Mapped[bool] = mapped_column(nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
 
     assigned_tickets: Mapped[list[Ticket]] = relationship(
         back_populates="assigned_operator",
         foreign_keys="Ticket.assigned_operator_id",
     )
-    sent_messages: Mapped[list[TicketMessage]] = relationship(back_populates="sender_operator")
+    sent_messages: Mapped[list[TicketMessage]] = relationship(
+        back_populates="sender_operator"
+    )
 
 
 class Macro(CreatedAtMixin, Base):
@@ -105,7 +114,9 @@ class Ticket(TimestampMixin, Base):
     __tablename__ = "tickets"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    public_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), default=uuid4, unique=True, nullable=False)
+    public_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), default=uuid4, unique=True, nullable=False
+    )
     client_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     status: Mapped[TicketStatus] = mapped_column(
         Enum(
@@ -136,7 +147,9 @@ class Ticket(TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_response_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     assigned_operator: Mapped[Operator | None] = relationship(

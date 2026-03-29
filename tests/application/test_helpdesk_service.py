@@ -21,7 +21,13 @@ class StubTicketRepository:
         self.assign_calls: list[dict[str, object]] = []
         self.close_calls: list[UUID] = []
 
-    async def create(self, *, client_chat_id: int, subject: str, priority: object = None) -> SimpleNamespace:
+    async def create(
+        self,
+        *,
+        client_chat_id: int,
+        subject: str,
+        priority: object = None,
+    ) -> SimpleNamespace:
         self.create_calls.append(
             {
                 "client_chat_id": client_chat_id,

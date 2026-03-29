@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from domain.contracts.repositories import (
@@ -13,7 +13,7 @@ from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def build_ticket_subject(message_text: str) -> str:
@@ -174,5 +174,7 @@ class BasicStatsUseCase:
     async def __call__(self) -> TicketStats:
         by_status = dict(await self.ticket_repository.count_by_status())
         total = sum(by_status.values())
-        open_total = sum(count for status, count in by_status.items() if status != TicketStatus.CLOSED)
+        open_total = sum(
+            count for status, count in by_status.items() if status != TicketStatus.CLOSED
+        )
         return TicketStats(total=total, open_total=open_total, by_status=by_status)

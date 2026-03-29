@@ -15,15 +15,12 @@ def test_redis_url_is_built_from_parts(sample_settings: Settings) -> None:
 
 
 def test_explicit_urls_override_component_settings() -> None:
-    settings = Settings(
-        database={"url": "postgresql+asyncpg://user:pass@db:5432/app"},
-        redis={"url": "redis://cache:6379/4"},
+    settings = Settings.model_validate(
+        {
+            "database": {"url": "postgresql+asyncpg://user:pass@db:5432/app"},
+            "redis": {"url": "redis://cache:6379/4"},
+        }
     )
 
     assert settings.database.sqlalchemy_url == "postgresql+asyncpg://user:pass@db:5432/app"
     assert settings.redis.url_with_auth == "redis://cache:6379/4"
-
-
-def test_compatibility_aliases_stay_in_sync(sample_settings: Settings) -> None:
-    assert sample_settings.telegram is sample_settings.bot
-    assert sample_settings.postgres is sample_settings.database

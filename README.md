@@ -37,7 +37,7 @@ src/
   bot/             aiogram dispatcher, routers, handlers, middlewares
   domain/          enums, entity contracts, repository contracts
   application/     use cases and service orchestration
-  infrastructure/  config, db, redis, logging, adapters
+  infrastructure/  config, db, redis, and logging integrations
 tests/             lightweight project test suite
 migrations/        Alembic environment and revisions
 ```
@@ -56,14 +56,13 @@ Prerequisites:
 
 - Python 3.12
 - Poetry
-- PostgreSQL
-- Redis
+- PostgreSQL and Redis, or Docker Compose for the full stack
 
 Setup:
 
 ```bash
 cp .env.example .env
-poetry install
+make install
 ```
 
 Apply migrations:
@@ -87,7 +86,7 @@ PYTHONPATH=src poetry run python -m app.main
 Notes:
 
 - `.env.example` enables `APP__DRY_RUN=true` by default.
-- Even in dry-run mode, the runtime still initializes Redis and database wiring.
+- Startup validates Redis connectivity and builds the database engine/session wiring.
 - Set `BOT__TOKEN` and `APP__DRY_RUN=false` to enable real Telegram polling.
 
 ## Docker Compose Usage
@@ -98,16 +97,16 @@ Start the full stack:
 make docker-up
 ```
 
+The stack starts in the background. Tail the application logs in a separate terminal with:
+
+```bash
+make logs
+```
+
 Stop it:
 
 ```bash
 make docker-down
-```
-
-Tail app logs:
-
-```bash
-make logs
 ```
 
 Compose services:
@@ -122,9 +121,11 @@ The container command matches the local entrypoint:
 poetry run python -m app.main
 ```
 
+The Compose service also exports `PYTHONPATH=/app/src`, which matches the local `src/` layout assumption.
+
 ## Environment Variables
 
-Configuration uses `pydantic-settings` with nested groups:
+Configuration uses `pydantic-settings` with nested groups. The canonical groups are:
 
 - `app`
 - `bot`
@@ -181,9 +182,9 @@ make make-migration name=add_some_table
 Direct Alembic commands are also available:
 
 ```bash
-PYTHONPATH=src poetry run alembic current
-PYTHONPATH=src poetry run alembic history
-PYTHONPATH=src poetry run alembic upgrade head
+poetry run alembic current
+poetry run alembic history
+poetry run alembic upgrade head
 ```
 
 ## Development Workflow
@@ -193,6 +194,8 @@ Install dependencies:
 ```bash
 make install
 ```
+
+The Make targets default to an in-project Poetry virtualenv at `.venv/`.
 
 Format code:
 

@@ -73,7 +73,7 @@ async def test_assign_to_operator_updates_ticket_status() -> None:
         operator_id=77,
     )
 
-    assert result is ticket
+    assert cast(object, result) is ticket
     assert ticket.assigned_operator_id == 77
     assert ticket.status == TicketStatus.ASSIGNED
     assert session.flush_count == 1
@@ -91,7 +91,7 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
 
     result = await repository.close(ticket_public_id=ticket.public_id)
 
-    assert result is ticket
+    assert cast(object, result) is ticket
     assert ticket.status == TicketStatus.CLOSED
     assert ticket.closed_at is not None
     assert session.flush_count == 1

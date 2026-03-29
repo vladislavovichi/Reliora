@@ -7,10 +7,9 @@ Create Date: 2026-03-29 18:30:00
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 # revision identifiers, used by Alembic.
 revision = "20260329_01"
@@ -77,7 +76,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_operators")),
         sa.UniqueConstraint("telegram_user_id", name=op.f("uq_operators_telegram_user_id")),
     )
-    op.create_index(op.f("ix_operators_telegram_user_id"), "operators", ["telegram_user_id"], unique=False)
+    op.create_index(
+        op.f("ix_operators_telegram_user_id"),
+        "operators",
+        ["telegram_user_id"],
+        unique=False,
+    )
     op.create_index(op.f("ix_operators_username"), "operators", ["username"], unique=False)
 
     op.create_table(
@@ -161,7 +165,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_tickets")),
         sa.UniqueConstraint("public_id", name=op.f("uq_tickets_public_id")),
     )
-    op.create_index(op.f("ix_tickets_assigned_operator_id"), "tickets", ["assigned_operator_id"], unique=False)
+    op.create_index(
+        op.f("ix_tickets_assigned_operator_id"),
+        "tickets",
+        ["assigned_operator_id"],
+        unique=False,
+    )
     op.create_index(op.f("ix_tickets_client_chat_id"), "tickets", ["client_chat_id"], unique=False)
     op.create_index(op.f("ix_tickets_priority"), "tickets", ["priority"], unique=False)
     op.create_index(op.f("ix_tickets_status"), "tickets", ["status"], unique=False)
@@ -186,8 +195,15 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_ticket_events")),
     )
-    op.create_index(op.f("ix_ticket_events_event_type"), "ticket_events", ["event_type"], unique=False)
-    op.create_index(op.f("ix_ticket_events_ticket_id"), "ticket_events", ["ticket_id"], unique=False)
+    op.create_index(
+        op.f("ix_ticket_events_event_type"),
+        "ticket_events",
+        ["event_type"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_ticket_events_ticket_id"), "ticket_events", ["ticket_id"], unique=False
+    )
 
     op.create_table(
         "ticket_messages",
@@ -203,7 +219,10 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.CheckConstraint("length(text) > 0", name=op.f("ck_ticket_messages_ticket_message_text_not_empty")),
+        sa.CheckConstraint(
+            "length(text) > 0",
+            name=op.f("ck_ticket_messages_ticket_message_text_not_empty"),
+        ),
         sa.ForeignKeyConstraint(
             ["sender_operator_id"],
             ["operators.id"],
@@ -224,8 +243,18 @@ def upgrade() -> None:
             name=op.f("uq_ticket_messages_ticket_telegram_sender"),
         ),
     )
-    op.create_index(op.f("ix_ticket_messages_sender_operator_id"), "ticket_messages", ["sender_operator_id"], unique=False)
-    op.create_index(op.f("ix_ticket_messages_ticket_id"), "ticket_messages", ["ticket_id"], unique=False)
+    op.create_index(
+        op.f("ix_ticket_messages_sender_operator_id"),
+        "ticket_messages",
+        ["sender_operator_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_ticket_messages_ticket_id"),
+        "ticket_messages",
+        ["ticket_id"],
+        unique=False,
+    )
 
     op.create_table(
         "ticket_tags",
@@ -253,7 +282,10 @@ def downgrade() -> None:
     op.drop_table("ticket_tags")
 
     op.drop_index(op.f("ix_ticket_messages_ticket_id"), table_name="ticket_messages")
-    op.drop_index(op.f("ix_ticket_messages_sender_operator_id"), table_name="ticket_messages")
+    op.drop_index(
+        op.f("ix_ticket_messages_sender_operator_id"),
+        table_name="ticket_messages",
+    )
     op.drop_table("ticket_messages")
 
     op.drop_index(op.f("ix_ticket_events_ticket_id"), table_name="ticket_events")

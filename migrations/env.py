@@ -1,24 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-SRC_DIR = ROOT_DIR / "src"
-
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
+import infrastructure.db.models  # noqa: F401
 from infrastructure.config import get_settings
 from infrastructure.db.base import Base
-import infrastructure.db.models  # noqa: F401
 
 config = context.config
 

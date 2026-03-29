@@ -10,7 +10,11 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper, TicketLockManager
+from infrastructure.redis.contracts import (
+    GlobalRateLimiter,
+    OperatorPresenceHelper,
+    TicketLockManager,
+)
 
 router = Router(name="operator")
 

@@ -26,7 +26,8 @@ async def run() -> None:
 
         if settings.app.dry_run:
             logger.info(
-                "Dry-run mode is enabled. Infrastructure is initialized, but Telegram polling stays disabled."
+                "Dry-run mode is enabled. "
+                "Infrastructure is initialized, but Telegram polling stays disabled."
             )
             await asyncio.Event().wait()
             return

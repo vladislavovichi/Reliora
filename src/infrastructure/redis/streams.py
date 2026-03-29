@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from redis.asyncio import Redis
 
 from infrastructure.redis.contracts import TicketStreamConsumer, TicketStreamPublisher
@@ -17,7 +19,7 @@ class RedisTicketStreamPublisher(TicketStreamPublisher):
         client_chat_id: int,
         subject: str,
     ) -> str:
-        return await self.redis.xadd(
+        message_id = await self.redis.xadd(
             STREAM_TICKETS_NEW,
             {
                 "ticket_id": ticket_id,
@@ -25,6 +27,7 @@ class RedisTicketStreamPublisher(TicketStreamPublisher):
                 "subject": subject,
             },
         )
+        return cast(str, message_id)
 
 
 class RedisTicketStreamConsumer(TicketStreamConsumer):
@@ -47,5 +50,5 @@ class RedisTicketStreamConsumer(TicketStreamConsumer):
             return []
 
         _, stream_messages = entries[0]
-        # TODO: switch to consumer groups and acknowledgements when background workers are introduced.
+        # TODO: switch to consumer groups when background workers are introduced.
         return [(message_id, dict(payload)) for message_id, payload in stream_messages]

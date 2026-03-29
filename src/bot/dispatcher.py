@@ -5,9 +5,9 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher
 
-from infrastructure.config import BotConfig, Settings
 from bot.middlewares import UpdateContextMiddleware
 from bot.routers import build_root_router
+from infrastructure.config import BotConfig, Settings
 
 
 def build_bot(config: BotConfig) -> Bot:

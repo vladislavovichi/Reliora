@@ -13,7 +13,7 @@ class RedisFixedWindowRateLimiter:
         self.window_seconds = window_seconds
 
     async def allow_key(self, key: str) -> bool:
-        current = await self.redis.incr(key)
+        current = int(await self.redis.incr(key))
         if current == 1:
             await self.redis.expire(key, self.window_seconds)
         return current <= self.limit

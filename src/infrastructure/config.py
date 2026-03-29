@@ -76,18 +76,6 @@ class Settings(BaseSettings):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
-    @property
-    def telegram(self) -> BotConfig:
-        return self.bot
-
-    @property
-    def postgres(self) -> DatabaseConfig:
-        return self.database
-
-
-TelegramConfig = BotConfig
-PostgresConfig = DatabaseConfig
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
