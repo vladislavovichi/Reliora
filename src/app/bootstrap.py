@@ -13,7 +13,6 @@ from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config import Settings
 from infrastructure.db.repositories import (
     SqlAlchemyOperatorRepository,
-    SqlAlchemyTagRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
 )
@@ -70,7 +69,6 @@ def build_helpdesk_service(session: AsyncSession) -> HelpdeskService:
         ticket_repository=SqlAlchemyTicketRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
-        tag_repository=SqlAlchemyTagRepository(session),
     )
 
 
@@ -115,16 +113,12 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             bot = build_bot(settings.bot)
             dispatcher = build_dispatcher(
                 settings=settings,
-                db_session_factory=db_session_factory,
                 helpdesk_service_factory=helpdesk_service_factory,
                 global_rate_limiter=redis_workflow.global_rate_limiter,
                 chat_rate_limiter=redis_workflow.chat_rate_limiter,
                 operator_presence=redis_workflow.operator_presence,
                 ticket_lock_manager=redis_workflow.ticket_lock_manager,
                 ticket_stream_publisher=redis_workflow.ticket_stream_publisher,
-                sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
-                sla_timeout_processor=redis_workflow.sla_timeout_processor,
-                redis=redis,
             )
 
         return AppRuntime(

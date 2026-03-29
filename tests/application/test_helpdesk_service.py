@@ -111,12 +111,6 @@ class StubOperatorRepository:
         return self.operator_id
 
 
-@dataclass
-class StubTagRepository:
-    async def get_or_create(self, *, name: str) -> int:
-        return 1
-
-
 def build_ticket(*, ticket_id: int, public_id: UUID, status: TicketStatus) -> SimpleNamespace:
     return SimpleNamespace(
         id=ticket_id,
@@ -143,7 +137,6 @@ async def test_create_ticket_from_client_message_returns_ticket_summary() -> Non
         ticket_repository=ticket_repository,
         ticket_message_repository=message_repository,
         operator_repository=StubOperatorRepository(operator_id=10),
-        tag_repository=StubTagRepository(),
     )
 
     result = await service.create_ticket_from_client_message(
@@ -170,7 +163,6 @@ async def test_assign_ticket_to_operator_uses_operator_repository() -> None:
         ticket_repository=ticket_repository,
         ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
         operator_repository=operator_repository,
-        tag_repository=StubTagRepository(),
     )
 
     result = await service.assign_ticket_to_operator(
@@ -199,7 +191,6 @@ async def test_get_basic_stats_returns_aggregated_totals() -> None:
         ticket_repository=ticket_repository,
         ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
         operator_repository=StubOperatorRepository(operator_id=1),
-        tag_repository=StubTagRepository(),
     )
 
     stats = await service.get_basic_stats()
