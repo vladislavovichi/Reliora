@@ -5,7 +5,12 @@ from typing import Protocol
 from uuid import UUID
 
 from domain.entities.ticket import Ticket
-from domain.enums.tickets import TicketMessageSenderType, TicketPriority, TicketStatus
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketPriority,
+    TicketStatus,
+)
 
 
 class TicketRepository(Protocol):
@@ -21,10 +26,19 @@ class TicketRepository(Protocol):
     async def get_by_public_id(self, public_id: UUID) -> Ticket | None:
         """Return a ticket by its public identifier."""
 
+    async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
+        """Return the most recent open ticket for a client chat, if any."""
+
+    async def enqueue(self, *, ticket_public_id: UUID) -> Ticket | None:
+        """Move a ticket into the queue."""
+
     async def assign_to_operator(
         self, *, ticket_public_id: UUID, operator_id: int
     ) -> Ticket | None:
         """Assign a ticket to an operator and update its status."""
+
+    async def escalate(self, *, ticket_public_id: UUID) -> Ticket | None:
+        """Escalate a ticket and persist its new status."""
 
     async def close(self, *, ticket_public_id: UUID) -> Ticket | None:
         """Close a ticket and persist its closure timestamp."""
@@ -60,3 +74,14 @@ class OperatorRepository(Protocol):
 class TagRepository(Protocol):
     async def get_or_create(self, *, name: str) -> int:
         """Return a tag identifier, creating the tag if it does not exist."""
+
+
+class TicketEventRepository(Protocol):
+    async def add(
+        self,
+        *,
+        ticket_id: int,
+        event_type: TicketEventType,
+        payload_json: Mapping[str, object] | None = None,
+    ) -> None:
+        """Persist a workflow event for a ticket."""

@@ -6,6 +6,7 @@ from application.use_cases.tickets import (
     BasicStatsUseCase,
     CloseTicketUseCase,
     CreateTicketFromClientMessageUseCase,
+    EscalateTicketUseCase,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "BasicStatsUseCase",
     "CloseTicketUseCase",
     "CreateTicketFromClientMessageUseCase",
+    "EscalateTicketUseCase",
 ]

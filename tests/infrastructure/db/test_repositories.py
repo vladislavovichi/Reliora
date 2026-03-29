@@ -6,9 +6,12 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.enums.tickets import TicketPriority, TicketStatus
-from infrastructure.db.models import Ticket
-from infrastructure.db.repositories import SqlAlchemyTicketRepository
+from domain.enums.tickets import TicketEventType, TicketPriority, TicketStatus
+from infrastructure.db.models import Ticket, TicketEvent
+from infrastructure.db.repositories import (
+    SqlAlchemyTicketEventRepository,
+    SqlAlchemyTicketRepository,
+)
 
 
 @dataclass
@@ -51,11 +54,28 @@ async def test_create_adds_ticket_to_session() -> None:
         priority=TicketPriority.NORMAL,
     )
 
-    assert session.added == [ticket]
+    assert session.added == [cast(object, ticket)]
     assert session.flush_count == 1
     assert ticket.client_chat_id == 100
     assert ticket.subject == "Need access"
     assert ticket.status == TicketStatus.NEW
+
+
+async def test_enqueue_updates_ticket_status() -> None:
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.enqueue(ticket_public_id=ticket.public_id)
+
+    assert cast(object, result) is ticket
+    assert ticket.status == TicketStatus.QUEUED
+    assert session.flush_count == 1
 
 
 async def test_assign_to_operator_updates_ticket_status() -> None:
@@ -76,6 +96,23 @@ async def test_assign_to_operator_updates_ticket_status() -> None:
     assert cast(object, result) is ticket
     assert ticket.assigned_operator_id == 77
     assert ticket.status == TicketStatus.ASSIGNED
+    assert session.flush_count == 1
+
+
+async def test_escalate_updates_ticket_status() -> None:
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.escalate(ticket_public_id=ticket.public_id)
+
+    assert cast(object, result) is ticket
+    assert ticket.status == TicketStatus.ESCALATED
     assert session.flush_count == 1
 
 
@@ -114,3 +151,21 @@ async def test_count_by_status_returns_mapping() -> None:
         TicketStatus.NEW: 2,
         TicketStatus.CLOSED: 1,
     }
+
+
+async def test_ticket_event_repository_persists_event_rows() -> None:
+    session = FakeAsyncSession()
+    repository = SqlAlchemyTicketEventRepository(cast(AsyncSession, session))
+
+    await repository.add(
+        ticket_id=10,
+        event_type=TicketEventType.QUEUED,
+        payload_json={"from_status": "new", "to_status": "queued"},
+    )
+
+    assert len(session.added) == 1
+    event = cast(TicketEvent, session.added[0])
+    assert event.ticket_id == 10
+    assert event.event_type == TicketEventType.QUEUED
+    assert event.payload_json == {"from_status": "new", "to_status": "queued"}
+    assert session.flush_count == 1

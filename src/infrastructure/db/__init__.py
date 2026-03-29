@@ -4,6 +4,7 @@ from infrastructure.db.base import Base, metadata
 from infrastructure.db.repositories import (
     SqlAlchemyOperatorRepository,
     SqlAlchemyTagRepository,
+    SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "Base",
     "SqlAlchemyOperatorRepository",
     "SqlAlchemyTagRepository",
+    "SqlAlchemyTicketEventRepository",
     "SqlAlchemyTicketMessageRepository",
     "SqlAlchemyTicketRepository",
     "build_engine",

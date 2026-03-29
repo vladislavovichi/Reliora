@@ -11,12 +11,13 @@ from application.use_cases.tickets import (
     BasicStatsUseCase,
     CloseTicketUseCase,
     CreateTicketFromClientMessageUseCase,
+    EscalateTicketUseCase,
     TicketStats,
     TicketSummary,
-    format_public_ticket_number,
 )
 from domain.contracts.repositories import (
     OperatorRepository,
+    TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
 )
@@ -29,6 +30,7 @@ HelpdeskServiceFactory = Callable[[], AbstractAsyncContextManager["HelpdeskServi
 class HelpdeskService:
     ticket_repository: TicketRepository
     ticket_message_repository: TicketMessageRepository
+    ticket_event_repository: TicketEventRepository
     operator_repository: OperatorRepository
     _create_ticket_from_client_message: CreateTicketFromClientMessageUseCase = field(
         init=False,
@@ -36,6 +38,7 @@ class HelpdeskService:
     )
     _add_message_to_ticket: AddMessageToTicketUseCase = field(init=False, repr=False)
     _assign_ticket_to_operator: AssignTicketToOperatorUseCase = field(init=False, repr=False)
+    _escalate_ticket: EscalateTicketUseCase = field(init=False, repr=False)
     _close_ticket: CloseTicketUseCase = field(init=False, repr=False)
     _get_basic_stats: BasicStatsUseCase = field(init=False, repr=False)
 
@@ -43,16 +46,26 @@ class HelpdeskService:
         self._create_ticket_from_client_message = CreateTicketFromClientMessageUseCase(
             ticket_repository=self.ticket_repository,
             ticket_message_repository=self.ticket_message_repository,
+            ticket_event_repository=self.ticket_event_repository,
         )
         self._add_message_to_ticket = AddMessageToTicketUseCase(
             ticket_repository=self.ticket_repository,
             ticket_message_repository=self.ticket_message_repository,
+            ticket_event_repository=self.ticket_event_repository,
         )
         self._assign_ticket_to_operator = AssignTicketToOperatorUseCase(
             ticket_repository=self.ticket_repository,
+            ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
         )
-        self._close_ticket = CloseTicketUseCase(ticket_repository=self.ticket_repository)
+        self._escalate_ticket = EscalateTicketUseCase(
+            ticket_repository=self.ticket_repository,
+            ticket_event_repository=self.ticket_event_repository,
+        )
+        self._close_ticket = CloseTicketUseCase(
+            ticket_repository=self.ticket_repository,
+            ticket_event_repository=self.ticket_event_repository,
+        )
         self._get_basic_stats = BasicStatsUseCase(ticket_repository=self.ticket_repository)
 
     async def create_ticket_from_client_message(
@@ -103,32 +116,8 @@ class HelpdeskService:
     async def close_ticket(self, *, ticket_public_id: UUID) -> TicketSummary | None:
         return await self._close_ticket(ticket_public_id=ticket_public_id)
 
+    async def escalate_ticket(self, *, ticket_public_id: UUID) -> TicketSummary | None:
+        return await self._escalate_ticket(ticket_public_id=ticket_public_id)
+
     async def get_basic_stats(self) -> TicketStats:
         return await self._get_basic_stats()
-
-    async def acknowledge_reply_action(self, *, ticket_public_id: UUID) -> str:
-        return await self._acknowledge_placeholder_action(
-            ticket_public_id=ticket_public_id,
-            action_name="Reply",
-        )
-
-    async def acknowledge_escalate_action(self, *, ticket_public_id: UUID) -> str:
-        return await self._acknowledge_placeholder_action(
-            ticket_public_id=ticket_public_id,
-            action_name="Escalation",
-        )
-
-    async def _acknowledge_placeholder_action(
-        self,
-        *,
-        ticket_public_id: UUID,
-        action_name: str,
-    ) -> str:
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
-        if ticket is None:
-            return "Ticket not found."
-
-        return (
-            f"{action_name} flow for ticket {format_public_ticket_number(ticket.public_id)} "
-            "is not implemented yet."
-        )

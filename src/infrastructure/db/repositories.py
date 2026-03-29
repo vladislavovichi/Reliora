@@ -5,18 +5,24 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.contracts.repositories import (
     OperatorRepository,
     TagRepository,
+    TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
 )
 from domain.entities.ticket import Ticket as TicketEntity
-from domain.enums.tickets import TicketMessageSenderType, TicketPriority, TicketStatus
-from infrastructure.db.models import Operator, Tag, TicketMessage
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketPriority,
+    TicketStatus,
+)
+from infrastructure.db.models import Operator, Tag, TicketEvent, TicketMessage
 from infrastructure.db.models import Ticket as TicketModel
 
 
@@ -52,6 +58,27 @@ class SqlAlchemyTicketRepository(TicketRepository):
         ticket = result.scalar_one_or_none()
         return cast(TicketEntity | None, ticket)
 
+    async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
+        statement = (
+            select(TicketModel)
+            .where(TicketModel.client_chat_id == client_chat_id)
+            .where(TicketModel.status != TicketStatus.CLOSED)
+            .order_by(desc(TicketModel.updated_at), desc(TicketModel.created_at))
+            .limit(1)
+        )
+        result = await self.session.execute(statement)
+        ticket = result.scalar_one_or_none()
+        return cast(TicketEntity | None, ticket)
+
+    async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
+        ticket = await self.get_by_public_id(ticket_public_id)
+        if ticket is None:
+            return None
+
+        ticket.status = TicketStatus.QUEUED
+        await self.session.flush()
+        return ticket
+
     async def assign_to_operator(
         self, *, ticket_public_id: UUID, operator_id: int
     ) -> TicketEntity | None:
@@ -61,6 +88,15 @@ class SqlAlchemyTicketRepository(TicketRepository):
 
         ticket.assigned_operator_id = operator_id
         ticket.status = TicketStatus.ASSIGNED
+        await self.session.flush()
+        return ticket
+
+    async def escalate(self, *, ticket_public_id: UUID) -> TicketEntity | None:
+        ticket = await self.get_by_public_id(ticket_public_id)
+        if ticket is None:
+            return None
+
+        ticket.status = TicketStatus.ESCALATED
         await self.session.flush()
         return ticket
 
@@ -103,6 +139,26 @@ class SqlAlchemyTicketMessageRepository(TicketMessageRepository):
             text=text,
         )
         self.session.add(ticket_message)
+        await self.session.flush()
+
+
+class SqlAlchemyTicketEventRepository(TicketEventRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def add(
+        self,
+        *,
+        ticket_id: int,
+        event_type: TicketEventType,
+        payload_json: Mapping[str, object] | None = None,
+    ) -> None:
+        ticket_event = TicketEvent(
+            ticket_id=ticket_id,
+            event_type=event_type,
+            payload_json=dict(payload_json) if payload_json is not None else None,
+        )
+        self.session.add(ticket_event)
         await self.session.flush()
 
 

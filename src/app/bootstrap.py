@@ -13,6 +13,7 @@ from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config import Settings
 from infrastructure.db.repositories import (
     SqlAlchemyOperatorRepository,
+    SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
 )
@@ -68,6 +69,7 @@ def build_helpdesk_service(session: AsyncSession) -> HelpdeskService:
     return HelpdeskService(
         ticket_repository=SqlAlchemyTicketRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
+        ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
     )
 

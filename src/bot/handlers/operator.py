@@ -10,6 +10,8 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
+from domain.enums.tickets import TicketEventType
+from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorPresenceHelper,
@@ -56,6 +58,9 @@ async def handle_take_action(
     operator_presence: OperatorPresenceHelper,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
+    ticket = None
+    error_message: str | None = None
+
     async with _operator_ticket_action(
         callback=callback,
         callback_data=callback_data,
@@ -67,21 +72,39 @@ async def handle_take_action(
             return
 
         async with helpdesk_service_factory() as helpdesk_service:
-            ticket = await helpdesk_service.assign_ticket_to_operator(
-                ticket_public_id=ticket_public_id,
-                telegram_user_id=callback.from_user.id,
-                display_name=callback.from_user.full_name,
-                username=callback.from_user.username,
-            )
+            try:
+                ticket = await helpdesk_service.assign_ticket_to_operator(
+                    ticket_public_id=ticket_public_id,
+                    telegram_user_id=callback.from_user.id,
+                    display_name=callback.from_user.full_name,
+                    username=callback.from_user.username,
+                )
+            except InvalidTicketTransitionError as exc:
+                error_message = str(exc)
+
+    if error_message is not None:
+        await _respond_to_operator(callback, error_message)
+        return
 
     if ticket is None:
         await _respond_to_operator(callback, "Ticket not found.")
         return
 
+    if ticket.event_type == TicketEventType.REASSIGNED:
+        answer_text = f"Ticket {ticket.public_number} reassigned."
+        message_text = (
+            f"Ticket {ticket.public_number} is now reassigned to {callback.from_user.full_name}."
+        )
+    else:
+        answer_text = f"Ticket {ticket.public_number} assigned."
+        message_text = (
+            f"Ticket {ticket.public_number} is now assigned to {callback.from_user.full_name}."
+        )
+
     await _respond_to_operator(
         callback,
-        f"Ticket {ticket.public_number} assigned.",
-        f"Ticket {ticket.public_number} is now assigned to {callback.from_user.full_name}.",
+        answer_text,
+        message_text,
     )
 
 
@@ -104,12 +127,11 @@ async def handle_reply_action(
         if ticket_public_id is None:
             return
 
-        async with helpdesk_service_factory() as helpdesk_service:
-            response_text = await helpdesk_service.acknowledge_reply_action(
-                ticket_public_id=ticket_public_id,
-            )
-
-    await _respond_to_operator(callback, response_text, response_text)
+    await _respond_to_operator(
+        callback,
+        "Operator reply capture is not wired yet.",
+        "Operator reply capture is not wired yet.",
+    )
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "close"))
@@ -121,6 +143,9 @@ async def handle_close_action(
     operator_presence: OperatorPresenceHelper,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
+    ticket = None
+    error_message: str | None = None
+
     async with _operator_ticket_action(
         callback=callback,
         callback_data=callback_data,
@@ -132,7 +157,14 @@ async def handle_close_action(
             return
 
         async with helpdesk_service_factory() as helpdesk_service:
-            ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+            try:
+                ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+            except InvalidTicketTransitionError as exc:
+                error_message = str(exc)
+
+    if error_message is not None:
+        await _respond_to_operator(callback, error_message)
+        return
 
     if ticket is None:
         await _respond_to_operator(callback, "Ticket not found.")
@@ -154,6 +186,9 @@ async def handle_escalate_action(
     operator_presence: OperatorPresenceHelper,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
+    ticket = None
+    error_message: str | None = None
+
     async with _operator_ticket_action(
         callback=callback,
         callback_data=callback_data,
@@ -165,11 +200,24 @@ async def handle_escalate_action(
             return
 
         async with helpdesk_service_factory() as helpdesk_service:
-            response_text = await helpdesk_service.acknowledge_escalate_action(
-                ticket_public_id=ticket_public_id,
-            )
+            try:
+                ticket = await helpdesk_service.escalate_ticket(ticket_public_id=ticket_public_id)
+            except InvalidTicketTransitionError as exc:
+                error_message = str(exc)
 
-    await _respond_to_operator(callback, response_text, response_text)
+    if error_message is not None:
+        await _respond_to_operator(callback, error_message)
+        return
+
+    if ticket is None:
+        await _respond_to_operator(callback, "Ticket not found.")
+        return
+
+    await _respond_to_operator(
+        callback,
+        f"Ticket {ticket.public_number} escalated.",
+        f"Ticket {ticket.public_number} moved to escalated status.",
+    )
 
 
 @asynccontextmanager
