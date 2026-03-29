@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -29,8 +29,24 @@ class TicketRepository(Protocol):
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
         """Return the most recent open ticket for a client chat, if any."""
 
+    async def get_next_queued_ticket(self, *, prioritize_priority: bool = False) -> Ticket | None:
+        """Return the next queued ticket according to the queue ordering."""
+
+    async def list_queued_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        prioritize_priority: bool = False,
+    ) -> Sequence[Ticket]:
+        """Return queued tickets in queue order."""
+
     async def enqueue(self, *, ticket_public_id: UUID) -> Ticket | None:
         """Move a ticket into the queue."""
+
+    async def assign_queued_to_operator(
+        self, *, ticket_public_id: UUID, operator_id: int
+    ) -> Ticket | None:
+        """Assign a queued ticket to an operator only if it is still queued."""
 
     async def assign_to_operator(
         self, *, ticket_public_id: UUID, operator_id: int

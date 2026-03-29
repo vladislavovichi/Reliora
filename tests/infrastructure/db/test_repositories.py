@@ -18,12 +18,23 @@ from infrastructure.db.repositories import (
 class FakeResult:
     scalar: Any = None
     rows: list[tuple[Any, Any]] = field(default_factory=list)
+    scalar_items: list[Any] = field(default_factory=list)
 
     def scalar_one_or_none(self) -> Any:
         return self.scalar
 
-    def all(self) -> list[tuple[Any, Any]]:
+    def all(self) -> list[Any]:
+        if self.scalar_items:
+            return self.scalar_items
         return self.rows
+
+    def scalars(self) -> FakeResult:
+        return self
+
+    def first(self) -> Any:
+        if not self.scalar_items:
+            return None
+        return self.scalar_items[0]
 
 
 @dataclass
@@ -76,6 +87,27 @@ async def test_enqueue_updates_ticket_status() -> None:
     assert cast(object, result) is ticket
     assert ticket.status == TicketStatus.QUEUED
     assert session.flush_count == 1
+
+
+async def test_assign_queued_to_operator_only_updates_queued_tickets() -> None:
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.ASSIGNED,
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.assign_queued_to_operator(
+        ticket_public_id=ticket.public_id,
+        operator_id=77,
+    )
+
+    assert cast(object, result) is None
+    assert ticket.status == TicketStatus.ASSIGNED
+    assert session.flush_count == 0
 
 
 async def test_assign_to_operator_updates_ticket_status() -> None:
@@ -151,6 +183,45 @@ async def test_count_by_status_returns_mapping() -> None:
         TicketStatus.NEW: 2,
         TicketStatus.CLOSED: 1,
     }
+
+
+async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:
+    first_ticket = Ticket(
+        client_chat_id=100,
+        subject="First",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.QUEUED,
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar=first_ticket))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.get_next_queued_ticket()
+
+    assert cast(object, result) is first_ticket
+
+
+async def test_list_queued_tickets_returns_ordered_sequence() -> None:
+    first_ticket = Ticket(
+        client_chat_id=100,
+        subject="First",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.QUEUED,
+    )
+    second_ticket = Ticket(
+        client_chat_id=101,
+        subject="Second",
+        priority=TicketPriority.HIGH,
+        public_id=uuid4(),
+        status=TicketStatus.QUEUED,
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar_items=[first_ticket, second_ticket]))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.list_queued_tickets(limit=2)
+
+    assert [ticket.subject for ticket in result] == ["First", "Second"]
 
 
 async def test_ticket_event_repository_persists_event_rows() -> None:

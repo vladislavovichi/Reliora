@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 
 from domain.contracts.repositories import (
     OperatorRepository,
@@ -28,6 +29,28 @@ from infrastructure.db.models import Ticket as TicketModel
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def apply_queue_ordering(
+    statement: Select[tuple[TicketModel]],
+    *,
+    prioritize_priority: bool,
+) -> Select[tuple[TicketModel]]:
+    if not prioritize_priority:
+        return statement.order_by(TicketModel.created_at.asc(), TicketModel.id.asc())
+
+    priority_rank = case(
+        (TicketModel.priority == TicketPriority.URGENT, 0),
+        (TicketModel.priority == TicketPriority.HIGH, 1),
+        (TicketModel.priority == TicketPriority.NORMAL, 2),
+        (TicketModel.priority == TicketPriority.LOW, 3),
+        else_=4,
+    )
+    return statement.order_by(
+        priority_rank.asc(),
+        TicketModel.created_at.asc(),
+        TicketModel.id.asc(),
+    )
 
 
 class SqlAlchemyTicketRepository(TicketRepository):
@@ -70,12 +93,55 @@ class SqlAlchemyTicketRepository(TicketRepository):
         ticket = result.scalar_one_or_none()
         return cast(TicketEntity | None, ticket)
 
+    async def get_next_queued_ticket(
+        self, *, prioritize_priority: bool = False
+    ) -> TicketEntity | None:
+        statement = apply_queue_ordering(
+            select(TicketModel)
+            .where(TicketModel.status == TicketStatus.QUEUED)
+            .limit(1),
+            prioritize_priority=prioritize_priority,
+        )
+        result = await self.session.execute(statement)
+        ticket = result.scalar_one_or_none()
+        return cast(TicketEntity | None, ticket)
+
+    async def list_queued_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        prioritize_priority: bool = False,
+    ) -> Sequence[TicketEntity]:
+        statement = apply_queue_ordering(
+            select(TicketModel)
+            .where(TicketModel.status == TicketStatus.QUEUED),
+            prioritize_priority=prioritize_priority,
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        result = await self.session.execute(statement)
+        tickets = result.scalars().all()
+        return cast(Sequence[TicketEntity], tickets)
+
     async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
         ticket = await self.get_by_public_id(ticket_public_id)
         if ticket is None:
             return None
 
         ticket.status = TicketStatus.QUEUED
+        await self.session.flush()
+        return ticket
+
+    async def assign_queued_to_operator(
+        self, *, ticket_public_id: UUID, operator_id: int
+    ) -> TicketEntity | None:
+        ticket = await self.get_by_public_id(ticket_public_id)
+        if ticket is None or ticket.status != TicketStatus.QUEUED:
+            return None
+
+        ticket.assigned_operator_id = operator_id
+        ticket.status = TicketStatus.ASSIGNED
         await self.session.flush()
         return ticket
 

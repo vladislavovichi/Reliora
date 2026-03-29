@@ -21,6 +21,79 @@ from infrastructure.redis.contracts import (
 router = Router(name="operator")
 
 
+@router.message(Command("queue"))
+async def handle_queue(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        queued_tickets = await helpdesk_service.list_queued_tickets(limit=10)
+
+    if not queued_tickets:
+        await message.answer("Queue is empty.")
+        return
+
+    lines = ["Queued tickets:"]
+    for index, ticket in enumerate(queued_tickets, start=1):
+        lines.append(
+            f"{index}. {ticket.public_number} priority={ticket.priority} subject={ticket.subject}"
+        )
+
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("take"))
+async def handle_take_next(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    if message.from_user is None:
+        await message.answer("Operator identity is unavailable for this action.")
+        return
+
+    if not await global_rate_limiter.allow():
+        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        return
+
+    await operator_presence.touch(operator_id=message.from_user.id)
+
+    queue_lock = ticket_lock_manager.for_ticket("queue-next")
+    if not await queue_lock.acquire():
+        await message.answer("Queue acquisition is busy. Please retry in a moment.")
+        return
+
+    try:
+        async with helpdesk_service_factory() as helpdesk_service:
+            ticket = await helpdesk_service.assign_next_ticket_to_operator(
+                telegram_user_id=message.from_user.id,
+                display_name=message.from_user.full_name,
+                username=message.from_user.username,
+            )
+    finally:
+        await queue_lock.release()
+
+    if ticket is None:
+        await message.answer("No queued ticket is currently available.")
+        return
+
+    await message.answer(
+        f"Took next ticket {ticket.public_number}. "
+        f"Current status={ticket.status.value}."
+    )
+
+
 @router.message(Command("stats"))
 async def handle_stats(
     message: Message,

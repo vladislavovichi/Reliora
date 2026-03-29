@@ -8,7 +8,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from application.services.helpdesk import HelpdeskService
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketPriority,
+    TicketStatus,
+)
 from domain.tickets import InvalidTicketTransitionError
 
 
@@ -16,12 +21,16 @@ from domain.tickets import InvalidTicketTransitionError
 class StubTicketRepository:
     created_ticket: SimpleNamespace
     active_ticket: SimpleNamespace | None = None
+    queued_tickets: list[SimpleNamespace] | None = None
     by_status: dict[TicketStatus, int] | None = None
 
     def __post_init__(self) -> None:
         self.create_calls: list[dict[str, object]] = []
         self.active_lookup_calls: list[int] = []
+        self.next_queued_calls: list[bool] = []
+        self.list_queued_calls: list[dict[str, object]] = []
         self.enqueue_calls: list[UUID] = []
+        self.assign_queued_calls: list[dict[str, object]] = []
         self.assign_calls: list[dict[str, object]] = []
         self.escalate_calls: list[UUID] = []
         self.close_calls: list[UUID] = []
@@ -30,6 +39,10 @@ class StubTicketRepository:
         }
         if self.active_ticket is not None:
             self.tickets[self.active_ticket.public_id] = self.active_ticket
+        if self.queued_tickets is None:
+            self.queued_tickets = []
+        for ticket in self.queued_tickets:
+            self.tickets[ticket.public_id] = ticket
 
     async def create(
         self,
@@ -50,6 +63,36 @@ class StubTicketRepository:
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> SimpleNamespace | None:
         self.active_lookup_calls.append(client_chat_id)
         return self.active_ticket
+
+    async def get_next_queued_ticket(
+        self, *, prioritize_priority: bool = False
+    ) -> SimpleNamespace | None:
+        self.next_queued_calls.append(prioritize_priority)
+        for ticket in self.queued_tickets or []:
+            if ticket.status == TicketStatus.QUEUED:
+                return ticket
+        return None
+
+    async def list_queued_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        prioritize_priority: bool = False,
+    ) -> list[SimpleNamespace]:
+        self.list_queued_calls.append(
+            {
+                "limit": limit,
+                "prioritize_priority": prioritize_priority,
+            }
+        )
+        tickets = [
+            ticket
+            for ticket in self.queued_tickets or []
+            if ticket.status == TicketStatus.QUEUED
+        ]
+        if limit is None:
+            return tickets
+        return tickets[:limit]
 
     async def get_by_public_id(self, public_id: UUID) -> SimpleNamespace | None:
         return self.tickets.get(public_id)
@@ -77,6 +120,26 @@ class StubTicketRepository:
         if ticket is not None:
             ticket.assigned_operator_id = operator_id
             ticket.status = TicketStatus.ASSIGNED
+        return ticket
+
+    async def assign_queued_to_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        operator_id: int,
+    ) -> SimpleNamespace | None:
+        self.assign_queued_calls.append(
+            {
+                "ticket_public_id": ticket_public_id,
+                "operator_id": operator_id,
+            }
+        )
+        ticket = self.tickets.get(ticket_public_id)
+        if ticket is None or ticket.status != TicketStatus.QUEUED:
+            return None
+
+        ticket.assigned_operator_id = operator_id
+        ticket.status = TicketStatus.ASSIGNED
         return ticket
 
     async def escalate(self, *, ticket_public_id: UUID) -> SimpleNamespace | None:
@@ -178,7 +241,7 @@ def build_ticket(
         public_id=public_id,
         client_chat_id=123,
         status=status,
-        priority="normal",
+        priority=TicketPriority.NORMAL,
         subject="Need help",
         assigned_operator_id=assigned_operator_id,
         created_at=None,
@@ -316,6 +379,59 @@ async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
         TicketEventType.ASSIGNED,
         TicketEventType.REASSIGNED,
     ]
+
+
+async def test_get_and_list_queued_tickets_follow_queue_order() -> None:
+    first_ticket = build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.QUEUED)
+    second_ticket = build_ticket(ticket_id=2, public_id=uuid4(), status=TicketStatus.QUEUED)
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
+        queued_tickets=[first_ticket, second_ticket],
+    )
+    service = HelpdeskService(
+        ticket_repository=ticket_repository,
+        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
+        ticket_event_repository=StubTicketEventRepository(added_events=[]),
+        operator_repository=StubOperatorRepository(operator_ids={}),
+    )
+
+    next_ticket = await service.get_next_queued_ticket()
+    queued_tickets = await service.list_queued_tickets(limit=1)
+
+    assert next_ticket is not None
+    assert next_ticket.public_id == first_ticket.public_id
+    assert next_ticket.public_number.startswith("HD-")
+    assert queued_tickets[0].public_id == first_ticket.public_id
+    assert ticket_repository.list_queued_calls[0]["limit"] == 1
+
+
+async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> None:
+    first_ticket = build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.QUEUED)
+    second_ticket = build_ticket(ticket_id=2, public_id=uuid4(), status=TicketStatus.QUEUED)
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
+        queued_tickets=[first_ticket, second_ticket],
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    operator_repository = StubOperatorRepository(operator_ids={1001: 7})
+    service = HelpdeskService(
+        ticket_repository=ticket_repository,
+        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
+        ticket_event_repository=event_repository,
+        operator_repository=operator_repository,
+    )
+
+    result = await service.assign_next_ticket_to_operator(
+        telegram_user_id=1001,
+        display_name="Operator One",
+    )
+
+    assert result is not None
+    assert result.public_id == first_ticket.public_id
+    assert result.status == TicketStatus.ASSIGNED
+    assert ticket_repository.assign_queued_calls[0]["ticket_public_id"] == first_ticket.public_id
+    assert first_ticket.assigned_operator_id == 7
+    assert event_repository.added_events[0]["event_type"] == TicketEventType.ASSIGNED
 
 
 async def test_escalate_and_close_ticket_log_workflow_events() -> None:

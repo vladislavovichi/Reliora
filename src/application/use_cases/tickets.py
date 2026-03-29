@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -109,6 +110,25 @@ class TicketStats:
     total: int
     open_total: int
     by_status: dict[TicketStatus, int]
+
+
+@dataclass(slots=True)
+class QueuedTicketSummary:
+    public_id: UUID
+    public_number: str
+    subject: str
+    priority: str
+    status: TicketStatus
+
+
+def build_queued_ticket_summary(ticket: Ticket) -> QueuedTicketSummary:
+    return QueuedTicketSummary(
+        public_id=ticket.public_id,
+        public_number=format_public_ticket_number(ticket.public_id),
+        subject=ticket.subject,
+        priority=ticket.priority.value,
+        status=ticket.status,
+    )
 
 
 class CreateTicketFromClientMessageUseCase:
@@ -320,6 +340,91 @@ class AssignTicketToOperatorUseCase:
         )
 
         return build_ticket_summary(assigned_ticket, event_type=event_type)
+
+
+class GetNextQueuedTicketUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(self, *, prioritize_priority: bool = False) -> QueuedTicketSummary | None:
+        ticket = await self.ticket_repository.get_next_queued_ticket(
+            prioritize_priority=prioritize_priority
+        )
+        if ticket is None:
+            return None
+
+        return build_queued_ticket_summary(ticket)
+
+
+class ListQueuedTicketsUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(
+        self,
+        *,
+        limit: int | None = None,
+        prioritize_priority: bool = False,
+    ) -> Sequence[QueuedTicketSummary]:
+        tickets = await self.ticket_repository.list_queued_tickets(
+            limit=limit,
+            prioritize_priority=prioritize_priority,
+        )
+        return [build_queued_ticket_summary(ticket) for ticket in tickets]
+
+
+class AssignNextQueuedTicketUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        ticket_event_repository: TicketEventRepository,
+        operator_repository: OperatorRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.ticket_event_repository = ticket_event_repository
+        self.operator_repository = operator_repository
+
+    async def __call__(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+        prioritize_priority: bool = False,
+    ) -> TicketSummary | None:
+        operator_id = await self.operator_repository.get_or_create(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+
+        for _ in range(3):
+            ticket = await self.ticket_repository.get_next_queued_ticket(
+                prioritize_priority=prioritize_priority
+            )
+            if ticket is None or ticket.id is None:
+                return None
+
+            assigned_ticket = await self.ticket_repository.assign_queued_to_operator(
+                ticket_public_id=ticket.public_id,
+                operator_id=operator_id,
+            )
+            if assigned_ticket is None:
+                continue
+
+            await self.ticket_event_repository.add(
+                ticket_id=ticket.id,
+                event_type=TicketEventType.ASSIGNED,
+                payload_json=build_status_payload(
+                    from_status=TicketStatus.QUEUED,
+                    to_status=assigned_ticket.status,
+                    assigned_operator_id=operator_id,
+                    actor_operator_id=operator_id,
+                ),
+            )
+            return build_ticket_summary(assigned_ticket, event_type=TicketEventType.ASSIGNED)
+
+        return None
 
 
 class EscalateTicketUseCase:

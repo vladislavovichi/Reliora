@@ -23,7 +23,9 @@ async def handle_help(message: Message) -> None:
         "/start - show the startup message\n"
         "/help - show this help\n"
         "/ping - health check placeholder\n"
-        "/stats - operator command placeholder"
+        "/stats - show ticket statistics\n"
+        "/queue - show the next queued tickets\n"
+        "/take - take the next queued ticket"
     )
 
 
