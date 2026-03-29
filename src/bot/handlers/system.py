@@ -25,7 +25,9 @@ async def handle_help(message: Message) -> None:
         "/ping - health check placeholder\n"
         "/stats - show ticket statistics\n"
         "/queue - show the next queued tickets\n"
-        "/take - take the next queued ticket"
+        "/take - take the next queued ticket\n"
+        "/ticket <ticket_public_id> - inspect ticket details\n"
+        "/cancel - cancel the current operator action"
     )
 
 

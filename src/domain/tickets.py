@@ -24,6 +24,12 @@ ESCALATABLE_TICKET_STATUSES = frozenset(
         TicketStatus.ASSIGNED,
     }
 )
+OPERATOR_REPLYABLE_TICKET_STATUSES = frozenset(
+    {
+        TicketStatus.ASSIGNED,
+        TicketStatus.ESCALATED,
+    }
+)
 
 
 class InvalidTicketTransitionError(ValueError):
@@ -59,4 +65,11 @@ def ensure_message_addable(status: TicketStatus) -> None:
     if not is_open_status(status):
         raise InvalidTicketTransitionError(
             f"Messages cannot be added while the ticket is {status.value!r}."
+        )
+
+
+def ensure_operator_replyable(status: TicketStatus) -> None:
+    if status not in OPERATOR_REPLYABLE_TICKET_STATUSES:
+        raise InvalidTicketTransitionError(
+            f"Operator replies are not allowed while the ticket is {status.value!r}."
         )

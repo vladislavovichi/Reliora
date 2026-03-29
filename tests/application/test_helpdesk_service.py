@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from application.services.helpdesk import HelpdeskService
+from domain.entities.ticket import TicketDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -63,6 +64,28 @@ class StubTicketRepository:
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> SimpleNamespace | None:
         self.active_lookup_calls.append(client_chat_id)
         return self.active_ticket
+
+    async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
+        ticket = self.tickets.get(public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        return TicketDetails(
+            id=ticket.id,
+            public_id=ticket.public_id,
+            client_chat_id=ticket.client_chat_id,
+            status=ticket.status,
+            priority=ticket.priority,
+            subject=ticket.subject,
+            assigned_operator_id=ticket.assigned_operator_id,
+            assigned_operator_name=getattr(ticket, "assigned_operator_name", None),
+            created_at=ticket.created_at,
+            updated_at=ticket.updated_at,
+            first_response_at=ticket.first_response_at,
+            closed_at=ticket.closed_at,
+            last_message_text=getattr(ticket, "last_message_text", None),
+            last_message_sender_type=getattr(ticket, "last_message_sender_type", None),
+        )
 
     async def get_next_queued_ticket(
         self, *, prioritize_priority: bool = False
@@ -235,6 +258,9 @@ def build_ticket(
     public_id: UUID,
     status: TicketStatus,
     assigned_operator_id: int | None = None,
+    assigned_operator_name: str | None = None,
+    last_message_text: str | None = None,
+    last_message_sender_type: TicketMessageSenderType | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=ticket_id,
@@ -248,6 +274,9 @@ def build_ticket(
         updated_at=None,
         first_response_at=None,
         closed_at=None,
+        assigned_operator_name=assigned_operator_name,
+        last_message_text=last_message_text,
+        last_message_sender_type=last_message_sender_type,
     )
 
 
@@ -432,6 +461,95 @@ async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> 
     assert ticket_repository.assign_queued_calls[0]["ticket_public_id"] == first_ticket.public_id
     assert first_ticket.assigned_operator_id == 7
     assert event_repository.added_events[0]["event_type"] == TicketEventType.ASSIGNED
+
+
+async def test_get_ticket_details_returns_operator_facing_summary() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+        assigned_operator_name="Operator One",
+        last_message_text="Client says hello",
+        last_message_sender_type=TicketMessageSenderType.CLIENT,
+    )
+    ticket_repository = StubTicketRepository(created_ticket=ticket)
+    service = HelpdeskService(
+        ticket_repository=ticket_repository,
+        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
+        ticket_event_repository=StubTicketEventRepository(added_events=[]),
+        operator_repository=StubOperatorRepository(operator_ids={}),
+    )
+
+    result = await service.get_ticket_details(ticket_public_id=public_id)
+
+    assert result is not None
+    assert result.public_id == public_id
+    assert result.public_number.startswith("HD-")
+    assert result.assigned_operator_name == "Operator One"
+    assert result.last_message_text == "Client says hello"
+    assert result.last_message_sender_type == TicketMessageSenderType.CLIENT
+
+
+async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_chat() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+    )
+    message_repository = StubTicketMessageRepository(added_messages=[])
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = HelpdeskService(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_message_repository=message_repository,
+        ticket_event_repository=event_repository,
+        operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
+    )
+
+    result = await service.reply_to_ticket_as_operator(
+        ticket_public_id=public_id,
+        telegram_user_id=1001,
+        display_name="Operator One",
+        username="operator_one",
+        telegram_message_id=4321,
+        text="Please try again now.",
+    )
+
+    assert result is not None
+    assert result.client_chat_id == ticket.client_chat_id
+    assert result.ticket.public_id == public_id
+    assert message_repository.added_messages[0]["sender_type"] == TicketMessageSenderType.OPERATOR
+    assert message_repository.added_messages[0]["sender_operator_id"] == 7
+    assert event_repository.added_events[0]["event_type"] == TicketEventType.OPERATOR_MESSAGE_ADDED
+
+
+async def test_reply_to_ticket_as_operator_rejects_other_operator() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=9,
+    )
+    service = HelpdeskService(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
+        ticket_event_repository=StubTicketEventRepository(added_events=[]),
+        operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
+    )
+
+    with pytest.raises(InvalidTicketTransitionError):
+        await service.reply_to_ticket_as_operator(
+            ticket_public_id=public_id,
+            telegram_user_id=1001,
+            display_name="Operator One",
+            username="operator_one",
+            telegram_message_id=4321,
+            text="Please try again now.",
+        )
 
 
 async def test_escalate_and_close_ticket_log_workflow_events() -> None:

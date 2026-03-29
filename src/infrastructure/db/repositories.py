@@ -17,6 +17,7 @@ from domain.contracts.repositories import (
     TicketRepository,
 )
 from domain.entities.ticket import Ticket as TicketEntity
+from domain.entities.ticket import TicketDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -80,6 +81,50 @@ class SqlAlchemyTicketRepository(TicketRepository):
         result = await self.session.execute(statement)
         ticket = result.scalar_one_or_none()
         return cast(TicketEntity | None, ticket)
+
+    async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
+        ticket = await self.get_by_public_id(public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        assigned_operator_name: str | None = None
+        if ticket.assigned_operator_id is not None:
+            operator_statement = select(Operator.display_name).where(
+                Operator.id == ticket.assigned_operator_id
+            )
+            operator_result = await self.session.execute(operator_statement)
+            assigned_operator_name = operator_result.scalar_one_or_none()
+
+        last_message_statement = (
+            select(TicketMessage.text, TicketMessage.sender_type)
+            .where(TicketMessage.ticket_id == ticket.id)
+            .order_by(desc(TicketMessage.created_at), desc(TicketMessage.id))
+            .limit(1)
+        )
+        last_message_result = await self.session.execute(last_message_statement)
+        last_message_row = last_message_result.first()
+        last_message_text: str | None = None
+        last_message_sender_type: TicketMessageSenderType | None = None
+        if last_message_row is not None:
+            last_message_text = cast(str, last_message_row[0])
+            last_message_sender_type = cast(TicketMessageSenderType, last_message_row[1])
+
+        return TicketDetails(
+            id=ticket.id,
+            public_id=ticket.public_id,
+            client_chat_id=ticket.client_chat_id,
+            status=ticket.status,
+            priority=ticket.priority,
+            subject=ticket.subject,
+            assigned_operator_id=ticket.assigned_operator_id,
+            assigned_operator_name=assigned_operator_name,
+            created_at=ticket.created_at,
+            updated_at=ticket.updated_at,
+            first_response_at=ticket.first_response_at,
+            closed_at=ticket.closed_at,
+            last_message_text=last_message_text,
+            last_message_sender_type=last_message_sender_type,
+        )
 
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
         statement = (

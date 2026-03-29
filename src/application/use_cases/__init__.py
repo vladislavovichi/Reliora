@@ -9,7 +9,9 @@ from application.use_cases.tickets import (
     CreateTicketFromClientMessageUseCase,
     EscalateTicketUseCase,
     GetNextQueuedTicketUseCase,
+    GetTicketDetailsUseCase,
     ListQueuedTicketsUseCase,
+    ReplyToTicketAsOperatorUseCase,
 )
 
 __all__ = [
@@ -21,5 +23,7 @@ __all__ = [
     "CreateTicketFromClientMessageUseCase",
     "EscalateTicketUseCase",
     "GetNextQueuedTicketUseCase",
+    "GetTicketDetailsUseCase",
     "ListQueuedTicketsUseCase",
+    "ReplyToTicketAsOperatorUseCase",
 ]

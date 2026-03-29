@@ -12,6 +12,7 @@ from domain.contracts.repositories import (
     TicketRepository,
 )
 from domain.entities.ticket import Ticket
+from domain.entities.ticket import TicketDetails as DomainTicketDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 from domain.tickets import (
     InvalidTicketTransitionError,
@@ -19,6 +20,7 @@ from domain.tickets import (
     ensure_closable,
     ensure_escalatable,
     ensure_message_addable,
+    ensure_operator_replyable,
 )
 
 
@@ -129,6 +131,41 @@ def build_queued_ticket_summary(ticket: Ticket) -> QueuedTicketSummary:
         priority=ticket.priority.value,
         status=ticket.status,
     )
+
+
+@dataclass(slots=True)
+class TicketDetailsSummary:
+    public_id: UUID
+    public_number: str
+    client_chat_id: int
+    status: TicketStatus
+    priority: str
+    subject: str
+    assigned_operator_id: int | None
+    assigned_operator_name: str | None
+    last_message_text: str | None
+    last_message_sender_type: TicketMessageSenderType | None
+
+
+def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSummary:
+    return TicketDetailsSummary(
+        public_id=ticket.public_id,
+        public_number=format_public_ticket_number(ticket.public_id),
+        client_chat_id=ticket.client_chat_id,
+        status=ticket.status,
+        priority=ticket.priority.value,
+        subject=ticket.subject,
+        assigned_operator_id=ticket.assigned_operator_id,
+        assigned_operator_name=ticket.assigned_operator_name,
+        last_message_text=ticket.last_message_text,
+        last_message_sender_type=ticket.last_message_sender_type,
+    )
+
+
+@dataclass(slots=True)
+class OperatorReplyResult:
+    ticket: TicketSummary
+    client_chat_id: int
 
 
 class CreateTicketFromClientMessageUseCase:
@@ -373,6 +410,18 @@ class ListQueuedTicketsUseCase:
         return [build_queued_ticket_summary(ticket) for ticket in tickets]
 
 
+class GetTicketDetailsUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(self, *, ticket_public_id: UUID) -> TicketDetailsSummary | None:
+        ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        if ticket is None:
+            return None
+
+        return build_ticket_details_summary(ticket)
+
+
 class AssignNextQueuedTicketUseCase:
     def __init__(
         self,
@@ -425,6 +474,65 @@ class AssignNextQueuedTicketUseCase:
             return build_ticket_summary(assigned_ticket, event_type=TicketEventType.ASSIGNED)
 
         return None
+
+
+class ReplyToTicketAsOperatorUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        ticket_message_repository: TicketMessageRepository,
+        ticket_event_repository: TicketEventRepository,
+        operator_repository: OperatorRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.operator_repository = operator_repository
+        self._add_message_to_ticket = AddMessageToTicketUseCase(
+            ticket_repository=ticket_repository,
+            ticket_message_repository=ticket_message_repository,
+            ticket_event_repository=ticket_event_repository,
+        )
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None,
+        telegram_message_id: int,
+        text: str,
+    ) -> OperatorReplyResult | None:
+        ticket_details = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        if ticket_details is None:
+            return None
+
+        ensure_operator_replyable(ticket_details.status)
+
+        operator_id = await self.operator_repository.get_or_create(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+        if (
+            ticket_details.assigned_operator_id is not None
+            and ticket_details.assigned_operator_id != operator_id
+        ):
+            raise InvalidTicketTransitionError("Ticket is assigned to another operator.")
+
+        ticket = await self._add_message_to_ticket(
+            ticket_public_id=ticket_public_id,
+            telegram_message_id=telegram_message_id,
+            sender_type=TicketMessageSenderType.OPERATOR,
+            text=text,
+            sender_operator_id=operator_id,
+        )
+        if ticket is None:
+            return None
+
+        return OperatorReplyResult(
+            ticket=ticket,
+            client_chat_id=ticket_details.client_chat_id,
+        )
 
 
 class EscalateTicketUseCase:

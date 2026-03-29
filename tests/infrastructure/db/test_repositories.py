@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.enums.tickets import TicketEventType, TicketPriority, TicketStatus
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketPriority,
+    TicketStatus,
+)
 from infrastructure.db.models import Ticket, TicketEvent
 from infrastructure.db.repositories import (
     SqlAlchemyTicketEventRepository,
@@ -32,14 +37,17 @@ class FakeResult:
         return self
 
     def first(self) -> Any:
-        if not self.scalar_items:
-            return None
-        return self.scalar_items[0]
+        if self.scalar_items:
+            return self.scalar_items[0]
+        if self.rows:
+            return self.rows[0]
+        return None
 
 
 @dataclass
 class FakeAsyncSession:
     result: FakeResult = field(default_factory=FakeResult)
+    queued_results: list[FakeResult] = field(default_factory=list)
     added: list[Any] = field(default_factory=list)
     flush_count: int = 0
     executed_statements: list[Any] = field(default_factory=list)
@@ -52,6 +60,8 @@ class FakeAsyncSession:
 
     async def execute(self, statement: Any) -> FakeResult:
         self.executed_statements.append(statement)
+        if self.queued_results:
+            return self.queued_results.pop(0)
         return self.result
 
 
@@ -183,6 +193,35 @@ async def test_count_by_status_returns_mapping() -> None:
         TicketStatus.NEW: 2,
         TicketStatus.CLOSED: 1,
     }
+
+
+async def test_get_details_by_public_id_returns_enriched_ticket_view() -> None:
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=77,
+    )
+    ticket.id = 1
+    session = FakeAsyncSession(
+        queued_results=[
+            FakeResult(scalar=ticket),
+            FakeResult(scalar="Operator One"),
+            FakeResult(
+                rows=[("Latest client message", TicketMessageSenderType.CLIENT)]
+            ),
+        ]
+    )
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.get_details_by_public_id(ticket.public_id)
+
+    assert result is not None
+    assert result.public_id == ticket.public_id
+    assert result.assigned_operator_name == "Operator One"
+    assert result.last_message_text == "Latest client message"
 
 
 async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:

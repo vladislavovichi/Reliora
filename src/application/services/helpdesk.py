@@ -14,8 +14,12 @@ from application.use_cases.tickets import (
     CreateTicketFromClientMessageUseCase,
     EscalateTicketUseCase,
     GetNextQueuedTicketUseCase,
+    GetTicketDetailsUseCase,
     ListQueuedTicketsUseCase,
+    OperatorReplyResult,
     QueuedTicketSummary,
+    ReplyToTicketAsOperatorUseCase,
+    TicketDetailsSummary,
     TicketStats,
     TicketSummary,
 )
@@ -45,6 +49,11 @@ class HelpdeskService:
     _get_next_queued_ticket: GetNextQueuedTicketUseCase = field(init=False, repr=False)
     _list_queued_tickets: ListQueuedTicketsUseCase = field(init=False, repr=False)
     _assign_next_queued_ticket: AssignNextQueuedTicketUseCase = field(init=False, repr=False)
+    _get_ticket_details: GetTicketDetailsUseCase = field(init=False, repr=False)
+    _reply_to_ticket_as_operator: ReplyToTicketAsOperatorUseCase = field(
+        init=False,
+        repr=False,
+    )
     _escalate_ticket: EscalateTicketUseCase = field(init=False, repr=False)
     _close_ticket: CloseTicketUseCase = field(init=False, repr=False)
     _get_basic_stats: BasicStatsUseCase = field(init=False, repr=False)
@@ -73,6 +82,15 @@ class HelpdeskService:
         )
         self._assign_next_queued_ticket = AssignNextQueuedTicketUseCase(
             ticket_repository=self.ticket_repository,
+            ticket_event_repository=self.ticket_event_repository,
+            operator_repository=self.operator_repository,
+        )
+        self._get_ticket_details = GetTicketDetailsUseCase(
+            ticket_repository=self.ticket_repository,
+        )
+        self._reply_to_ticket_as_operator = ReplyToTicketAsOperatorUseCase(
+            ticket_repository=self.ticket_repository,
+            ticket_message_repository=self.ticket_message_repository,
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
         )
@@ -165,6 +183,32 @@ class HelpdeskService:
             display_name=display_name,
             username=username,
             prioritize_priority=prioritize_priority,
+        )
+
+    async def get_ticket_details(
+        self,
+        *,
+        ticket_public_id: UUID,
+    ) -> TicketDetailsSummary | None:
+        return await self._get_ticket_details(ticket_public_id=ticket_public_id)
+
+    async def reply_to_ticket_as_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None,
+        telegram_message_id: int,
+        text: str,
+    ) -> OperatorReplyResult | None:
+        return await self._reply_to_ticket_as_operator(
+            ticket_public_id=ticket_public_id,
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+            telegram_message_id=telegram_message_id,
+            text=text,
         )
 
     async def escalate_ticket(self, *, ticket_public_id: UUID) -> TicketSummary | None:

@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
-from domain.entities.ticket import Ticket
+from domain.entities.ticket import Ticket, TicketDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -25,6 +25,9 @@ class TicketRepository(Protocol):
 
     async def get_by_public_id(self, public_id: UUID) -> Ticket | None:
         """Return a ticket by its public identifier."""
+
+    async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
+        """Return ticket details enriched for operator-facing workflows."""
 
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
         """Return the most recent open ticket for a client chat, if any."""

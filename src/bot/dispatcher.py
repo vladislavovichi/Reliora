@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.middlewares import UpdateContextMiddleware
 from bot.routers import build_root_router
@@ -15,7 +16,7 @@ def build_bot(config: BotConfig) -> Bot:
 
 
 def build_dispatcher(**workflow_data: Any) -> Dispatcher:
-    dispatcher = Dispatcher()
+    dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.workflow_data.update(workflow_data)
     _register_middlewares(dispatcher)
     _register_lifecycle(dispatcher)
