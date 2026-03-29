@@ -24,6 +24,33 @@ from infrastructure.db.session import (
     session_scope,
 )
 from infrastructure.redis.client import build_redis_client, close_redis_client, ping_redis_client
+from infrastructure.redis.contracts import (
+    ChatRateLimiter,
+    GlobalRateLimiter,
+    OperatorPresenceHelper,
+    SLADeadlineScheduler,
+    SLATimeoutProcessor,
+    TicketLockManager,
+    TicketStreamConsumer,
+    TicketStreamPublisher,
+)
+from infrastructure.redis.locks import RedisTicketLockManager
+from infrastructure.redis.presence import RedisOperatorPresenceHelper
+from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
+from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
+from infrastructure.redis.streams import RedisTicketStreamConsumer, RedisTicketStreamPublisher
+
+
+@dataclass(slots=True)
+class RedisWorkflowRuntime:
+    ticket_lock_manager: TicketLockManager
+    global_rate_limiter: GlobalRateLimiter
+    chat_rate_limiter: ChatRateLimiter
+    operator_presence: OperatorPresenceHelper
+    sla_deadline_scheduler: SLADeadlineScheduler
+    ticket_stream_publisher: TicketStreamPublisher
+    ticket_stream_consumer: TicketStreamConsumer
+    sla_timeout_processor: SLATimeoutProcessor
 
 
 @dataclass(slots=True)
@@ -32,6 +59,7 @@ class AppRuntime:
     db_engine: AsyncEngine
     db_session_factory: async_sessionmaker[AsyncSession]
     redis: Redis
+    redis_workflow: RedisWorkflowRuntime
     helpdesk_service_factory: HelpdeskServiceFactory
     dispatcher: Dispatcher | None = None
     bot: Bot | None = None
@@ -57,11 +85,26 @@ def build_helpdesk_service_factory(
     return provide
 
 
+def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
+    sla_deadline_scheduler = RedisSLADeadlineScheduler(redis)
+    return RedisWorkflowRuntime(
+        ticket_lock_manager=RedisTicketLockManager(redis),
+        global_rate_limiter=RedisGlobalRateLimiter(redis),
+        chat_rate_limiter=RedisChatRateLimiter(redis),
+        operator_presence=RedisOperatorPresenceHelper(redis),
+        sla_deadline_scheduler=sla_deadline_scheduler,
+        ticket_stream_publisher=RedisTicketStreamPublisher(redis),
+        ticket_stream_consumer=RedisTicketStreamConsumer(redis),
+        sla_timeout_processor=RedisSLATimeoutProcessor(sla_deadline_scheduler),
+    )
+
+
 async def build_runtime(settings: Settings) -> AppRuntime:
     db_engine = build_engine(settings.database)
     db_session_factory = build_session_factory(db_engine)
     helpdesk_service_factory = build_helpdesk_service_factory(db_session_factory)
     redis = build_redis_client(settings.redis)
+    redis_workflow = build_redis_workflow_runtime(redis)
     bot: Bot | None = None
 
     try:
@@ -74,6 +117,13 @@ async def build_runtime(settings: Settings) -> AppRuntime:
                 settings=settings,
                 db_session_factory=db_session_factory,
                 helpdesk_service_factory=helpdesk_service_factory,
+                global_rate_limiter=redis_workflow.global_rate_limiter,
+                chat_rate_limiter=redis_workflow.chat_rate_limiter,
+                operator_presence=redis_workflow.operator_presence,
+                ticket_lock_manager=redis_workflow.ticket_lock_manager,
+                ticket_stream_publisher=redis_workflow.ticket_stream_publisher,
+                sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
+                sla_timeout_processor=redis_workflow.sla_timeout_processor,
                 redis=redis,
             )
 
@@ -82,6 +132,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             db_engine=db_engine,
             db_session_factory=db_session_factory,
             redis=redis,
+            redis_workflow=redis_workflow,
             helpdesk_service_factory=helpdesk_service_factory,
             dispatcher=dispatcher,
             bot=bot,
