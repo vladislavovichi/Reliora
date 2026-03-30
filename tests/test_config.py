@@ -22,5 +22,7 @@ def test_explicit_urls_override_component_settings() -> None:
         }
     )
 
-    assert settings.database.sqlalchemy_url == "postgresql+asyncpg://user:pass@db:5432/app"
+    assert (
+        settings.database.sqlalchemy_url == "postgresql+asyncpg://user:pass@db:5432/app"
+    )
     assert settings.redis.url_with_auth == "redis://cache:6379/4"

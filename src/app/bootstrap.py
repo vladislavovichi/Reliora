@@ -12,10 +12,13 @@ from application.services.helpdesk import HelpdeskService, HelpdeskServiceFactor
 from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config import Settings
 from infrastructure.db.repositories import (
+    SqlAlchemyMacroRepository,
     SqlAlchemyOperatorRepository,
+    SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
+    SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.session import (
     build_engine,
@@ -23,7 +26,11 @@ from infrastructure.db.session import (
     dispose_engine,
     session_scope,
 )
-from infrastructure.redis.client import build_redis_client, close_redis_client, ping_redis_client
+from infrastructure.redis.client import (
+    build_redis_client,
+    close_redis_client,
+    ping_redis_client,
+)
 from infrastructure.redis.contracts import (
     ChatRateLimiter,
     GlobalRateLimiter,
@@ -38,7 +45,10 @@ from infrastructure.redis.locks import RedisTicketLockManager
 from infrastructure.redis.presence import RedisOperatorPresenceHelper
 from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
 from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
-from infrastructure.redis.streams import RedisTicketStreamConsumer, RedisTicketStreamPublisher
+from infrastructure.redis.streams import (
+    RedisTicketStreamConsumer,
+    RedisTicketStreamPublisher,
+)
 
 
 @dataclass(slots=True)
@@ -71,6 +81,9 @@ def build_helpdesk_service(session: AsyncSession) -> HelpdeskService:
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
+        macro_repository=SqlAlchemyMacroRepository(session),
+        tag_repository=SqlAlchemyTagRepository(session),
+        ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
     )
 
 

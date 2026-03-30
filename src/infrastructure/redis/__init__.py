@@ -1,6 +1,10 @@
 """Redis client scaffolding."""
 
-from infrastructure.redis.client import build_redis_client, close_redis_client, ping_redis_client
+from infrastructure.redis.client import (
+    build_redis_client,
+    close_redis_client,
+    ping_redis_client,
+)
 from infrastructure.redis.contracts import (
     ChatRateLimiter,
     GlobalRateLimiter,
@@ -24,7 +28,10 @@ from infrastructure.redis.locks import RedisTicketLock, RedisTicketLockManager
 from infrastructure.redis.presence import RedisOperatorPresenceHelper
 from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
 from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
-from infrastructure.redis.streams import RedisTicketStreamConsumer, RedisTicketStreamPublisher
+from infrastructure.redis.streams import (
+    RedisTicketStreamConsumer,
+    RedisTicketStreamPublisher,
+)
 
 __all__ = [
     "ChatRateLimiter",

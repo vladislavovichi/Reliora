@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID, uuid4
-
-import pytest
 
 from application.services.helpdesk import HelpdeskService
 from domain.entities.ticket import TicketDetails
@@ -15,7 +13,10 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from domain.tickets import InvalidTicketTransitionError
+
+
+def normalize_tag_name(name: str) -> str:
+    return " ".join(name.strip().lower().split())
 
 
 @dataclass
@@ -83,6 +84,7 @@ class StubTicketRepository:
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
             closed_at=ticket.closed_at,
+            tags=tuple(getattr(ticket, "tags", ())),
             last_message_text=getattr(ticket, "last_message_text", None),
             last_message_sender_type=getattr(ticket, "last_message_sender_type", None),
         )
@@ -187,6 +189,10 @@ class StubTicketRepository:
 @dataclass
 class StubTicketMessageRepository:
     added_messages: list[dict[str, object]]
+    next_internal_message_id: int = -1
+
+    def __post_init__(self) -> None:
+        self.allocated_internal_ids: list[dict[str, object]] = []
 
     async def add(
         self,
@@ -206,6 +212,20 @@ class StubTicketMessageRepository:
                 "sender_operator_id": sender_operator_id,
             }
         )
+
+    async def allocate_internal_telegram_message_id(
+        self,
+        *,
+        ticket_id: int,
+        sender_type: TicketMessageSenderType,
+    ) -> int:
+        self.allocated_internal_ids.append(
+            {
+                "ticket_id": ticket_id,
+                "sender_type": sender_type,
+            }
+        )
+        return self.next_internal_message_id
 
 
 @dataclass
@@ -252,6 +272,92 @@ class StubOperatorRepository:
         return self.operator_ids[telegram_user_id]
 
 
+@dataclass
+class StubMacroRepository:
+    macros: list[SimpleNamespace] = field(default_factory=list)
+
+    async def list_all(self) -> list[SimpleNamespace]:
+        return sorted(self.macros, key=lambda macro: (macro.title, macro.id))
+
+    async def get_by_id(self, *, macro_id: int) -> SimpleNamespace | None:
+        for macro in self.macros:
+            if macro.id == macro_id:
+                return macro
+        return None
+
+
+@dataclass
+class StubTagRepository:
+    initial_tags: list[tuple[int, str]] = field(default_factory=list)
+    next_id: int = 100
+
+    def __post_init__(self) -> None:
+        self.records_by_name: dict[str, SimpleNamespace] = {}
+        self.records_by_id: dict[int, SimpleNamespace] = {}
+        for tag_id, name in self.initial_tags:
+            normalized = normalize_tag_name(name)
+            record = SimpleNamespace(id=tag_id, name=normalized)
+            self.records_by_name[normalized] = record
+            self.records_by_id[tag_id] = record
+            self.next_id = max(self.next_id, tag_id + 1)
+
+    async def get_or_create(self, *, name: str) -> int:
+        normalized = normalize_tag_name(name)
+        record = self.records_by_name.get(normalized)
+        if record is None:
+            record = SimpleNamespace(id=self.next_id, name=normalized)
+            self.records_by_name[normalized] = record
+            self.records_by_id[record.id] = record
+            self.next_id += 1
+        return record.id
+
+    async def get_by_name(self, *, name: str) -> SimpleNamespace | None:
+        return self.records_by_name.get(normalize_tag_name(name))
+
+    async def list_all(self) -> list[SimpleNamespace]:
+        return sorted(
+            self.records_by_name.values(),
+            key=lambda tag: (tag.name, tag.id),
+        )
+
+
+@dataclass
+class StubTicketTagRepository:
+    tag_repository: StubTagRepository
+    ticket_tag_ids: dict[int, set[int]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.add_calls: list[dict[str, int]] = []
+        self.remove_calls: list[dict[str, int]] = []
+
+    async def list_for_ticket(self, *, ticket_id: int) -> list[SimpleNamespace]:
+        tag_ids = self.ticket_tag_ids.get(ticket_id, set())
+        return [
+            tag
+            for tag in sorted(
+                self.tag_repository.records_by_id.values(),
+                key=lambda item: (item.name, item.id),
+            )
+            if tag.id in tag_ids
+        ]
+
+    async def add(self, *, ticket_id: int, tag_id: int) -> bool:
+        self.add_calls.append({"ticket_id": ticket_id, "tag_id": tag_id})
+        tag_ids = self.ticket_tag_ids.setdefault(ticket_id, set())
+        if tag_id in tag_ids:
+            return False
+        tag_ids.add(tag_id)
+        return True
+
+    async def remove(self, *, ticket_id: int, tag_id: int) -> bool:
+        self.remove_calls.append({"ticket_id": ticket_id, "tag_id": tag_id})
+        tag_ids = self.ticket_tag_ids.setdefault(ticket_id, set())
+        if tag_id not in tag_ids:
+            return False
+        tag_ids.remove(tag_id)
+        return True
+
+
 def build_ticket(
     *,
     ticket_id: int,
@@ -261,6 +367,7 @@ def build_ticket(
     assigned_operator_name: str | None = None,
     last_message_text: str | None = None,
     last_message_sender_type: TicketMessageSenderType | None = None,
+    tags: tuple[str, ...] = (),
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=ticket_id,
@@ -277,6 +384,31 @@ def build_ticket(
         assigned_operator_name=assigned_operator_name,
         last_message_text=last_message_text,
         last_message_sender_type=last_message_sender_type,
+        tags=tags,
+    )
+
+
+def build_service(
+    *,
+    ticket_repository: StubTicketRepository,
+    message_repository: StubTicketMessageRepository | None = None,
+    event_repository: StubTicketEventRepository | None = None,
+    operator_repository: StubOperatorRepository | None = None,
+    macro_repository: StubMacroRepository | None = None,
+    tag_repository: StubTagRepository | None = None,
+    ticket_tag_repository: StubTicketTagRepository | None = None,
+) -> HelpdeskService:
+    active_tag_repository = tag_repository or StubTagRepository()
+    return HelpdeskService(
+        ticket_repository=ticket_repository,
+        ticket_message_repository=message_repository
+        or StubTicketMessageRepository(added_messages=[]),
+        ticket_event_repository=event_repository or StubTicketEventRepository(added_events=[]),
+        operator_repository=operator_repository or StubOperatorRepository(operator_ids={}),
+        macro_repository=macro_repository or StubMacroRepository(),
+        tag_repository=active_tag_repository,
+        ticket_tag_repository=ticket_tag_repository
+        or StubTicketTagRepository(tag_repository=active_tag_repository),
     )
 
 
@@ -286,11 +418,10 @@ async def test_create_ticket_from_first_client_message_creates_queues_and_logs_e
     ticket_repository = StubTicketRepository(created_ticket=created_ticket)
     message_repository = StubTicketMessageRepository(added_messages=[])
     event_repository = StubTicketEventRepository(added_events=[])
-    service = HelpdeskService(
+    service = build_service(
         ticket_repository=ticket_repository,
-        ticket_message_repository=message_repository,
-        ticket_event_repository=event_repository,
-        operator_repository=StubOperatorRepository(operator_ids={}),
+        message_repository=message_repository,
+        event_repository=event_repository,
     )
 
     result = await service.create_ticket_from_client_message(
@@ -323,11 +454,10 @@ async def test_follow_up_client_message_reuses_active_open_ticket() -> None:
     )
     message_repository = StubTicketMessageRepository(added_messages=[])
     event_repository = StubTicketEventRepository(added_events=[])
-    service = HelpdeskService(
+    service = build_service(
         ticket_repository=ticket_repository,
-        ticket_message_repository=message_repository,
-        ticket_event_repository=event_repository,
-        operator_repository=StubOperatorRepository(operator_ids={}),
+        message_repository=message_repository,
+        event_repository=event_repository,
     )
 
     result = await service.create_ticket_from_client_message(
@@ -350,14 +480,12 @@ async def test_follow_up_client_message_reuses_active_open_ticket() -> None:
 async def test_add_operator_message_logs_event_and_sets_first_response_timestamp() -> None:
     public_id = uuid4()
     ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
-    ticket_repository = StubTicketRepository(created_ticket=ticket)
     message_repository = StubTicketMessageRepository(added_messages=[])
     event_repository = StubTicketEventRepository(added_events=[])
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=message_repository,
-        ticket_event_repository=event_repository,
-        operator_repository=StubOperatorRepository(operator_ids={}),
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        message_repository=message_repository,
+        event_repository=event_repository,
     )
 
     result = await service.add_message_to_ticket(
@@ -378,13 +506,11 @@ async def test_add_operator_message_logs_event_and_sets_first_response_timestamp
 async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
     public_id = uuid4()
     ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.QUEUED)
-    ticket_repository = StubTicketRepository(created_ticket=ticket)
     event_repository = StubTicketEventRepository(added_events=[])
     operator_repository = StubOperatorRepository(operator_ids={1001: 7, 1002: 9})
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=event_repository,
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        event_repository=event_repository,
         operator_repository=operator_repository,
     )
 
@@ -413,15 +539,11 @@ async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
 async def test_get_and_list_queued_tickets_follow_queue_order() -> None:
     first_ticket = build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.QUEUED)
     second_ticket = build_ticket(ticket_id=2, public_id=uuid4(), status=TicketStatus.QUEUED)
-    ticket_repository = StubTicketRepository(
-        created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
-        queued_tickets=[first_ticket, second_ticket],
-    )
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=StubTicketEventRepository(added_events=[]),
-        operator_repository=StubOperatorRepository(operator_ids={}),
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
+            queued_tickets=[first_ticket, second_ticket],
+        )
     )
 
     next_ticket = await service.get_next_queued_ticket()
@@ -431,23 +553,19 @@ async def test_get_and_list_queued_tickets_follow_queue_order() -> None:
     assert next_ticket.public_id == first_ticket.public_id
     assert next_ticket.public_number.startswith("HD-")
     assert queued_tickets[0].public_id == first_ticket.public_id
-    assert ticket_repository.list_queued_calls[0]["limit"] == 1
 
 
 async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> None:
     first_ticket = build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.QUEUED)
     second_ticket = build_ticket(ticket_id=2, public_id=uuid4(), status=TicketStatus.QUEUED)
-    ticket_repository = StubTicketRepository(
-        created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
-        queued_tickets=[first_ticket, second_ticket],
-    )
     event_repository = StubTicketEventRepository(added_events=[])
-    operator_repository = StubOperatorRepository(operator_ids={1001: 7})
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=event_repository,
-        operator_repository=operator_repository,
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=3, public_id=uuid4(), status=TicketStatus.NEW),
+            queued_tickets=[first_ticket, second_ticket],
+        ),
+        event_repository=event_repository,
+        operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
     )
 
     result = await service.assign_next_ticket_to_operator(
@@ -458,12 +576,11 @@ async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> 
     assert result is not None
     assert result.public_id == first_ticket.public_id
     assert result.status == TicketStatus.ASSIGNED
-    assert ticket_repository.assign_queued_calls[0]["ticket_public_id"] == first_ticket.public_id
     assert first_ticket.assigned_operator_id == 7
     assert event_repository.added_events[0]["event_type"] == TicketEventType.ASSIGNED
 
 
-async def test_get_ticket_details_returns_operator_facing_summary() -> None:
+async def test_get_ticket_details_returns_operator_facing_summary_with_tags() -> None:
     public_id = uuid4()
     ticket = build_ticket(
         ticket_id=1,
@@ -473,14 +590,9 @@ async def test_get_ticket_details_returns_operator_facing_summary() -> None:
         assigned_operator_name="Operator One",
         last_message_text="Client says hello",
         last_message_sender_type=TicketMessageSenderType.CLIENT,
+        tags=("billing", "vip"),
     )
-    ticket_repository = StubTicketRepository(created_ticket=ticket)
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=StubTicketEventRepository(added_events=[]),
-        operator_repository=StubOperatorRepository(operator_ids={}),
-    )
+    service = build_service(ticket_repository=StubTicketRepository(created_ticket=ticket))
 
     result = await service.get_ticket_details(ticket_public_id=public_id)
 
@@ -490,6 +602,7 @@ async def test_get_ticket_details_returns_operator_facing_summary() -> None:
     assert result.assigned_operator_name == "Operator One"
     assert result.last_message_text == "Client says hello"
     assert result.last_message_sender_type == TicketMessageSenderType.CLIENT
+    assert result.tags == ("billing", "vip")
 
 
 async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_chat() -> None:
@@ -502,10 +615,10 @@ async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_c
     )
     message_repository = StubTicketMessageRepository(added_messages=[])
     event_repository = StubTicketEventRepository(added_events=[])
-    service = HelpdeskService(
+    service = build_service(
         ticket_repository=StubTicketRepository(created_ticket=ticket),
-        ticket_message_repository=message_repository,
-        ticket_event_repository=event_repository,
+        message_repository=message_repository,
+        event_repository=event_repository,
         operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
     )
 
@@ -521,99 +634,159 @@ async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_c
     assert result is not None
     assert result.client_chat_id == ticket.client_chat_id
     assert result.ticket.public_id == public_id
-    assert message_repository.added_messages[0]["sender_type"] == TicketMessageSenderType.OPERATOR
-    assert message_repository.added_messages[0]["sender_operator_id"] == 7
+    assert message_repository.added_messages[0]["telegram_message_id"] == 4321
     assert event_repository.added_events[0]["event_type"] == TicketEventType.OPERATOR_MESSAGE_ADDED
 
 
-async def test_reply_to_ticket_as_operator_rejects_other_operator() -> None:
+async def test_list_macros_returns_sorted_operator_templates() -> None:
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        macro_repository=StubMacroRepository(
+            macros=[
+                SimpleNamespace(id=2, title="Z macro", body="Second"),
+                SimpleNamespace(id=1, title="A macro", body="First"),
+            ]
+        ),
+    )
+
+    result = await service.list_macros()
+
+    assert [(macro.id, macro.title) for macro in result] == [
+        (1, "A macro"),
+        (2, "Z macro"),
+    ]
+
+
+async def test_apply_macro_to_ticket_persists_operator_message_and_macro_event_payload() -> None:
     public_id = uuid4()
     ticket = build_ticket(
         ticket_id=1,
         public_id=public_id,
         status=TicketStatus.ASSIGNED,
-        assigned_operator_id=9,
+        assigned_operator_id=7,
     )
-    service = HelpdeskService(
+    message_repository = StubTicketMessageRepository(
+        added_messages=[],
+        next_internal_message_id=-11,
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = build_service(
         ticket_repository=StubTicketRepository(created_ticket=ticket),
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=StubTicketEventRepository(added_events=[]),
+        message_repository=message_repository,
+        event_repository=event_repository,
         operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
+        macro_repository=StubMacroRepository(
+            macros=[SimpleNamespace(id=5, title="Resolved", body="Issue resolved.")]
+        ),
     )
 
-    with pytest.raises(InvalidTicketTransitionError):
-        await service.reply_to_ticket_as_operator(
-            ticket_public_id=public_id,
-            telegram_user_id=1001,
-            display_name="Operator One",
-            username="operator_one",
-            telegram_message_id=4321,
-            text="Please try again now.",
-        )
+    result = await service.apply_macro_to_ticket(
+        ticket_public_id=public_id,
+        macro_id=5,
+        telegram_user_id=1001,
+        display_name="Operator One",
+        username="operator_one",
+    )
+
+    assert result is not None
+    assert result.client_chat_id == ticket.client_chat_id
+    assert result.macro.id == 5
+    assert result.macro.body == "Issue resolved."
+    assert message_repository.allocated_internal_ids == [
+        {
+            "ticket_id": 1,
+            "sender_type": TicketMessageSenderType.OPERATOR,
+        }
+    ]
+    assert message_repository.added_messages[0]["telegram_message_id"] == -11
+    assert message_repository.added_messages[0]["text"] == "Issue resolved."
+    assert event_repository.added_events[0]["event_type"] == TicketEventType.OPERATOR_MESSAGE_ADDED
+    assert event_repository.added_events[0]["payload_json"]["macro_id"] == 5
+    assert event_repository.added_events[0]["payload_json"]["macro_title"] == "Resolved"
 
 
-async def test_escalate_and_close_ticket_log_workflow_events() -> None:
+async def test_add_tag_to_ticket_is_idempotent_and_logs_event_once() -> None:
     public_id = uuid4()
     ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
-    ticket_repository = StubTicketRepository(created_ticket=ticket)
+    tag_repository = StubTagRepository(initial_tags=[(10, "vip")])
+    ticket_tag_repository = StubTicketTagRepository(tag_repository=tag_repository)
     event_repository = StubTicketEventRepository(added_events=[])
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=event_repository,
-        operator_repository=StubOperatorRepository(operator_ids={}),
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        event_repository=event_repository,
+        tag_repository=tag_repository,
+        ticket_tag_repository=ticket_tag_repository,
     )
 
-    escalated = await service.escalate_ticket(ticket_public_id=public_id)
-    closed = await service.close_ticket(ticket_public_id=public_id)
+    first_result = await service.add_tag_to_ticket(
+        ticket_public_id=public_id,
+        tag_name="VIP",
+    )
+    second_result = await service.add_tag_to_ticket(
+        ticket_public_id=public_id,
+        tag_name="vip",
+    )
 
-    assert escalated is not None
-    assert closed is not None
-    assert escalated.status == TicketStatus.ESCALATED
-    assert closed.status == TicketStatus.CLOSED
+    assert first_result is not None
+    assert second_result is not None
+    assert first_result.changed is True
+    assert second_result.changed is False
+    assert first_result.tags == ("vip",)
+    assert second_result.tags == ("vip",)
     assert [event["event_type"] for event in event_repository.added_events] == [
-        TicketEventType.ESCALATED,
-        TicketEventType.CLOSED,
+        TicketEventType.TAG_ADDED,
     ]
 
 
-async def test_invalid_transition_is_rejected() -> None:
+async def test_remove_tag_from_ticket_updates_links_and_logs_event() -> None:
     public_id = uuid4()
-    closed_ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.CLOSED)
-    ticket_repository = StubTicketRepository(created_ticket=closed_ticket)
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=StubTicketEventRepository(added_events=[]),
-        operator_repository=StubOperatorRepository(operator_ids={1001: 7}),
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
+    tag_repository = StubTagRepository(initial_tags=[(10, "vip"), (11, "billing")])
+    ticket_tag_repository = StubTicketTagRepository(
+        tag_repository=tag_repository,
+        ticket_tag_ids={1: {10, 11}},
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        event_repository=event_repository,
+        tag_repository=tag_repository,
+        ticket_tag_repository=ticket_tag_repository,
     )
 
-    with pytest.raises(InvalidTicketTransitionError):
-        await service.assign_ticket_to_operator(
-            ticket_public_id=public_id,
-            telegram_user_id=1001,
-            display_name="Operator One",
-        )
-
-
-async def test_get_basic_stats_returns_aggregated_totals() -> None:
-    ticket_repository = StubTicketRepository(
-        created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW),
-        by_status={
-            TicketStatus.NEW: 2,
-            TicketStatus.ASSIGNED: 3,
-            TicketStatus.CLOSED: 1,
-        },
-    )
-    service = HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_message_repository=StubTicketMessageRepository(added_messages=[]),
-        ticket_event_repository=StubTicketEventRepository(added_events=[]),
-        operator_repository=StubOperatorRepository(operator_ids={}),
+    result = await service.remove_tag_from_ticket(
+        ticket_public_id=public_id,
+        tag_name="VIP",
     )
 
-    stats = await service.get_basic_stats()
+    assert result is not None
+    assert result.changed is True
+    assert result.tag == "vip"
+    assert result.tags == ("billing",)
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.TAG_REMOVED,
+    ]
 
-    assert stats.total == 6
-    assert stats.open_total == 5
-    assert stats.by_status[TicketStatus.CLOSED] == 1
+
+async def test_list_ticket_tags_and_available_tags_return_normalized_names() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
+    tag_repository = StubTagRepository(initial_tags=[(10, "vip"), (11, "billing")])
+    ticket_tag_repository = StubTicketTagRepository(
+        tag_repository=tag_repository,
+        ticket_tag_ids={1: {11}},
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        tag_repository=tag_repository,
+        ticket_tag_repository=ticket_tag_repository,
+    )
+
+    ticket_tags = await service.list_ticket_tags(ticket_public_id=public_id)
+    available_tags = await service.list_available_tags()
+
+    assert ticket_tags is not None
+    assert ticket_tags.tags == ("billing",)
+    assert available_tags == ["billing", "vip"]

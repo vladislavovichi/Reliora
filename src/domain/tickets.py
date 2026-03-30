@@ -54,33 +54,38 @@ def is_open_status(status: TicketStatus) -> bool:
 def ensure_assignable(status: TicketStatus) -> None:
     if status not in ASSIGNABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Заявку нельзя назначить, пока она находится в статусе «{format_status_for_humans(status)}»."
+            "Заявку нельзя назначить, пока она находится "
+            f"в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_escalatable(status: TicketStatus) -> None:
     if status not in ESCALATABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Заявку нельзя эскалировать, пока она находится в статусе «{format_status_for_humans(status)}»."
+            "Заявку нельзя эскалировать, пока она находится "
+            f"в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_closable(status: TicketStatus) -> None:
     if not is_open_status(status):
         raise InvalidTicketTransitionError(
-            f"Заявку нельзя закрыть, пока она находится в статусе «{format_status_for_humans(status)}»."
+            "Заявку нельзя закрыть, пока она находится "
+            f"в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_message_addable(status: TicketStatus) -> None:
     if not is_open_status(status):
         raise InvalidTicketTransitionError(
-            f"Нельзя добавлять сообщения, пока заявка находится в статусе «{format_status_for_humans(status)}»."
+            "Нельзя добавлять сообщения, пока заявка находится "
+            f"в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_operator_replyable(status: TicketStatus) -> None:
     if status not in OPERATOR_REPLYABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Ответ оператора недоступен, пока заявка находится в статусе «{format_status_for_humans(status)}»."
+            "Ответ оператора недоступен, пока заявка находится "
+            f"в статусе «{format_status_for_humans(status)}»."
         )

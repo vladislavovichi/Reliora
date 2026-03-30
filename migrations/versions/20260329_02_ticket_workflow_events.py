@@ -19,8 +19,12 @@ depends_on = None
 def upgrade() -> None:
     op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'queued'")
     op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'reassigned'")
-    op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'client_message_added'")
-    op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'operator_message_added'")
+    op.execute(
+        "ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'client_message_added'"
+    )
+    op.execute(
+        "ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'operator_message_added'"
+    )
 
 
 def downgrade() -> None:

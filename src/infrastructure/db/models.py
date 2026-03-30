@@ -91,7 +91,9 @@ class Macro(CreatedAtMixin, Base):
 class SLAPolicy(Base):
     __tablename__ = "sla_policies"
     __table_args__ = (
-        CheckConstraint("first_response_minutes > 0", name="first_response_minutes_positive"),
+        CheckConstraint(
+            "first_response_minutes > 0", name="first_response_minutes_positive"
+        ),
         CheckConstraint("resolution_minutes > 0", name="resolution_minutes_positive"),
     )
 
@@ -150,7 +152,9 @@ class Ticket(TimestampMixin, Base):
     first_response_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     assigned_operator: Mapped[Operator | None] = relationship(
         back_populates="assigned_tickets",
@@ -207,7 +211,9 @@ class TicketMessage(CreatedAtMixin, Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
     ticket: Mapped[Ticket] = relationship(back_populates="messages")
-    sender_operator: Mapped[Operator | None] = relationship(back_populates="sent_messages")
+    sender_operator: Mapped[Operator | None] = relationship(
+        back_populates="sent_messages"
+    )
 
 
 class TicketEvent(CreatedAtMixin, Base):

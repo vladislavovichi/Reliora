@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from uuid import UUID
 
@@ -13,8 +13,8 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.services.helpdesk import HelpdeskServiceFactory
-from application.use_cases.tickets import QueuedTicketSummary, TicketDetailsSummary
-from bot.callbacks import OperatorActionCallback
+from application.use_cases.tickets import MacroSummary, QueuedTicketSummary, TicketDetailsSummary
+from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 from domain.tickets import InvalidTicketTransitionError, format_status_for_humans
 from infrastructure.redis.contracts import (
@@ -173,6 +173,225 @@ async def handle_ticket_details(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,
         ),
+    )
+
+
+@router.message(Command("macros"))
+async def handle_macros(
+    message: Message,
+    command: CommandObject,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    ticket_public_id: UUID | None = None
+    if command.args is not None and command.args.strip():
+        ticket_public_id = _parse_ticket_public_id(command.args.strip())
+        if ticket_public_id is None:
+            await message.answer("Использование: /macros [ticket_public_id]")
+            return
+
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        macros = await helpdesk_service.list_macros()
+        ticket_details = None
+        if ticket_public_id is not None:
+            ticket_details = await helpdesk_service.get_ticket_details(
+                ticket_public_id=ticket_public_id
+            )
+
+    if ticket_public_id is not None and ticket_details is None:
+        await message.answer("Заявка не найдена.")
+        return
+
+    if not macros:
+        await message.answer("Макросы пока не настроены.")
+        return
+
+    await message.answer(
+        _format_macro_list(macros, ticket_details),
+        reply_markup=(
+            _build_macro_actions_markup(ticket_public_id=ticket_public_id, macros=macros)
+            if ticket_public_id is not None
+            else None
+        ),
+    )
+
+
+@router.message(Command("tags"))
+async def handle_ticket_tags(
+    message: Message,
+    command: CommandObject,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if command.args is None:
+        await message.answer("Использование: /tags <ticket_public_id>")
+        return
+
+    ticket_public_id = _parse_ticket_public_id(command.args.strip())
+    if ticket_public_id is None:
+        await message.answer("Некорректный идентификатор заявки.")
+        return
+
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        tags_result = await helpdesk_service.list_ticket_tags(ticket_public_id=ticket_public_id)
+        available_tags = await helpdesk_service.list_available_tags()
+
+    if tags_result is None:
+        await message.answer("Заявка не найдена.")
+        return
+
+    await message.answer(
+        _format_ticket_tags_response(
+            tags_result.public_number,
+            tags_result.tags,
+            available_tags,
+        )
+    )
+
+
+@router.message(Command("alltags"))
+async def handle_all_tags(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        available_tags = await helpdesk_service.list_available_tags()
+
+    if not available_tags:
+        await message.answer("Теги пока не созданы.")
+        return
+
+    await message.answer("Доступные теги:\n" + "\n".join(f"- {tag}" for tag in available_tags))
+
+
+@router.message(Command("addtag"))
+async def handle_add_tag(
+    message: Message,
+    command: CommandObject,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    parsed = _parse_ticket_argument_with_text(command.args)
+    if parsed is None:
+        await message.answer("Использование: /addtag <ticket_public_id> <tag>")
+        return
+
+    ticket_public_id, tag_name = parsed
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
+    if not await lock.acquire():
+        await message.answer("Заявка сейчас обрабатывается другим оператором.")
+        return
+
+    try:
+        async with helpdesk_service_factory() as helpdesk_service:
+            result = await helpdesk_service.add_tag_to_ticket(
+                ticket_public_id=ticket_public_id,
+                tag_name=tag_name,
+            )
+    finally:
+        await lock.release()
+
+    if result is None:
+        await message.answer("Заявка не найдена.")
+        return
+
+    if result.changed:
+        await message.answer(
+            f"Тег {result.tag} добавлен к заявке {result.ticket.public_number}.\n"
+            f"Текущие теги: {_format_tags(result.tags)}"
+        )
+        return
+
+    await message.answer(
+        f"Тег {result.tag} уже привязан к заявке {result.ticket.public_number}.\n"
+        f"Текущие теги: {_format_tags(result.tags)}"
+    )
+
+
+@router.message(Command("rmtag"))
+async def handle_remove_tag(
+    message: Message,
+    command: CommandObject,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    parsed = _parse_ticket_argument_with_text(command.args)
+    if parsed is None:
+        await message.answer("Использование: /rmtag <ticket_public_id> <tag>")
+        return
+
+    ticket_public_id, tag_name = parsed
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
+    if not await lock.acquire():
+        await message.answer("Заявка сейчас обрабатывается другим оператором.")
+        return
+
+    try:
+        async with helpdesk_service_factory() as helpdesk_service:
+            result = await helpdesk_service.remove_tag_from_ticket(
+                ticket_public_id=ticket_public_id,
+                tag_name=tag_name,
+            )
+    finally:
+        await lock.release()
+
+    if result is None:
+        await message.answer("Заявка не найдена.")
+        return
+
+    if result.changed:
+        await message.answer(
+            f"Тег {result.tag} снят с заявки {result.ticket.public_number}.\n"
+            f"Текущие теги: {_format_tags(result.tags)}"
+        )
+        return
+
+    await message.answer(
+        f"Тег {result.tag} не найден у заявки {result.ticket.public_number}.\n"
+        f"Текущие теги: {_format_tags(result.tags)}"
     )
 
 
@@ -355,6 +574,99 @@ async def handle_reply_action(
     )
 
 
+@router.callback_query(OperatorMacroCallback.filter())
+async def handle_apply_macro(
+    callback: CallbackQuery,
+    callback_data: OperatorMacroCallback,
+    bot: Bot,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await _respond_to_operator(callback, "Некорректный идентификатор заявки.")
+        return
+
+    if not await global_rate_limiter.allow():
+        await _respond_to_operator(
+            callback,
+            "Сервис временно недоступен. Попробуйте чуть позже.",
+        )
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
+
+    lock = ticket_lock_manager.for_ticket(callback_data.ticket_public_id)
+    if not await lock.acquire():
+        await _respond_to_operator(callback, "Заявка сейчас обрабатывается другим оператором.")
+        return
+
+    macro_result = None
+    ticket_details = None
+    error_message: str | None = None
+    try:
+        async with helpdesk_service_factory() as helpdesk_service:
+            try:
+                macro_result = await helpdesk_service.apply_macro_to_ticket(
+                    ticket_public_id=ticket_public_id,
+                    macro_id=callback_data.macro_id,
+                    telegram_user_id=callback.from_user.id,
+                    display_name=callback.from_user.full_name,
+                    username=callback.from_user.username,
+                )
+                if macro_result is not None:
+                    ticket_details = await helpdesk_service.get_ticket_details(
+                        ticket_public_id=ticket_public_id
+                    )
+            except InvalidTicketTransitionError as exc:
+                error_message = str(exc)
+    finally:
+        await lock.release()
+
+    if error_message is not None:
+        await _respond_to_operator(callback, error_message)
+        return
+
+    if macro_result is None:
+        await _respond_to_operator(callback, "Не удалось применить макрос.")
+        return
+
+    delivery_error: str | None = None
+    try:
+        await bot.send_message(macro_result.client_chat_id, macro_result.macro.body)
+    except TelegramAPIError as exc:
+        delivery_error = str(exc)
+
+    if callback.message is None or ticket_details is None:
+        answer_text = f"Макрос «{macro_result.macro.title}» применен."
+        if delivery_error is not None:
+            answer_text = (
+                f"{answer_text} Ответ сохранен, но доставить его клиенту не удалось: "
+                f"{delivery_error}"
+            )
+        await _respond_to_operator(callback, answer_text)
+        return
+
+    if delivery_error is None:
+        await callback.answer(f"Макрос «{macro_result.macro.title}» отправлен.")
+    else:
+        await callback.answer(f"Макрос «{macro_result.macro.title}» сохранен.")
+        await callback.message.answer(
+            f"Макрос «{macro_result.macro.title}» сохранен, "
+            f"но доставить его клиенту не удалось: {delivery_error}"
+        )
+
+    await callback.message.answer(
+        _format_ticket_details(ticket_details),
+        reply_markup=_build_ticket_actions_markup(
+            ticket_public_id=ticket_details.public_id,
+            status=ticket_details.status,
+        ),
+    )
+
+
 @router.message(StateFilter(OperatorTicketStates.replying), F.text)
 async def handle_reply_message(
     message: Message,
@@ -370,7 +682,10 @@ async def handle_reply_message(
         return
 
     if message.text.startswith("/"):
-        await message.answer("Сейчас активен режим ответа. Отправьте текст или используйте /cancel.")
+        await message.answer(
+            "Сейчас активен режим ответа. "
+            "Отправьте текст или используйте /cancel."
+        )
         return
 
     if not await global_rate_limiter.allow():
@@ -485,7 +800,8 @@ async def handle_reassign_action(
         callback,
         f"Режим переназначения для заявки {ticket_details.public_number} включен.",
         (
-            "Отправьте идентификатор пользователя Telegram целевого оператора, при необходимости добавьте "
+            "Отправьте идентификатор пользователя Telegram "
+            "целевого оператора, при необходимости добавьте "
             "имя.\nПример: 123456789 Иван Иванов\nИспользуйте /cancel, чтобы отменить действие."
         ),
     )
@@ -506,7 +822,9 @@ async def handle_reassign_message(
 
     if message.text.startswith("/"):
         await message.answer(
-            "Сейчас активен режим переназначения. Отправьте данные оператора или используйте /cancel."
+            "Сейчас активен режим переназначения. "
+            "Отправьте данные оператора\n"
+            "или используйте /cancel."
         )
         return
 
@@ -520,7 +838,8 @@ async def handle_reassign_message(
     target = _parse_reassign_target(message.text)
     if target is None:
         await message.answer(
-            "Некорректный ввод. Отправьте идентификатор пользователя Telegram, при необходимости добавьте имя."
+            "Некорректный ввод. Отправьте идентификатор "
+            "пользователя Telegram, при необходимости добавьте имя."
         )
         return
 
@@ -801,6 +1120,26 @@ def _build_ticket_actions_markup(
     return builder.as_markup()
 
 
+def _build_macro_actions_markup(
+    *,
+    ticket_public_id: UUID,
+    macros: Sequence[MacroSummary],
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    callback_value = str(ticket_public_id)
+    for macro in macros:
+        builder.row(
+            _build_callback_button(
+                _format_macro_button_text(macro),
+                OperatorMacroCallback(
+                    ticket_public_id=callback_value,
+                    macro_id=macro.id,
+                ).pack(),
+            )
+        )
+    return builder.as_markup()
+
+
 def _build_callback_button(text: str, callback_data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=callback_data)
 
@@ -830,12 +1169,53 @@ def _format_ticket_details(ticket: TicketDetailsSummary) -> str:
         f"Приоритет: {_format_priority(ticket.priority)}",
         f"Тема: {ticket.subject}",
         f"Назначен: {assigned_operator}",
+        f"Теги: {_format_tags(ticket.tags)}",
         (
             "Последнее сообщение: "
             f"{_format_last_message(ticket.last_message_text, ticket.last_message_sender_type)}"
         ),
     ]
     return "\n".join(lines)
+
+
+def _format_macro_list(
+    macros: Sequence[MacroSummary],
+    ticket_details: TicketDetailsSummary | None,
+) -> str:
+    lines: list[str] = []
+    if ticket_details is None:
+        lines.append("Доступные макросы:")
+    else:
+        lines.append(f"Макросы для заявки {ticket_details.public_number}:")
+
+    for macro in macros:
+        lines.append(f"{macro.id}. {macro.title} — {_format_macro_preview(macro.body)}")
+
+    if ticket_details is None:
+        lines.append("Используйте /macros <ticket_public_id>, чтобы применить макрос кнопкой.")
+    else:
+        lines.append("Выберите макрос кнопкой ниже.")
+    return "\n".join(lines)
+
+
+def _format_ticket_tags_response(
+    public_number: str,
+    ticket_tags: Sequence[str],
+    available_tags: Sequence[str],
+) -> str:
+    lines = [
+        f"Теги заявки {public_number}: {_format_tags(ticket_tags)}",
+        f"Доступные теги: {_format_tags(available_tags)}",
+        "Добавить: /addtag <ticket_public_id> <tag>",
+        "Снять: /rmtag <ticket_public_id> <tag>",
+    ]
+    return "\n".join(lines)
+
+
+def _format_tags(tags: Sequence[str]) -> str:
+    if not tags:
+        return "-"
+    return ", ".join(tags)
 
 
 def _format_last_message(
@@ -853,6 +1233,20 @@ def _format_last_message(
         return preview
 
     return f"[{_format_sender_type(sender_type)}] {preview}"
+
+
+def _format_macro_preview(text: str) -> str:
+    preview = " ".join(text.split())
+    if len(preview) > 80:
+        return f"{preview[:77]}..."
+    return preview
+
+
+def _format_macro_button_text(macro: MacroSummary) -> str:
+    label = macro.title.strip() or f"Макрос {macro.id}"
+    if len(label) > 32:
+        return f"{label[:29]}..."
+    return label
 
 
 def _format_status(status: TicketStatus) -> str:
@@ -886,6 +1280,25 @@ def _parse_ticket_public_id(value: str | None) -> UUID | None:
         return UUID(value)
     except ValueError:
         return None
+
+
+def _parse_ticket_argument_with_text(args: str | None) -> tuple[UUID, str] | None:
+    if args is None:
+        return None
+
+    parts = args.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return None
+
+    ticket_public_id = _parse_ticket_public_id(parts[0])
+    if ticket_public_id is None:
+        return None
+
+    tag_name = parts[1].strip()
+    if not tag_name:
+        return None
+
+    return ticket_public_id, tag_name
 
 
 def _parse_reassign_target(text: str) -> tuple[int, str] | None:

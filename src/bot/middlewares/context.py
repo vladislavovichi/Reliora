@@ -18,9 +18,13 @@ class UpdateContextMiddleware(BaseMiddleware):
     ) -> Any:
         if isinstance(event, Message):
             data["event_chat_id"] = event.chat.id
-            data["event_user_id"] = event.from_user.id if event.from_user is not None else None
+            data["event_user_id"] = (
+                event.from_user.id if event.from_user is not None else None
+            )
         elif isinstance(event, CallbackQuery):
-            data["event_chat_id"] = event.message.chat.id if event.message is not None else None
+            data["event_chat_id"] = (
+                event.message.chat.id if event.message is not None else None
+            )
             data["event_user_id"] = event.from_user.id
 
         return await handler(event, data)

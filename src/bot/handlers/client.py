@@ -5,7 +5,11 @@ from aiogram.types import Message
 
 from application.services.helpdesk import HelpdeskServiceFactory
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import ChatRateLimiter, GlobalRateLimiter, TicketStreamPublisher
+from infrastructure.redis.contracts import (
+    ChatRateLimiter,
+    GlobalRateLimiter,
+    TicketStreamPublisher,
+)
 
 router = Router(name="client")
 
@@ -26,7 +30,9 @@ async def handle_client_text(
         return
 
     if not await chat_rate_limiter.allow(chat_id=message.chat.id):
-        await message.answer("Слишком много запросов из этого чата. Пожалуйста, подождите немного.")
+        await message.answer(
+            "Слишком много запросов из этого чата. Пожалуйста, подождите немного."
+        )
         return
 
     try:

@@ -27,6 +27,11 @@ async def handle_help(message: Message) -> None:
         "/queue - показать ближайшие заявки в очереди\n"
         "/take - взять следующую заявку из очереди\n"
         "/ticket <ticket_public_id> - показать детали заявки\n"
+        "/macros [ticket_public_id] - показать доступные макросы\n"
+        "/tags <ticket_public_id> - показать теги заявки\n"
+        "/alltags - показать все доступные теги\n"
+        "/addtag <ticket_public_id> <tag> - добавить тег к заявке\n"
+        "/rmtag <ticket_public_id> <tag> - снять тег с заявки\n"
         "/cancel - отменить текущее действие оператора"
     )
 

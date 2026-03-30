@@ -35,7 +35,9 @@ def _register_lifecycle(dispatcher: Dispatcher) -> None:
     dispatcher.shutdown.register(on_shutdown)
 
 
-async def on_startup(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any) -> None:
+async def on_startup(
+    dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any
+) -> None:
     logger = logging.getLogger(__name__)
     bot_info = await bot.get_me()
     logger.info(
@@ -45,7 +47,9 @@ async def on_startup(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: 
     )
 
 
-async def on_shutdown(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any) -> None:
+async def on_shutdown(
+    dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any
+) -> None:
     logger = logging.getLogger(__name__)
     logger.info(
         "Bot shutdown completed bot_id=%s app=%s",

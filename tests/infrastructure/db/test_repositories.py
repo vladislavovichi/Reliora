@@ -12,10 +12,14 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import Ticket, TicketEvent
+from infrastructure.db.models import Macro, Tag, Ticket, TicketEvent, TicketTag
 from infrastructure.db.repositories import (
+    SqlAlchemyMacroRepository,
+    SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
+    SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
+    SqlAlchemyTicketTagRepository,
 )
 
 
@@ -49,11 +53,15 @@ class FakeAsyncSession:
     result: FakeResult = field(default_factory=FakeResult)
     queued_results: list[FakeResult] = field(default_factory=list)
     added: list[Any] = field(default_factory=list)
+    deleted: list[Any] = field(default_factory=list)
     flush_count: int = 0
     executed_statements: list[Any] = field(default_factory=list)
 
     def add(self, value: Any) -> None:
         self.added.append(value)
+
+    async def delete(self, value: Any) -> None:
+        self.deleted.append(value)
 
     async def flush(self) -> None:
         self.flush_count += 1
@@ -195,7 +203,7 @@ async def test_count_by_status_returns_mapping() -> None:
     }
 
 
-async def test_get_details_by_public_id_returns_enriched_ticket_view() -> None:
+async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags() -> None:
     ticket = Ticket(
         client_chat_id=100,
         subject="Need access",
@@ -209,9 +217,8 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view() -> None:
         queued_results=[
             FakeResult(scalar=ticket),
             FakeResult(scalar="Operator One"),
-            FakeResult(
-                rows=[("Latest client message", TicketMessageSenderType.CLIENT)]
-            ),
+            FakeResult(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
+            FakeResult(scalar_items=["billing", "vip"]),
         ]
     )
     repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
@@ -222,6 +229,7 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view() -> None:
     assert result.public_id == ticket.public_id
     assert result.assigned_operator_name == "Operator One"
     assert result.last_message_text == "Latest client message"
+    assert result.tags == ("billing", "vip")
 
 
 async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:
@@ -263,6 +271,18 @@ async def test_list_queued_tickets_returns_ordered_sequence() -> None:
     assert [ticket.subject for ticket in result] == ["First", "Second"]
 
 
+async def test_ticket_message_repository_allocates_negative_internal_ids() -> None:
+    session = FakeAsyncSession(result=FakeResult(scalar=-4))
+    repository = SqlAlchemyTicketMessageRepository(cast(AsyncSession, session))
+
+    result = await repository.allocate_internal_telegram_message_id(
+        ticket_id=10,
+        sender_type=TicketMessageSenderType.OPERATOR,
+    )
+
+    assert result == -5
+
+
 async def test_ticket_event_repository_persists_event_rows() -> None:
     session = FakeAsyncSession()
     repository = SqlAlchemyTicketEventRepository(cast(AsyncSession, session))
@@ -279,3 +299,68 @@ async def test_ticket_event_repository_persists_event_rows() -> None:
     assert event.event_type == TicketEventType.QUEUED
     assert event.payload_json == {"from_status": "new", "to_status": "queued"}
     assert session.flush_count == 1
+
+
+async def test_macro_repository_lists_and_fetches_macros() -> None:
+    first_macro = Macro(title="First", body="Hello")
+    first_macro.id = 1
+    second_macro = Macro(title="Second", body="World")
+    second_macro.id = 2
+    session = FakeAsyncSession(
+        queued_results=[
+            FakeResult(scalar_items=[first_macro, second_macro]),
+            FakeResult(scalar=second_macro),
+        ]
+    )
+    repository = SqlAlchemyMacroRepository(cast(AsyncSession, session))
+
+    listed = await repository.list_all()
+    fetched = await repository.get_by_id(macro_id=2)
+
+    assert [macro.title for macro in listed] == ["First", "Second"]
+    assert fetched is second_macro
+
+
+async def test_tag_repository_normalizes_and_lists_tags() -> None:
+    existing_tag = Tag(name="vip")
+    existing_tag.id = 3
+    session = FakeAsyncSession(
+        queued_results=[
+            FakeResult(scalar=existing_tag),
+            FakeResult(scalar=existing_tag),
+            FakeResult(scalar_items=[existing_tag]),
+        ]
+    )
+    repository = SqlAlchemyTagRepository(cast(AsyncSession, session))
+
+    created_id = await repository.get_or_create(name=" VIP ")
+    fetched = await repository.get_by_name(name="vip")
+    listed = await repository.list_all()
+
+    assert created_id == 3
+    assert fetched is existing_tag
+    assert listed == [existing_tag]
+
+
+async def test_ticket_tag_repository_add_remove_and_list_links() -> None:
+    first_tag = Tag(name="billing")
+    first_tag.id = 10
+    existing_link = TicketTag(ticket_id=5, tag_id=10)
+    session = FakeAsyncSession(
+        queued_results=[
+            FakeResult(scalar=None),
+            FakeResult(scalar=existing_link),
+            FakeResult(scalar_items=[first_tag]),
+        ]
+    )
+    repository = SqlAlchemyTicketTagRepository(cast(AsyncSession, session))
+
+    added = await repository.add(ticket_id=5, tag_id=10)
+    removed = await repository.remove(ticket_id=5, tag_id=10)
+    listed = await repository.list_for_ticket(ticket_id=5)
+
+    assert added is True
+    assert removed is True
+    assert listed == [first_tag]
+    assert isinstance(session.added[0], TicketTag)
+    assert session.deleted == [existing_link]

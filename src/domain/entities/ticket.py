@@ -38,5 +38,6 @@ class TicketDetails:
     updated_at: datetime
     first_response_at: datetime | None
     closed_at: datetime | None
+    tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None

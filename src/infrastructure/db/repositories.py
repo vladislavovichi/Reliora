@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from domain.contracts.repositories import (
+    MacroRepository,
     OperatorRepository,
     TagRepository,
     TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
+    TicketTagRepository,
 )
 from domain.entities.ticket import Ticket as TicketEntity
 from domain.entities.ticket import TicketDetails
@@ -24,12 +26,23 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import Operator, Tag, TicketEvent, TicketMessage
+from infrastructure.db.models import (
+    Macro,
+    Operator,
+    Tag,
+    TicketEvent,
+    TicketMessage,
+    TicketTag,
+)
 from infrastructure.db.models import Ticket as TicketModel
 
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def normalize_tag_name(name: str) -> str:
+    return " ".join(name.strip().lower().split())
 
 
 def apply_queue_ordering(
@@ -107,7 +120,18 @@ class SqlAlchemyTicketRepository(TicketRepository):
         last_message_sender_type: TicketMessageSenderType | None = None
         if last_message_row is not None:
             last_message_text = cast(str, last_message_row[0])
-            last_message_sender_type = cast(TicketMessageSenderType, last_message_row[1])
+            last_message_sender_type = cast(
+                TicketMessageSenderType, last_message_row[1]
+            )
+
+        tags_statement = (
+            select(Tag.name)
+            .join(TicketTag, TicketTag.tag_id == Tag.id)
+            .where(TicketTag.ticket_id == ticket.id)
+            .order_by(Tag.name.asc(), Tag.id.asc())
+        )
+        tags_result = await self.session.execute(tags_statement)
+        tags = tuple(tags_result.scalars().all())
 
         return TicketDetails(
             id=ticket.id,
@@ -122,11 +146,14 @@ class SqlAlchemyTicketRepository(TicketRepository):
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
             closed_at=ticket.closed_at,
+            tags=tags,
             last_message_text=last_message_text,
             last_message_sender_type=last_message_sender_type,
         )
 
-    async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
+    async def get_active_by_client_chat_id(
+        self, client_chat_id: int
+    ) -> TicketEntity | None:
         statement = (
             select(TicketModel)
             .where(TicketModel.client_chat_id == client_chat_id)
@@ -158,8 +185,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         prioritize_priority: bool = False,
     ) -> Sequence[TicketEntity]:
         statement = apply_queue_ordering(
-            select(TicketModel)
-            .where(TicketModel.status == TicketStatus.QUEUED),
+            select(TicketModel).where(TicketModel.status == TicketStatus.QUEUED),
             prioritize_priority=prioritize_priority,
         )
         if limit is not None:
@@ -252,6 +278,22 @@ class SqlAlchemyTicketMessageRepository(TicketMessageRepository):
         self.session.add(ticket_message)
         await self.session.flush()
 
+    async def allocate_internal_telegram_message_id(
+        self,
+        *,
+        ticket_id: int,
+        sender_type: TicketMessageSenderType,
+    ) -> int:
+        statement = select(func.min(TicketMessage.telegram_message_id)).where(
+            TicketMessage.ticket_id == ticket_id,
+            TicketMessage.sender_type == sender_type,
+        )
+        result = await self.session.execute(statement)
+        current_min = result.scalar_one_or_none()
+        if current_min is None or current_min >= 0:
+            return -1
+        return int(current_min) - 1
+
 
 class SqlAlchemyTicketEventRepository(TicketEventRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -284,7 +326,9 @@ class SqlAlchemyOperatorRepository(OperatorRepository):
         display_name: str,
         username: str | None = None,
     ) -> int:
-        statement = select(Operator).where(Operator.telegram_user_id == telegram_user_id)
+        statement = select(Operator).where(
+            Operator.telegram_user_id == telegram_user_id
+        )
         result = await self.session.execute(statement)
         operator = result.scalar_one_or_none()
 
@@ -305,12 +349,27 @@ class SqlAlchemyOperatorRepository(OperatorRepository):
         return operator.id
 
 
+class SqlAlchemyMacroRepository(MacroRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_all(self) -> Sequence[Macro]:
+        statement = select(Macro).order_by(Macro.title.asc(), Macro.id.asc())
+        result = await self.session.execute(statement)
+        return result.scalars().all()
+
+    async def get_by_id(self, *, macro_id: int) -> Macro | None:
+        statement = select(Macro).where(Macro.id == macro_id)
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+
 class SqlAlchemyTagRepository(TagRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get_or_create(self, *, name: str) -> int:
-        normalized_name = name.strip().lower()
+        normalized_name = normalize_tag_name(name)
         statement = select(Tag).where(Tag.name == normalized_name)
         result = await self.session.execute(statement)
         tag = result.scalar_one_or_none()
@@ -321,3 +380,57 @@ class SqlAlchemyTagRepository(TagRepository):
             await self.session.flush()
 
         return tag.id
+
+    async def get_by_name(self, *, name: str) -> Tag | None:
+        normalized_name = normalize_tag_name(name)
+        statement = select(Tag).where(Tag.name == normalized_name)
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def list_all(self) -> Sequence[Tag]:
+        statement = select(Tag).order_by(Tag.name.asc(), Tag.id.asc())
+        result = await self.session.execute(statement)
+        return result.scalars().all()
+
+
+class SqlAlchemyTicketTagRepository(TicketTagRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_for_ticket(self, *, ticket_id: int) -> Sequence[Tag]:
+        statement = (
+            select(Tag)
+            .join(TicketTag, TicketTag.tag_id == Tag.id)
+            .where(TicketTag.ticket_id == ticket_id)
+            .order_by(Tag.name.asc(), Tag.id.asc())
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().all()
+
+    async def add(self, *, ticket_id: int, tag_id: int) -> bool:
+        statement = select(TicketTag).where(
+            TicketTag.ticket_id == ticket_id,
+            TicketTag.tag_id == tag_id,
+        )
+        result = await self.session.execute(statement)
+        ticket_tag = result.scalar_one_or_none()
+        if ticket_tag is not None:
+            return False
+
+        self.session.add(TicketTag(ticket_id=ticket_id, tag_id=tag_id))
+        await self.session.flush()
+        return True
+
+    async def remove(self, *, ticket_id: int, tag_id: int) -> bool:
+        statement = select(TicketTag).where(
+            TicketTag.ticket_id == ticket_id,
+            TicketTag.tag_id == tag_id,
+        )
+        result = await self.session.execute(statement)
+        ticket_tag = result.scalar_one_or_none()
+        if ticket_tag is None:
+            return False
+
+        await self.session.delete(ticket_tag)
+        await self.session.flush()
+        return True

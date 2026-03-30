@@ -33,9 +33,7 @@ class DatabaseConfig(BaseModel):
 
         user = quote_plus(self.user)
         password = quote_plus(self.password)
-        return (
-            f"postgresql+asyncpg://{user}:{password}@{self.host}:{self.port}/{self.database}"
-        )
+        return f"postgresql+asyncpg://{user}:{password}@{self.host}:{self.port}/{self.database}"
 
 
 class RedisConfig(BaseModel):

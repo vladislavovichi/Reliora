@@ -32,7 +32,9 @@ class TicketRepository(Protocol):
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
         """Return the most recent open ticket for a client chat, if any."""
 
-    async def get_next_queued_ticket(self, *, prioritize_priority: bool = False) -> Ticket | None:
+    async def get_next_queued_ticket(
+        self, *, prioritize_priority: bool = False
+    ) -> Ticket | None:
         """Return the next queued ticket according to the queue ordering."""
 
     async def list_queued_tickets(
@@ -78,6 +80,14 @@ class TicketMessageRepository(Protocol):
     ) -> None:
         """Persist a ticket message."""
 
+    async def allocate_internal_telegram_message_id(
+        self,
+        *,
+        ticket_id: int,
+        sender_type: TicketMessageSenderType,
+    ) -> int:
+        """Return a negative internal message id suitable for synthetic ticket messages."""
+
 
 class OperatorRepository(Protocol):
     async def get_or_create(
@@ -90,9 +100,45 @@ class OperatorRepository(Protocol):
         """Return an operator identifier, creating or refreshing the operator record if needed."""
 
 
+class MacroRecord(Protocol):
+    id: int
+    title: str
+    body: str
+
+
+class MacroRepository(Protocol):
+    async def list_all(self) -> Sequence[MacroRecord]:
+        """Return configured operator macros."""
+
+    async def get_by_id(self, *, macro_id: int) -> MacroRecord | None:
+        """Return a macro by identifier."""
+
+
+class TagRecord(Protocol):
+    id: int
+    name: str
+
+
 class TagRepository(Protocol):
     async def get_or_create(self, *, name: str) -> int:
         """Return a tag identifier, creating the tag if it does not exist."""
+
+    async def get_by_name(self, *, name: str) -> TagRecord | None:
+        """Return a tag by name."""
+
+    async def list_all(self) -> Sequence[TagRecord]:
+        """Return configured tags."""
+
+
+class TicketTagRepository(Protocol):
+    async def list_for_ticket(self, *, ticket_id: int) -> Sequence[TagRecord]:
+        """Return tags attached to a ticket."""
+
+    async def add(self, *, ticket_id: int, tag_id: int) -> bool:
+        """Attach a tag to a ticket and report whether a new link was created."""
+
+    async def remove(self, *, ticket_id: int, tag_id: int) -> bool:
+        """Detach a tag from a ticket and report whether a link was removed."""
 
 
 class TicketEventRepository(Protocol):

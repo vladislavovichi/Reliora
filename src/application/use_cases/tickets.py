@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
 from domain.contracts.repositories import (
+    MacroRepository,
     OperatorRepository,
+    TagRepository,
     TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
+    TicketTagRepository,
 )
 from domain.entities.ticket import Ticket
 from domain.entities.ticket import TicketDetails as DomainTicketDetails
@@ -30,7 +33,9 @@ def utcnow() -> datetime:
 
 def build_ticket_subject(message_text: str) -> str:
     first_line = (
-        message_text.strip().splitlines()[0] if message_text.strip() else "Обращение клиента"
+        message_text.strip().splitlines()[0]
+        if message_text.strip()
+        else "Обращение клиента"
     )
     return first_line[:255]
 
@@ -80,6 +85,7 @@ def build_message_payload(
     telegram_message_id: int,
     sender_type: TicketMessageSenderType,
     sender_operator_id: int | None,
+    extra_payload: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "telegram_message_id": telegram_message_id,
@@ -87,6 +93,8 @@ def build_message_payload(
     }
     if sender_operator_id is not None:
         payload["sender_operator_id"] = sender_operator_id
+    if extra_payload is not None:
+        payload.update(extra_payload)
     return payload
 
 
@@ -145,6 +153,7 @@ class TicketDetailsSummary:
     subject: str
     assigned_operator_id: int | None
     assigned_operator_name: str | None
+    tags: tuple[str, ...]
     last_message_text: str | None
     last_message_sender_type: TicketMessageSenderType | None
 
@@ -159,6 +168,7 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         subject=ticket.subject,
         assigned_operator_id=ticket.assigned_operator_id,
         assigned_operator_name=ticket.assigned_operator_name,
+        tags=ticket.tags,
         last_message_text=ticket.last_message_text,
         last_message_sender_type=ticket.last_message_sender_type,
     )
@@ -168,6 +178,35 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
 class OperatorReplyResult:
     ticket: TicketSummary
     client_chat_id: int
+
+
+@dataclass(slots=True)
+class MacroSummary:
+    id: int
+    title: str
+    body: str
+
+
+@dataclass(slots=True)
+class MacroApplicationResult:
+    ticket: TicketSummary
+    client_chat_id: int
+    macro: MacroSummary
+
+
+@dataclass(slots=True)
+class TicketTagsSummary:
+    public_id: UUID
+    public_number: str
+    tags: tuple[str, ...]
+
+
+@dataclass(slots=True)
+class TicketTagMutationResult:
+    ticket: TicketSummary
+    tag: str
+    changed: bool
+    tags: tuple[str, ...]
 
 
 class CreateTicketFromClientMessageUseCase:
@@ -188,7 +227,9 @@ class CreateTicketFromClientMessageUseCase:
         telegram_message_id: int,
         text: str,
     ) -> TicketSummary:
-        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
+        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(
+            client_chat_id
+        )
         if active_ticket is not None:
             if active_ticket.id is None:
                 raise RuntimeError("Не найден идентификатор активной заявки.")
@@ -232,7 +273,9 @@ class CreateTicketFromClientMessageUseCase:
             },
         )
 
-        queued_ticket = await self.ticket_repository.enqueue(ticket_public_id=ticket.public_id)
+        queued_ticket = await self.ticket_repository.enqueue(
+            ticket_public_id=ticket.public_id
+        )
         if queued_ticket is None:
             raise RuntimeError("Не удалось поставить заявку в очередь.")
 
@@ -288,13 +331,17 @@ class AddMessageToTicketUseCase:
         sender_type: TicketMessageSenderType,
         text: str,
         sender_operator_id: int | None = None,
+        extra_event_payload: Mapping[str, object] | None = None,
     ) -> TicketSummary | None:
         ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
         if ticket is None or ticket.id is None:
             return None
 
         ensure_message_addable(ticket.status)
-        if sender_type == TicketMessageSenderType.OPERATOR and ticket.first_response_at is None:
+        if (
+            sender_type == TicketMessageSenderType.OPERATOR
+            and ticket.first_response_at is None
+        ):
             ticket.first_response_at = utcnow()
 
         await self.ticket_message_repository.add(
@@ -314,6 +361,7 @@ class AddMessageToTicketUseCase:
                     telegram_message_id=telegram_message_id,
                     sender_type=sender_type,
                     sender_operator_id=sender_operator_id,
+                    extra_payload=extra_event_payload,
                 ),
             )
 
@@ -352,7 +400,10 @@ class AssignTicketToOperatorUseCase:
 
         previous_status = ticket.status
         previous_operator_id = ticket.assigned_operator_id
-        if previous_status == TicketStatus.ASSIGNED and previous_operator_id == operator_id:
+        if (
+            previous_status == TicketStatus.ASSIGNED
+            and previous_operator_id == operator_id
+        ):
             raise InvalidTicketTransitionError("Заявка уже назначена этому оператору.")
 
         event_type = TicketEventType.ASSIGNED
@@ -385,7 +436,9 @@ class GetNextQueuedTicketUseCase:
     def __init__(self, ticket_repository: TicketRepository) -> None:
         self.ticket_repository = ticket_repository
 
-    async def __call__(self, *, prioritize_priority: bool = False) -> QueuedTicketSummary | None:
+    async def __call__(
+        self, *, prioritize_priority: bool = False
+    ) -> QueuedTicketSummary | None:
         ticket = await self.ticket_repository.get_next_queued_ticket(
             prioritize_priority=prioritize_priority
         )
@@ -473,7 +526,9 @@ class AssignNextQueuedTicketUseCase:
                     actor_operator_id=operator_id,
                 ),
             )
-            return build_ticket_summary(assigned_ticket, event_type=TicketEventType.ASSIGNED)
+            return build_ticket_summary(
+                assigned_ticket, event_type=TicketEventType.ASSIGNED
+            )
 
         return None
 
@@ -504,7 +559,9 @@ class ReplyToTicketAsOperatorUseCase:
         telegram_message_id: int,
         text: str,
     ) -> OperatorReplyResult | None:
-        ticket_details = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        ticket_details = await self.ticket_repository.get_details_by_public_id(
+            ticket_public_id
+        )
         if ticket_details is None:
             return None
 
@@ -537,6 +594,224 @@ class ReplyToTicketAsOperatorUseCase:
         )
 
 
+class ListMacrosUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self) -> Sequence[MacroSummary]:
+        macros = await self.macro_repository.list_all()
+        return [
+            MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+            for macro in macros
+        ]
+
+
+class ApplyMacroToTicketUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        ticket_message_repository: TicketMessageRepository,
+        ticket_event_repository: TicketEventRepository,
+        operator_repository: OperatorRepository,
+        macro_repository: MacroRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.ticket_message_repository = ticket_message_repository
+        self.operator_repository = operator_repository
+        self.macro_repository = macro_repository
+        self._add_message_to_ticket = AddMessageToTicketUseCase(
+            ticket_repository=ticket_repository,
+            ticket_message_repository=ticket_message_repository,
+            ticket_event_repository=ticket_event_repository,
+        )
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        macro_id: int,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None,
+    ) -> MacroApplicationResult | None:
+        ticket_details = await self.ticket_repository.get_details_by_public_id(
+            ticket_public_id
+        )
+        if ticket_details is None:
+            return None
+
+        macro = await self.macro_repository.get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+
+        ensure_operator_replyable(ticket_details.status)
+
+        operator_id = await self.operator_repository.get_or_create(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+        if (
+            ticket_details.assigned_operator_id is not None
+            and ticket_details.assigned_operator_id != operator_id
+        ):
+            raise InvalidTicketTransitionError("Заявка назначена другому оператору.")
+
+        telegram_message_id = (
+            await self.ticket_message_repository.allocate_internal_telegram_message_id(
+                ticket_id=ticket_details.id,
+                sender_type=TicketMessageSenderType.OPERATOR,
+            )
+        )
+        ticket = await self._add_message_to_ticket(
+            ticket_public_id=ticket_public_id,
+            telegram_message_id=telegram_message_id,
+            sender_type=TicketMessageSenderType.OPERATOR,
+            text=macro.body,
+            sender_operator_id=operator_id,
+            extra_event_payload={
+                "macro_id": macro.id,
+                "macro_title": macro.title,
+            },
+        )
+        if ticket is None:
+            return None
+
+        return MacroApplicationResult(
+            ticket=ticket,
+            client_chat_id=ticket_details.client_chat_id,
+            macro=MacroSummary(id=macro.id, title=macro.title, body=macro.body),
+        )
+
+
+class ListTicketTagsUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        ticket_tag_repository: TicketTagRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.ticket_tag_repository = ticket_tag_repository
+
+    async def __call__(self, *, ticket_public_id: UUID) -> TicketTagsSummary | None:
+        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        tags = await self.ticket_tag_repository.list_for_ticket(ticket_id=ticket.id)
+        return TicketTagsSummary(
+            public_id=ticket.public_id,
+            public_number=format_public_ticket_number(ticket.public_id),
+            tags=tuple(tag.name for tag in tags),
+        )
+
+
+class ListAvailableTagsUseCase:
+    def __init__(self, tag_repository: TagRepository) -> None:
+        self.tag_repository = tag_repository
+
+    async def __call__(self) -> Sequence[str]:
+        tags = await self.tag_repository.list_all()
+        return [tag.name for tag in tags]
+
+
+class AddTagToTicketUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        tag_repository: TagRepository,
+        ticket_tag_repository: TicketTagRepository,
+        ticket_event_repository: TicketEventRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.tag_repository = tag_repository
+        self.ticket_tag_repository = ticket_tag_repository
+        self.ticket_event_repository = ticket_event_repository
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        tag_name: str,
+    ) -> TicketTagMutationResult | None:
+        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        tag_id = await self.tag_repository.get_or_create(name=tag_name)
+        added = await self.ticket_tag_repository.add(ticket_id=ticket.id, tag_id=tag_id)
+        tags = await self.ticket_tag_repository.list_for_ticket(ticket_id=ticket.id)
+        normalized_tag = next(
+            (tag.name for tag in tags if tag.id == tag_id), tag_name.strip().lower()
+        )
+
+        if added:
+            await self.ticket_event_repository.add(
+                ticket_id=ticket.id,
+                event_type=TicketEventType.TAG_ADDED,
+                payload_json={"tag": normalized_tag},
+            )
+
+        return TicketTagMutationResult(
+            ticket=build_ticket_summary(
+                ticket, event_type=TicketEventType.TAG_ADDED if added else None
+            ),
+            tag=normalized_tag,
+            changed=added,
+            tags=tuple(tag.name for tag in tags),
+        )
+
+
+class RemoveTagFromTicketUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        tag_repository: TagRepository,
+        ticket_tag_repository: TicketTagRepository,
+        ticket_event_repository: TicketEventRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.tag_repository = tag_repository
+        self.ticket_tag_repository = ticket_tag_repository
+        self.ticket_event_repository = ticket_event_repository
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        tag_name: str,
+    ) -> TicketTagMutationResult | None:
+        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        tag = await self.tag_repository.get_by_name(name=tag_name)
+        removed = False
+        normalized_tag = tag_name.strip().lower()
+        if tag is not None:
+            normalized_tag = tag.name
+            removed = await self.ticket_tag_repository.remove(
+                ticket_id=ticket.id, tag_id=tag.id
+            )
+            if removed:
+                await self.ticket_event_repository.add(
+                    ticket_id=ticket.id,
+                    event_type=TicketEventType.TAG_REMOVED,
+                    payload_json={"tag": normalized_tag},
+                )
+
+        tags = await self.ticket_tag_repository.list_for_ticket(ticket_id=ticket.id)
+        return TicketTagMutationResult(
+            ticket=build_ticket_summary(
+                ticket,
+                event_type=TicketEventType.TAG_REMOVED if removed else None,
+            ),
+            tag=normalized_tag,
+            changed=removed,
+            tags=tuple(tag_item.name for tag_item in tags),
+        )
+
+
 class EscalateTicketUseCase:
     def __init__(
         self,
@@ -554,7 +829,9 @@ class EscalateTicketUseCase:
         ensure_escalatable(ticket.status)
         previous_status = ticket.status
 
-        escalated_ticket = await self.ticket_repository.escalate(ticket_public_id=ticket_public_id)
+        escalated_ticket = await self.ticket_repository.escalate(
+            ticket_public_id=ticket_public_id
+        )
         if escalated_ticket is None:
             return None
 
@@ -568,7 +845,9 @@ class EscalateTicketUseCase:
             ),
         )
 
-        return build_ticket_summary(escalated_ticket, event_type=TicketEventType.ESCALATED)
+        return build_ticket_summary(
+            escalated_ticket, event_type=TicketEventType.ESCALATED
+        )
 
 
 class CloseTicketUseCase:
@@ -588,7 +867,9 @@ class CloseTicketUseCase:
         ensure_closable(ticket.status)
         previous_status = ticket.status
 
-        closed_ticket = await self.ticket_repository.close(ticket_public_id=ticket_public_id)
+        closed_ticket = await self.ticket_repository.close(
+            ticket_public_id=ticket_public_id
+        )
         if closed_ticket is None:
             return None
 
@@ -613,6 +894,8 @@ class BasicStatsUseCase:
         by_status = dict(await self.ticket_repository.count_by_status())
         total = sum(by_status.values())
         open_total = sum(
-            count for status, count in by_status.items() if status != TicketStatus.CLOSED
+            count
+            for status, count in by_status.items()
+            if status != TicketStatus.CLOSED
         )
         return TicketStats(total=total, open_total=open_total, by_status=by_status)
