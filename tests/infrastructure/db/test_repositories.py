@@ -12,9 +12,10 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import Macro, Tag, Ticket, TicketEvent, TicketTag
+from infrastructure.db.models import Macro, SLAPolicy, Tag, Ticket, TicketEvent, TicketTag
 from infrastructure.db.repositories import (
     SqlAlchemyMacroRepository,
+    SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
@@ -271,6 +272,22 @@ async def test_list_queued_tickets_returns_ordered_sequence() -> None:
     assert [ticket.subject for ticket in result] == ["First", "Second"]
 
 
+async def test_list_open_tickets_returns_only_non_closed_items() -> None:
+    open_ticket = Ticket(
+        client_chat_id=100,
+        subject="Open",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.ASSIGNED,
+    )
+    session = FakeAsyncSession(result=FakeResult(scalar_items=[open_ticket]))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.list_open_tickets(limit=5)
+
+    assert result == [open_ticket]
+
+
 async def test_ticket_message_repository_allocates_negative_internal_ids() -> None:
     session = FakeAsyncSession(result=FakeResult(scalar=-4))
     repository = SqlAlchemyTicketMessageRepository(cast(AsyncSession, session))
@@ -299,6 +316,34 @@ async def test_ticket_event_repository_persists_event_rows() -> None:
     assert event.event_type == TicketEventType.QUEUED
     assert event.payload_json == {"from_status": "new", "to_status": "queued"}
     assert session.flush_count == 1
+
+
+async def test_ticket_event_repository_exists_checks_for_prior_event() -> None:
+    session = FakeAsyncSession(result=FakeResult(scalar=10))
+    repository = SqlAlchemyTicketEventRepository(cast(AsyncSession, session))
+
+    result = await repository.exists(
+        ticket_id=10,
+        event_type=TicketEventType.SLA_BREACHED_FIRST_RESPONSE,
+    )
+
+    assert result is True
+
+
+async def test_sla_policy_repository_prefers_priority_specific_policy() -> None:
+    policy = SLAPolicy(
+        name="Urgent",
+        first_response_minutes=10,
+        resolution_minutes=60,
+        priority=TicketPriority.URGENT,
+    )
+    policy.id = 1
+    session = FakeAsyncSession(result=FakeResult(scalar=policy))
+    repository = SqlAlchemySLAPolicyRepository(cast(AsyncSession, session))
+
+    result = await repository.get_for_priority(priority=TicketPriority.URGENT)
+
+    assert result is policy
 
 
 async def test_macro_repository_lists_and_fetches_macros() -> None:

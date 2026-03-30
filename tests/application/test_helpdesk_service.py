@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -115,6 +116,17 @@ class StubTicketRepository:
             for ticket in self.queued_tickets or []
             if ticket.status == TicketStatus.QUEUED
         ]
+        if limit is None:
+            return tickets
+        return tickets[:limit]
+
+    async def list_open_tickets(self, *, limit: int | None = None) -> list[SimpleNamespace]:
+        tickets = [
+            ticket
+            for ticket in self.tickets.values()
+            if ticket.status != TicketStatus.CLOSED
+        ]
+        tickets.sort(key=lambda ticket: (ticket.updated_at, ticket.id))
         if limit is None:
             return tickets
         return tickets[:limit]
@@ -247,6 +259,12 @@ class StubTicketEventRepository:
             }
         )
 
+    async def exists(self, *, ticket_id: int, event_type: TicketEventType) -> bool:
+        return any(
+            event["ticket_id"] == ticket_id and event["event_type"] == event_type
+            for event in self.added_events
+        )
+
 
 @dataclass
 class StubOperatorRepository:
@@ -284,6 +302,20 @@ class StubMacroRepository:
             if macro.id == macro_id:
                 return macro
         return None
+
+
+@dataclass
+class StubSLAPolicyRepository:
+    policies: dict[TicketPriority | None, SimpleNamespace]
+
+    def __post_init__(self) -> None:
+        self.calls: list[TicketPriority] = []
+
+    async def get_for_priority(
+        self, *, priority: TicketPriority
+    ) -> SimpleNamespace | None:
+        self.calls.append(priority)
+        return self.policies.get(priority) or self.policies.get(None)
 
 
 @dataclass
@@ -368,19 +400,25 @@ def build_ticket(
     last_message_text: str | None = None,
     last_message_sender_type: TicketMessageSenderType | None = None,
     tags: tuple[str, ...] = (),
+    priority: TicketPriority = TicketPriority.NORMAL,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+    first_response_at: datetime | None = None,
+    closed_at: datetime | None = None,
 ) -> SimpleNamespace:
+    now = datetime.now(UTC)
     return SimpleNamespace(
         id=ticket_id,
         public_id=public_id,
         client_chat_id=123,
         status=status,
-        priority=TicketPriority.NORMAL,
+        priority=priority,
         subject="Need help",
         assigned_operator_id=assigned_operator_id,
-        created_at=None,
-        updated_at=None,
-        first_response_at=None,
-        closed_at=None,
+        created_at=created_at or now,
+        updated_at=updated_at or now,
+        first_response_at=first_response_at,
+        closed_at=closed_at,
         assigned_operator_name=assigned_operator_name,
         last_message_text=last_message_text,
         last_message_sender_type=last_message_sender_type,
@@ -395,6 +433,7 @@ def build_service(
     event_repository: StubTicketEventRepository | None = None,
     operator_repository: StubOperatorRepository | None = None,
     macro_repository: StubMacroRepository | None = None,
+    sla_policy_repository: StubSLAPolicyRepository | None = None,
     tag_repository: StubTagRepository | None = None,
     ticket_tag_repository: StubTicketTagRepository | None = None,
 ) -> HelpdeskService:
@@ -406,6 +445,18 @@ def build_service(
         ticket_event_repository=event_repository or StubTicketEventRepository(added_events=[]),
         operator_repository=operator_repository or StubOperatorRepository(operator_ids={}),
         macro_repository=macro_repository or StubMacroRepository(),
+        sla_policy_repository=sla_policy_repository
+        or StubSLAPolicyRepository(
+            policies={
+                None: SimpleNamespace(
+                    id=1,
+                    name="Default",
+                    first_response_minutes=30,
+                    resolution_minutes=240,
+                    priority=None,
+                )
+            }
+        ),
         tag_repository=active_tag_repository,
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
@@ -790,3 +841,193 @@ async def test_list_ticket_tags_and_available_tags_return_normalized_names() -> 
     assert ticket_tags is not None
     assert ticket_tags.tags == ("billing",)
     assert available_tags == ["billing", "vip"]
+
+
+async def test_evaluate_ticket_sla_state_detects_approaching_deadlines() -> None:
+    public_id = uuid4()
+    now = datetime.now(UTC)
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.QUEUED,
+        created_at=now - timedelta(minutes=26),
+        updated_at=now - timedelta(minutes=5),
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        sla_policy_repository=StubSLAPolicyRepository(
+            policies={
+                None: SimpleNamespace(
+                    id=1,
+                    name="Default",
+                    first_response_minutes=30,
+                    resolution_minutes=240,
+                    priority=None,
+                )
+            }
+        ),
+    )
+
+    result = await service.evaluate_ticket_sla_state(
+        ticket_public_id=public_id,
+        now=now,
+    )
+
+    assert result is not None
+    assert result.policy_name == "Default"
+    assert result.first_response.status.value == "approaching"
+    assert result.resolution.status.value == "ok"
+    assert result.should_auto_escalate is False
+    assert result.should_auto_reassign is False
+
+
+async def test_auto_escalate_ticket_by_sla_persists_breach_and_auto_escalated_events() -> None:
+    public_id = uuid4()
+    now = datetime.now(UTC)
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+        created_at=now - timedelta(minutes=90),
+        updated_at=now - timedelta(minutes=45),
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        event_repository=event_repository,
+        sla_policy_repository=StubSLAPolicyRepository(
+            policies={
+                None: SimpleNamespace(
+                    id=1,
+                    name="Default",
+                    first_response_minutes=30,
+                    resolution_minutes=240,
+                    priority=None,
+                )
+            }
+        ),
+    )
+
+    result = await service.auto_escalate_ticket_by_sla(
+        ticket_public_id=public_id,
+        now=now,
+    )
+
+    assert result is not None
+    assert result.status == TicketStatus.ESCALATED
+    assert result.event_type == TicketEventType.AUTO_ESCALATED
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.SLA_BREACHED_FIRST_RESPONSE,
+        TicketEventType.AUTO_ESCALATED,
+    ]
+
+
+async def test_auto_reassign_ticket_by_sla_requires_stale_assignment() -> None:
+    public_id = uuid4()
+    now = datetime.now(UTC)
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+        created_at=now - timedelta(minutes=35),
+        updated_at=now - timedelta(minutes=31),
+        first_response_at=now - timedelta(minutes=34),
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        event_repository=event_repository,
+        operator_repository=StubOperatorRepository(operator_ids={1002: 9}),
+        sla_policy_repository=StubSLAPolicyRepository(
+            policies={
+                None: SimpleNamespace(
+                    id=1,
+                    name="Default",
+                    first_response_minutes=30,
+                    resolution_minutes=120,
+                    priority=None,
+                )
+            }
+        ),
+    )
+
+    result = await service.auto_reassign_ticket_by_sla(
+        ticket_public_id=public_id,
+        telegram_user_id=1002,
+        display_name="Operator Two",
+        now=now,
+    )
+
+    assert result is not None
+    assert result.status == TicketStatus.ASSIGNED
+    assert result.event_type == TicketEventType.AUTO_REASSIGNED
+    assert ticket.assigned_operator_id == 9
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.AUTO_REASSIGNED,
+    ]
+
+
+async def test_run_ticket_sla_checks_processes_escalation_and_reassignment_paths() -> None:
+    now = datetime.now(UTC)
+    escalated_ticket = build_ticket(
+        ticket_id=1,
+        public_id=uuid4(),
+        status=TicketStatus.QUEUED,
+        created_at=now - timedelta(minutes=45),
+        updated_at=now - timedelta(minutes=45),
+    )
+    stale_ticket = build_ticket(
+        ticket_id=2,
+        public_id=uuid4(),
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+        created_at=now - timedelta(minutes=50),
+        updated_at=now - timedelta(minutes=31),
+        first_response_at=now - timedelta(minutes=49),
+    )
+    ticket_repository = StubTicketRepository(
+        created_ticket=escalated_ticket,
+        queued_tickets=[stale_ticket],
+    )
+    event_repository = StubTicketEventRepository(added_events=[])
+    service = build_service(
+        ticket_repository=ticket_repository,
+        event_repository=event_repository,
+        operator_repository=StubOperatorRepository(operator_ids={2001: 11}),
+        sla_policy_repository=StubSLAPolicyRepository(
+            policies={
+                None: SimpleNamespace(
+                    id=1,
+                    name="Default",
+                    first_response_minutes=30,
+                    resolution_minutes=120,
+                    priority=None,
+                )
+            }
+        ),
+    )
+
+    result = await service.run_ticket_sla_checks(
+        now=now,
+        reassignment_targets=(
+            SimpleNamespace(
+                ticket_public_id=stale_ticket.public_id,
+                telegram_user_id=2001,
+                display_name="Operator Eleven",
+                username="operator11",
+            ),
+        ),
+    )
+
+    assert result.evaluated_count == 2
+    assert result.auto_escalated_count == 1
+    assert result.auto_reassigned_count == 1
+    assert escalated_ticket.status == TicketStatus.ESCALATED
+    assert stale_ticket.assigned_operator_id == 11
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.SLA_BREACHED_FIRST_RESPONSE,
+        TicketEventType.AUTO_ESCALATED,
+        TicketEventType.AUTO_REASSIGNED,
+    ]

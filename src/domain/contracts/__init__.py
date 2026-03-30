@@ -2,6 +2,7 @@
 
 from domain.contracts.repositories import (
     OperatorRepository,
+    SLAPolicyRepository,
     TagRepository,
     TicketEventRepository,
     TicketMessageRepository,
@@ -10,6 +11,7 @@ from domain.contracts.repositories import (
 
 __all__ = [
     "OperatorRepository",
+    "SLAPolicyRepository",
     "TagRepository",
     "TicketEventRepository",
     "TicketMessageRepository",

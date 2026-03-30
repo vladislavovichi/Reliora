@@ -3,6 +3,7 @@
 from infrastructure.db.base import Base, metadata
 from infrastructure.db.repositories import (
     SqlAlchemyOperatorRepository,
+    SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
@@ -21,6 +22,7 @@ from infrastructure.db.session import (
 __all__ = [
     "Base",
     "SqlAlchemyOperatorRepository",
+    "SqlAlchemySLAPolicyRepository",
     "SqlAlchemyTagRepository",
     "SqlAlchemyTicketEventRepository",
     "SqlAlchemyTicketMessageRepository",

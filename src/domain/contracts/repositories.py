@@ -45,6 +45,9 @@ class TicketRepository(Protocol):
     ) -> Sequence[Ticket]:
         """Return queued tickets in queue order."""
 
+    async def list_open_tickets(self, *, limit: int | None = None) -> Sequence[Ticket]:
+        """Return open tickets that are eligible for workflow evaluation."""
+
     async def enqueue(self, *, ticket_public_id: UUID) -> Ticket | None:
         """Move a ticket into the queue."""
 
@@ -150,3 +153,21 @@ class TicketEventRepository(Protocol):
         payload_json: Mapping[str, object] | None = None,
     ) -> None:
         """Persist a workflow event for a ticket."""
+
+    async def exists(self, *, ticket_id: int, event_type: TicketEventType) -> bool:
+        """Return whether the ticket already has an event of the given type."""
+
+
+class SLAPolicyRecord(Protocol):
+    id: int
+    name: str
+    first_response_minutes: int
+    resolution_minutes: int
+    priority: TicketPriority | None
+
+
+class SLAPolicyRepository(Protocol):
+    async def get_for_priority(
+        self, *, priority: TicketPriority
+    ) -> SLAPolicyRecord | None:
+        """Return the best matching SLA policy for a ticket priority."""

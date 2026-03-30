@@ -14,6 +14,7 @@ from infrastructure.config import Settings
 from infrastructure.db.repositories import (
     SqlAlchemyMacroRepository,
     SqlAlchemyOperatorRepository,
+    SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
@@ -75,25 +76,36 @@ class AppRuntime:
     bot: Bot | None = None
 
 
-def build_helpdesk_service(session: AsyncSession) -> HelpdeskService:
+def build_helpdesk_service(
+    session: AsyncSession,
+    *,
+    sla_deadline_scheduler: SLADeadlineScheduler | None = None,
+) -> HelpdeskService:
     return HelpdeskService(
         ticket_repository=SqlAlchemyTicketRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
         macro_repository=SqlAlchemyMacroRepository(session),
+        sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
         tag_repository=SqlAlchemyTagRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
+        sla_deadline_scheduler=sla_deadline_scheduler,
     )
 
 
 def build_helpdesk_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
     @asynccontextmanager
     async def provide() -> AsyncIterator[HelpdeskService]:
         async with session_scope(session_factory) as session:
-            yield build_helpdesk_service(session)
+            yield build_helpdesk_service(
+                session,
+                sla_deadline_scheduler=sla_deadline_scheduler,
+            )
 
     return provide
 
@@ -115,9 +127,12 @@ def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
 async def build_runtime(settings: Settings) -> AppRuntime:
     db_engine = build_engine(settings.database)
     db_session_factory = build_session_factory(db_engine)
-    helpdesk_service_factory = build_helpdesk_service_factory(db_session_factory)
     redis = build_redis_client(settings.redis)
     redis_workflow = build_redis_workflow_runtime(redis)
+    helpdesk_service_factory = build_helpdesk_service_factory(
+        db_session_factory,
+        sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
+    )
     bot: Bot | None = None
 
     try:

@@ -12,6 +12,7 @@ from sqlalchemy.sql import Select
 from domain.contracts.repositories import (
     MacroRepository,
     OperatorRepository,
+    SLAPolicyRepository,
     TagRepository,
     TicketEventRepository,
     TicketMessageRepository,
@@ -29,6 +30,7 @@ from domain.enums.tickets import (
 from infrastructure.db.models import (
     Macro,
     Operator,
+    SLAPolicy,
     Tag,
     TicketEvent,
     TicketMessage,
@@ -195,6 +197,19 @@ class SqlAlchemyTicketRepository(TicketRepository):
         tickets = result.scalars().all()
         return cast(Sequence[TicketEntity], tickets)
 
+    async def list_open_tickets(self, *, limit: int | None = None) -> Sequence[TicketEntity]:
+        statement = (
+            select(TicketModel)
+            .where(TicketModel.status != TicketStatus.CLOSED)
+            .order_by(TicketModel.updated_at.asc(), TicketModel.id.asc())
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        result = await self.session.execute(statement)
+        tickets = result.scalars().all()
+        return cast(Sequence[TicketEntity], tickets)
+
     async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
         ticket = await self.get_by_public_id(ticket_public_id)
         if ticket is None:
@@ -314,6 +329,15 @@ class SqlAlchemyTicketEventRepository(TicketEventRepository):
         self.session.add(ticket_event)
         await self.session.flush()
 
+    async def exists(self, *, ticket_id: int, event_type: TicketEventType) -> bool:
+        statement = (
+            select(TicketEvent.id)
+            .where(TicketEvent.ticket_id == ticket_id, TicketEvent.event_type == event_type)
+            .limit(1)
+        )
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none() is not None
+
 
 class SqlAlchemyOperatorRepository(OperatorRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -360,6 +384,29 @@ class SqlAlchemyMacroRepository(MacroRepository):
 
     async def get_by_id(self, *, macro_id: int) -> Macro | None:
         statement = select(Macro).where(Macro.id == macro_id)
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+
+class SqlAlchemySLAPolicyRepository(SLAPolicyRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_for_priority(
+        self, *, priority: TicketPriority
+    ) -> SLAPolicy | None:
+        priority_rank = case(
+            (SLAPolicy.priority == priority, 0),
+            else_=1,
+        )
+        statement = (
+            select(SLAPolicy)
+            .where(
+                (SLAPolicy.priority == priority) | (SLAPolicy.priority.is_(None))
+            )
+            .order_by(priority_rank.asc(), SLAPolicy.id.asc())
+            .limit(1)
+        )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
