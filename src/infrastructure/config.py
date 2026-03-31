@@ -17,6 +17,10 @@ class BotConfig(BaseModel):
     token: str = ""
 
 
+class AuthorizationConfig(BaseModel):
+    super_admin_telegram_user_id: int = Field(gt=0)
+
+
 class DatabaseConfig(BaseModel):
     url: str | None = None
     host: str = "postgres"
@@ -70,6 +74,7 @@ class Settings(BaseSettings):
 
     app: AppConfig = Field(default_factory=AppConfig)
     bot: BotConfig = Field(default_factory=BotConfig)
+    authorization: AuthorizationConfig
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

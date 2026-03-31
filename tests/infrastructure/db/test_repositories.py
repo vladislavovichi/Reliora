@@ -15,6 +15,7 @@ from domain.enums.tickets import (
 from infrastructure.db.models import Macro, SLAPolicy, Tag, Ticket, TicketEvent, TicketTag
 from infrastructure.db.repositories import (
     SqlAlchemyMacroRepository,
+    SqlAlchemyOperatorRepository,
     SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
     SqlAlchemyTicketEventRepository,
@@ -40,9 +41,7 @@ def build_result(
     scalars_result.all.return_value = active_scalar_items
     result.scalars.return_value = scalars_result
     result.first.return_value = (
-        active_scalar_items[0]
-        if active_scalar_items
-        else (active_rows[0] if active_rows else None)
+        active_scalar_items[0] if active_scalar_items else (active_rows[0] if active_rows else None)
     )
     return result
 
@@ -247,6 +246,24 @@ async def test_get_average_resolution_time_seconds_returns_float() -> None:
     result = await repository.get_average_resolution_time_seconds()
 
     assert result == 3600.0
+
+
+async def test_operator_exists_active_by_telegram_user_id_returns_true() -> None:
+    session = build_session(result=build_result(scalar=7))
+    repository = SqlAlchemyOperatorRepository(session)
+
+    result = await repository.exists_active_by_telegram_user_id(telegram_user_id=1001)
+
+    assert result is True
+
+
+async def test_operator_exists_active_by_telegram_user_id_returns_false() -> None:
+    session = build_session(result=build_result(scalar=None))
+    repository = SqlAlchemyOperatorRepository(session)
+
+    result = await repository.exists_active_by_telegram_user_id(telegram_user_id=1001)
+
+    assert result is False
 
 
 async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags() -> None:

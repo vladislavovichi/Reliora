@@ -6,7 +6,7 @@ from typing import Any
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from bot.middlewares import UpdateContextMiddleware
+from bot.middlewares import AuthorizationMiddleware, UpdateContextMiddleware
 from bot.routers import build_root_router
 from infrastructure.config import BotConfig, Settings
 
@@ -25,9 +25,12 @@ def build_dispatcher(**workflow_data: Any) -> Dispatcher:
 
 
 def _register_middlewares(dispatcher: Dispatcher) -> None:
-    middleware = UpdateContextMiddleware()
-    dispatcher.message.outer_middleware(middleware)
-    dispatcher.callback_query.outer_middleware(middleware)
+    update_context_middleware = UpdateContextMiddleware()
+    authorization_middleware = AuthorizationMiddleware()
+    dispatcher.message.outer_middleware(update_context_middleware)
+    dispatcher.callback_query.outer_middleware(update_context_middleware)
+    dispatcher.message.middleware(authorization_middleware)
+    dispatcher.callback_query.middleware(authorization_middleware)
 
 
 def _register_lifecycle(dispatcher: Dispatcher) -> None:
@@ -35,9 +38,7 @@ def _register_lifecycle(dispatcher: Dispatcher) -> None:
     dispatcher.shutdown.register(on_shutdown)
 
 
-async def on_startup(
-    dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any
-) -> None:
+async def on_startup(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any) -> None:
     logger = logging.getLogger(__name__)
     bot_info = await bot.get_me()
     logger.info(
@@ -47,9 +48,7 @@ async def on_startup(
     )
 
 
-async def on_shutdown(
-    dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any
-) -> None:
+async def on_shutdown(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: Any) -> None:
     logger = logging.getLogger(__name__)
     logger.info(
         "Bot shutdown completed bot_id=%s app=%s",

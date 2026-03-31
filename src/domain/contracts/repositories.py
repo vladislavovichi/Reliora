@@ -32,9 +32,7 @@ class TicketRepository(Protocol):
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
         """Return the most recent open ticket for a client chat, if any."""
 
-    async def get_next_queued_ticket(
-        self, *, prioritize_priority: bool = False
-    ) -> Ticket | None:
+    async def get_next_queued_ticket(self, *, prioritize_priority: bool = False) -> Ticket | None:
         """Return the next queued ticket according to the queue ordering."""
 
     async def list_queued_tickets(
@@ -102,6 +100,9 @@ class TicketMessageRepository(Protocol):
 
 
 class OperatorRepository(Protocol):
+    async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
+        """Return whether the Telegram user is an active operator."""
+
     async def get_or_create(
         self,
         *,
@@ -190,7 +191,5 @@ class SLAPolicyRecord(Protocol):
 
 
 class SLAPolicyRepository(Protocol):
-    async def get_for_priority(
-        self, *, priority: TicketPriority
-    ) -> SLAPolicyRecord | None:
+    async def get_for_priority(self, *, priority: TicketPriority) -> SLAPolicyRecord | None:
         """Return the best matching SLA policy for a ticket priority."""

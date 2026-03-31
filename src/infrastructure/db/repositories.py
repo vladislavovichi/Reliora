@@ -131,9 +131,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         last_message_sender_type: TicketMessageSenderType | None = None
         if last_message_row is not None:
             last_message_text = cast(str, last_message_row[0])
-            last_message_sender_type = cast(
-                TicketMessageSenderType, last_message_row[1]
-            )
+            last_message_sender_type = cast(TicketMessageSenderType, last_message_row[1])
 
         tags_statement = (
             select(Tag.name)
@@ -162,9 +160,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
             last_message_sender_type=last_message_sender_type,
         )
 
-    async def get_active_by_client_chat_id(
-        self, client_chat_id: int
-    ) -> TicketEntity | None:
+    async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
         statement = (
             select(TicketModel)
             .where(TicketModel.client_chat_id == client_chat_id)
@@ -180,9 +176,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         self, *, prioritize_priority: bool = False
     ) -> TicketEntity | None:
         statement = apply_queue_ordering(
-            select(TicketModel)
-            .where(TicketModel.status == TicketStatus.QUEUED)
-            .limit(1),
+            select(TicketModel).where(TicketModel.status == TicketStatus.QUEUED).limit(1),
             prioritize_priority=prioritize_priority,
         )
         result = await self.session.execute(statement)
@@ -415,6 +409,18 @@ class SqlAlchemyOperatorRepository(OperatorRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
+        statement = (
+            select(Operator.id)
+            .where(
+                Operator.telegram_user_id == telegram_user_id,
+                Operator.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none() is not None
+
     async def get_or_create(
         self,
         *,
@@ -422,9 +428,7 @@ class SqlAlchemyOperatorRepository(OperatorRepository):
         display_name: str,
         username: str | None = None,
     ) -> int:
-        statement = select(Operator).where(
-            Operator.telegram_user_id == telegram_user_id
-        )
+        statement = select(Operator).where(Operator.telegram_user_id == telegram_user_id)
         result = await self.session.execute(statement)
         operator = result.scalar_one_or_none()
 
@@ -464,18 +468,14 @@ class SqlAlchemySLAPolicyRepository(SLAPolicyRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_for_priority(
-        self, *, priority: TicketPriority
-    ) -> SLAPolicy | None:
+    async def get_for_priority(self, *, priority: TicketPriority) -> SLAPolicy | None:
         priority_rank = case(
             (SLAPolicy.priority == priority, 0),
             else_=1,
         )
         statement = (
             select(SLAPolicy)
-            .where(
-                (SLAPolicy.priority == priority) | (SLAPolicy.priority.is_(None))
-            )
+            .where((SLAPolicy.priority == priority) | (SLAPolicy.priority.is_(None)))
             .order_by(priority_rank.asc(), SLAPolicy.id.asc())
             .limit(1)
         )
