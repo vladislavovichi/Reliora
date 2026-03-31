@@ -4,6 +4,8 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from application.services.helpdesk import HelpdeskServiceFactory
+from bot.texts.client import build_ticket_created_text, build_ticket_message_added_text
+from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
 from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     ChatRateLimiter,
@@ -26,13 +28,11 @@ async def handle_client_text(
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        await message.answer(SERVICE_UNAVAILABLE_TEXT)
         return
 
     if not await chat_rate_limiter.allow(chat_id=message.chat.id):
-        await message.answer(
-            "Слишком много запросов из этого чата. Пожалуйста, подождите немного."
-        )
+        await message.answer(CHAT_RATE_LIMIT_TEXT)
         return
 
     try:
@@ -52,13 +52,7 @@ async def handle_client_text(
             client_chat_id=message.chat.id,
             subject=message.text.strip()[:255] or "Обращение клиента",
         )
-        await message.answer(
-            f"Заявка {ticket.public_number} создана и поставлена в очередь. "
-            "Оператор скоро ее возьмет в работу."
-        )
+        await message.answer(build_ticket_created_text(ticket.public_number))
         return
 
-    await message.answer(
-        f"Ваше сообщение добавлено в заявку {ticket.public_number}. "
-        "Работа по ней продолжается."
-    )
+    await message.answer(build_ticket_message_added_text(ticket.public_number))

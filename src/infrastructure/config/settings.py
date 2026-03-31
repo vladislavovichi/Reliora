@@ -3,8 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 from urllib.parse import quote_plus
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from infrastructure.config.parsers import parse_positive_int_list
 
 
 class AppConfig(BaseModel):
@@ -18,7 +20,12 @@ class BotConfig(BaseModel):
 
 
 class AuthorizationConfig(BaseModel):
-    super_admin_telegram_user_id: int = Field(gt=0)
+    super_admin_telegram_user_ids: tuple[int, ...]
+
+    @field_validator("super_admin_telegram_user_ids", mode="before")
+    @classmethod
+    def validate_super_admin_telegram_user_ids(cls, value: object) -> tuple[int, ...]:
+        return parse_positive_int_list(value)
 
 
 class DatabaseConfig(BaseModel):
@@ -82,4 +89,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

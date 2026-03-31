@@ -11,7 +11,7 @@ def sample_settings() -> Settings:
         {
             "app": {"dry_run": True},
             "bot": {"token": ""},
-            "authorization": {"super_admin_telegram_user_id": 42},
+            "authorization": {"super_admin_telegram_user_ids": [42]},
             "database": {
                 "host": "postgres",
                 "port": 5432,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from application.services.stats import HelpdeskOperationalStats, OperatorTicketLoad
-from bot.handlers.operator import _format_operational_stats
+from bot.formatters.operator import format_operational_stats
 
 
 def test_format_operational_stats_returns_operator_friendly_text() -> None:
@@ -19,7 +19,7 @@ def test_format_operational_stats_returns_operator_friendly_text() -> None:
         average_resolution_time_seconds=7260,
     )
 
-    result = _format_operational_stats(stats)
+    result = format_operational_stats(stats)
 
     assert "Операционная статистика:" in result
     assert "Открытые заявки: 6" in result

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from bot.presentation import (
+from aiogram.types import ReplyKeyboardMarkup
+
+from bot.formatters.system import build_help_text, build_start_text
+from bot.keyboards.reply.main_menu import build_main_menu
+from bot.texts.buttons import (
     ADD_OPERATOR_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
@@ -9,9 +13,6 @@ from bot.presentation import (
     REMOVE_OPERATOR_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
-    build_help_text,
-    build_main_menu,
-    build_start_text,
 )
 from domain.enums.roles import UserRole
 
@@ -87,7 +88,7 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
     )
 
 
-def _keyboard_rows(keyboard: object) -> tuple[tuple[str, ...], ...]:
+def _keyboard_rows(keyboard: ReplyKeyboardMarkup) -> tuple[tuple[str, ...], ...]:
     rows = keyboard.keyboard
     assert rows is not None
     return tuple(tuple(button.text for button in row) for row in rows)

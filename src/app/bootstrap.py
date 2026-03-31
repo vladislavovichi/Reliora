@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.base import BaseStorage
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -46,6 +47,7 @@ from infrastructure.redis.contracts import (
     TicketStreamConsumer,
     TicketStreamPublisher,
 )
+from infrastructure.redis.fsm import build_fsm_storage
 from infrastructure.redis.locks import RedisTicketLockManager
 from infrastructure.redis.presence import RedisOperatorPresenceHelper
 from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
@@ -74,6 +76,7 @@ class AppRuntime:
     db_engine: AsyncEngine
     db_session_factory: async_sessionmaker[AsyncSession]
     redis: Redis
+    fsm_storage: BaseStorage
     redis_workflow: RedisWorkflowRuntime
     authorization_service_factory: AuthorizationServiceFactory
     helpdesk_service_factory: HelpdeskServiceFactory
@@ -84,25 +87,25 @@ class AppRuntime:
 def build_authorization_service(
     session: AsyncSession,
     *,
-    super_admin_telegram_user_id: int,
+    super_admin_telegram_user_ids: frozenset[int],
 ) -> AuthorizationService:
     return AuthorizationService(
         operator_repository=SqlAlchemyOperatorRepository(session),
-        super_admin_telegram_user_id=super_admin_telegram_user_id,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
     )
 
 
 def build_authorization_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
     *,
-    super_admin_telegram_user_id: int,
+    super_admin_telegram_user_ids: frozenset[int],
 ) -> AuthorizationServiceFactory:
     @asynccontextmanager
     async def provide() -> AsyncIterator[AuthorizationService]:
         async with session_scope(session_factory) as session:
             yield build_authorization_service(
                 session,
-                super_admin_telegram_user_id=super_admin_telegram_user_id,
+                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             )
 
     return provide
@@ -111,7 +114,7 @@ def build_authorization_service_factory(
 def build_helpdesk_service(
     session: AsyncSession,
     *,
-    super_admin_telegram_user_id: int,
+    super_admin_telegram_user_ids: frozenset[int],
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
     return HelpdeskService(
@@ -124,14 +127,14 @@ def build_helpdesk_service(
         tag_repository=SqlAlchemyTagRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         sla_deadline_scheduler=sla_deadline_scheduler,
-        super_admin_telegram_user_id=super_admin_telegram_user_id,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
     )
 
 
 def build_helpdesk_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
     *,
-    super_admin_telegram_user_id: int,
+    super_admin_telegram_user_ids: frozenset[int],
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
     @asynccontextmanager
@@ -139,7 +142,7 @@ def build_helpdesk_service_factory(
         async with session_scope(session_factory) as session:
             yield build_helpdesk_service(
                 session,
-                super_admin_telegram_user_id=super_admin_telegram_user_id,
+                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
 
@@ -164,14 +167,18 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     db_engine = build_engine(settings.database)
     db_session_factory = build_session_factory(db_engine)
     redis = build_redis_client(settings.redis)
+    fsm_storage = build_fsm_storage(redis)
     redis_workflow = build_redis_workflow_runtime(redis)
+    super_admin_telegram_user_ids = frozenset(
+        settings.authorization.super_admin_telegram_user_ids
+    )
     authorization_service_factory = build_authorization_service_factory(
         db_session_factory,
-        super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
     )
     helpdesk_service_factory = build_helpdesk_service_factory(
         db_session_factory,
-        super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
         sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
     )
     bot: Bot | None = None
@@ -183,6 +190,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
         if settings.bot.token:
             bot = build_bot(settings.bot)
             dispatcher = build_dispatcher(
+                storage=fsm_storage,
                 settings=settings,
                 authorization_service_factory=authorization_service_factory,
                 helpdesk_service_factory=helpdesk_service_factory,
@@ -198,6 +206,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             db_engine=db_engine,
             db_session_factory=db_session_factory,
             redis=redis,
+            fsm_storage=fsm_storage,
             redis_workflow=redis_workflow,
             authorization_service_factory=authorization_service_factory,
             helpdesk_service_factory=helpdesk_service_factory,
@@ -216,5 +225,6 @@ async def close_runtime(runtime: AppRuntime) -> None:
     if runtime.bot is not None:
         await runtime.bot.session.close()
 
+    await runtime.fsm_storage.close()
     await close_redis_client(runtime.redis)
     await dispose_engine(runtime.db_engine)

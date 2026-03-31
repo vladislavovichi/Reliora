@@ -1,155 +1,70 @@
 # tg-helpdesk
 
-`tg-helpdesk` is a Telegram helpdesk service.
-Clients send messages to a bot, those messages create support tickets, and operators work with tickets through Telegram commands and callback actions.
+`tg-helpdesk` — Telegram helpdesk-сервис для приема клиентских обращений, обработки очереди заявок операторами и управления ролями внутри одного бота.
 
-The repository already includes:
+## Что умеет проект
 
-- async `aiogram` bootstrap and router separation
-- SQLAlchemy 2.x async models, repositories, and Alembic migrations
-- Redis primitives for locks, rate limiting, operator presence, streams, and SLA deadline coordination
-- explicit `domain -> application -> infrastructure -> bot` layering
-- Poetry, Docker Compose, Ruff, mypy, pytest, and pre-commit integration
+- принимает сообщения клиентов и создает заявки;
+- продолжает переписку в уже открытой заявке;
+- дает операторам очередь, карточки заявок, ответы, эскалацию, переназначение, макросы, теги и статистику;
+- дает супер администраторам управление операторами;
+- хранит состояние в PostgreSQL и Redis;
+- использует Redis-backed FSM для состояний `aiogram`.
 
-The project is still early-stage. It already covers the main ticket workflow, but it is not a finished helpdesk product.
+## Архитектура
 
-## Project Purpose
+Проект использует `src/` layout и явные слои:
 
-The long-term goal is a Telegram-native helpdesk where:
-
-- clients write to the bot and create support tickets
-- operators work inside Telegram
-- ticket assignment, SLA handling, rate limiting, and queue mechanics remain infrastructure-ready from the start
-
-The current codebase already supports:
-
-- client message -> persisted ticket creation
-- queued ticket routing inside Telegram
-- operator take, reply, close, escalate, reassign, macro, and tag flows
-- role-based `/start`, `/help`, and reply keyboards for regular users, operators, and the super admin
-- operator management commands for the super admin
-- SLA evaluation and deadline scheduling hooks
-- operational `/stats` reporting for operators and admins
-
-## Roles And Access
-
-The bot currently distinguishes three Telegram roles:
-
-- regular user: can start the bot, view user-safe help, and create or continue tickets by sending messages
-- operator: can use the operator menu, queue commands, ticket actions, macros, tags, and stats
-- super admin: keeps all operator capabilities and can manage operators
-
-The super admin is configured through:
-
-```dotenv
-AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_ID=123456789
+```text
+src/
+  app/             bootstrap, runtime, entrypoint
+  application/     use cases и orchestration сервисов
+  bot/             handlers, middlewares, texts, keyboards, formatters
+  domain/          сущности, enum'ы, бизнес-правила, контракты репозиториев
+  infrastructure/  config, PostgreSQL, Redis, logging
+tests/             тесты
+migrations/        Alembic
 ```
 
-Operator management commands:
+Основной поток:
+
+1. Telegram update попадает в `bot`.
+2. Handler вызывает `application`-сервис.
+3. Сервис использует конкретные use case'ы и доменные правила.
+4. Репозитории и Redis-адаптеры из `infrastructure` сохраняют состояние и выполняют технические операции.
+
+Слои не должны обходить друг друга: `bot -> application -> domain/contracts -> infrastructure`.
+
+## Роли и доступ
+
+Поддерживаются три роли:
+
+- пользователь: может писать в бот и продолжать свои обращения;
+- оператор: может работать с очередью, заявками, макросами, тегами и статистикой;
+- супер администратор: имеет все права оператора и дополнительно управляет операторами.
+
+Супер администраторы задаются списком Telegram ID через `.env`:
+
+```dotenv
+AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=12345,67890,11111
+```
+
+Правила:
+
+- пустые элементы игнорируются;
+- значения должны быть положительными целыми числами;
+- роль оператора продолжает определяться через таблицу операторов;
+- супер администраторы не требуют отдельной записи в таблице операторов.
+
+Команды супер администратора:
 
 - `/operators`
 - `/add_operator <telegram_user_id> [display_name]`
 - `/remove_operator <telegram_user_id>`
 
-## Architecture
+## Конфигурация
 
-The repository uses a `src/` layout with clear boundaries:
-
-```text
-src/
-  app/             process bootstrap and runtime assembly
-  bot/             aiogram dispatcher, routers, handlers, middlewares
-  domain/          enums, entity contracts, repository contracts
-  application/     use cases and service orchestration
-  infrastructure/  config, db, redis, and logging integrations
-tests/             lightweight project test suite
-migrations/        Alembic environment and revisions
-```
-
-Request flow today:
-
-1. Telegram update enters the `aiogram` dispatcher.
-2. Thin bot handlers delegate work to the application service layer.
-3. Application services execute use cases against repository contracts.
-4. SQLAlchemy repositories persist data in PostgreSQL.
-5. Redis primitives support rate limiting, locks, stream publishing, presence, and SLA deadline scheduling.
-
-## Local Startup
-
-Prerequisites:
-
-- Python 3.12
-- Poetry
-- PostgreSQL and Redis, or Docker Compose for the full stack
-
-Setup:
-
-```bash
-cp .env.example .env
-make install
-```
-
-Apply migrations:
-
-```bash
-make migrate
-```
-
-Start the app locally:
-
-```bash
-make run
-```
-
-The local startup command is:
-
-```bash
-PYTHONPATH=src poetry run python -m app.main
-```
-
-Notes:
-
-- `.env.example` enables `APP__DRY_RUN=true` by default.
-- Startup validates Redis connectivity and builds the database engine/session wiring.
-- Set `BOT__TOKEN` and `APP__DRY_RUN=false` to enable real Telegram polling.
-
-## Docker Compose Usage
-
-Start the full stack:
-
-```bash
-make docker-up
-```
-
-The stack starts in the background. Tail the application logs in a separate terminal with:
-
-```bash
-make logs
-```
-
-Stop it:
-
-```bash
-make docker-down
-```
-
-Compose services:
-
-- `app`
-- `postgres`
-- `redis`
-
-The container command matches the local entrypoint:
-
-```bash
-poetry run python -m app.main
-```
-
-The Compose service also exports `PYTHONPATH=/app/src`, which matches the local `src/` layout assumption.
-
-## Environment Variables
-
-Configuration uses `pydantic-settings` with nested groups. The canonical groups are:
+Настройки читаются через `pydantic-settings` с группами:
 
 - `app`
 - `bot`
@@ -158,7 +73,7 @@ Configuration uses `pydantic-settings` with nested groups. The canonical groups 
 - `redis`
 - `logging`
 
-Important variables:
+Основные переменные:
 
 ```dotenv
 APP__NAME=tg-helpdesk
@@ -167,7 +82,7 @@ APP__DRY_RUN=true
 
 BOT__TOKEN=
 
-AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_ID=123456789
+AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=123456789,987654321
 
 DATABASE__URL=
 DATABASE__HOST=postgres
@@ -187,26 +102,102 @@ LOGGING__LEVEL=INFO
 LOGGING__STRUCTURED=true
 ```
 
-Port publishing variables:
+Дополнительно для локального Docker:
 
 - `POSTGRES_EXPOSE_PORT`
 - `REDIS_EXPOSE_PORT`
 
-## Migration Commands
+## Локальный запуск
 
-Apply all migrations:
+Требования:
+
+- Python 3.12+
+- Poetry
+- PostgreSQL и Redis, либо Docker Compose
+
+Подготовка:
+
+```bash
+cp .env.example .env
+make install
+```
+
+Применить миграции:
 
 ```bash
 make migrate
 ```
 
-Create a new autogenerated migration:
+Запустить приложение локально:
+
+```bash
+make run
+```
+
+Фактический entrypoint:
+
+```bash
+PYTHONPATH=src poetry run python -m app.main
+```
+
+Если `APP__DRY_RUN=true`, инфраструктура поднимется, но polling Telegram не запустится. Для реальной работы задайте `BOT__TOKEN` и `APP__DRY_RUN=false`.
+
+## Docker
+
+Поднять стек:
+
+```bash
+make docker-up
+```
+
+Посмотреть логи приложения:
+
+```bash
+make logs
+```
+
+Остановить стек:
+
+```bash
+make docker-down
+```
+
+Сервисы в Compose:
+
+- `app`
+- `postgres`
+- `redis`
+
+Контейнер использует тот же entrypoint, что и локальный запуск: `python -m app.main`.
+
+## Redis и FSM
+
+Redis используется для:
+
+- FSM storage `aiogram`;
+- rate limiting;
+- locks по заявкам;
+- presence операторов;
+- stream/publish событий;
+- SLA deadline scheduling.
+
+FSM больше не использует `MemoryStorage`: runtime создает `RedisStorage` поверх общего Redis-клиента приложения.
+
+## Миграции
+
+Применить все миграции:
+
+```bash
+make migrate
+```
+
+Создать новую миграцию:
 
 ```bash
 make make-migration name=add_some_table
 ```
 
-Direct Alembic commands are also available:
+Прямые команды Alembic:
 
 ```bash
 poetry run alembic current
@@ -214,81 +205,35 @@ poetry run alembic history
 poetry run alembic upgrade head
 ```
 
-## Development Workflow
+## Проверки качества и разработка
 
-Install dependencies:
-
-```bash
-make install
-```
-
-The Make targets use Poetry's active virtual environment.
-
-Format code:
+Форматирование:
 
 ```bash
 make format
 ```
 
-Run linting and type checks:
+Линтинг и типы:
 
 ```bash
 make lint
 ```
 
-Run tests:
+Тесты:
 
 ```bash
 make test
 ```
 
-Run the standard local quality gate:
+Полный локальный прогон:
 
 ```bash
 make check
 ```
 
-Install pre-commit hooks:
+Pre-commit:
 
 ```bash
 make pre-commit-install
-```
-
-Run pre-commit across the whole repository:
-
-```bash
 make pre-commit-run
 ```
-
-## Practical Make Targets
-
-- `make install`
-- `make format`
-- `make lint`
-- `make test`
-- `make check`
-- `make run`
-- `make migrate`
-- `make make-migration name=...`
-- `make docker-up`
-- `make docker-down`
-- `make logs`
-
-## Current Starter Capabilities
-
-- client text messages create and enqueue persisted tickets
-- regular users see user-safe `/start`, `/help`, and a minimal reply keyboard
-- operators can inspect the queue, take tickets, reply, close, escalate, and reassign
-- the super admin can promote and revoke operators from Telegram commands
-- macros and tags are available in operator flows
-- SLA evaluation, auto-escalation, auto-reassignment hooks, and deadline scheduling are implemented in the service layer
-- `/stats` shows operational counts, current operator load, and simple average response and resolution times
-- operator and admin commands, callbacks, and protected FSM states are guarded by centralized authorization middleware
-- repository and service layers remain split cleanly
-
-## Suggested Next Steps
-
-- introduce background workers for Redis streams and SLA timeout handling
-- expand historical analytics beyond current-status and current-assignee reporting
-- add integration tests against a dedicated PostgreSQL test database
-- expand operator tooling and audit/event processing

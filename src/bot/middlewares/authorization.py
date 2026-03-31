@@ -42,8 +42,10 @@ class AuthorizationMiddleware(BaseMiddleware):
             data["event_user_role"] = role
             data["event_is_super_admin"] = role == UserRole.SUPER_ADMIN
 
-            if required_permission is not None and (
-                context is None or not context.has_permission(required_permission)
+            if (
+                required_permission is not None
+                and (context is None or not context.has_permission(required_permission))
+                and isinstance(event, (Message, CallbackQuery))
             ):
                 await deny_event_access(
                     event,

@@ -9,7 +9,7 @@ from bot.access import (
     extract_command_name,
     resolve_required_permission,
 )
-from bot.presentation import ADD_OPERATOR_BUTTON_TEXT, QUEUE_BUTTON_TEXT
+from bot.texts.buttons import ADD_OPERATOR_BUTTON_TEXT, QUEUE_BUTTON_TEXT
 
 
 def test_extract_command_name_strips_bot_suffix_and_args() -> None:

@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from application.services.authorization import AuthorizationError, Permission
+from application.services.authorization import Permission
+from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskOperationalStats, HelpdeskStatsService
 from application.use_cases.tickets import (
     AddMessageToTicketUseCase,
@@ -74,16 +75,14 @@ class HelpdeskService:
     sla_policy_repository: SLAPolicyRepository
     tag_repository: TagRepository
     ticket_tag_repository: TicketTagRepository
+    super_admin_telegram_user_ids: frozenset[int]
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
-    super_admin_telegram_user_id: int | None = None
+    _permissions: HelpdeskPermissionGuard = field(init=False, repr=False)
     _create_ticket_from_client_message: CreateTicketFromClientMessageUseCase = field(
-        init=False,
-        repr=False,
-    )
-    _add_message_to_ticket: AddMessageToTicketUseCase = field(init=False, repr=False)
-    _assign_ticket_to_operator: AssignTicketToOperatorUseCase = field(
         init=False, repr=False
     )
+    _add_message_to_ticket: AddMessageToTicketUseCase = field(init=False, repr=False)
+    _assign_ticket_to_operator: AssignTicketToOperatorUseCase = field(init=False, repr=False)
     _get_next_queued_ticket: GetNextQueuedTicketUseCase = field(init=False, repr=False)
     _list_queued_tickets: ListQueuedTicketsUseCase = field(init=False, repr=False)
     _assign_next_queued_ticket: AssignNextQueuedTicketUseCase = field(
@@ -91,8 +90,7 @@ class HelpdeskService:
     )
     _get_ticket_details: GetTicketDetailsUseCase = field(init=False, repr=False)
     _reply_to_ticket_as_operator: ReplyToTicketAsOperatorUseCase = field(
-        init=False,
-        repr=False,
+        init=False, repr=False
     )
     _list_operators: ListOperatorsUseCase = field(init=False, repr=False)
     _promote_operator: PromoteOperatorUseCase = field(init=False, repr=False)
@@ -115,68 +113,17 @@ class HelpdeskService:
     _auto_reassign_ticket_by_sla: AutoReassignTicketBySLAUseCase = field(
         init=False, repr=False
     )
-    _run_ticket_sla_checks: RunTicketSLAChecksUseCase = field(
-        init=False, repr=False
-    )
+    _run_ticket_sla_checks: RunTicketSLAChecksUseCase = field(init=False, repr=False)
     _stats_service: HelpdeskStatsService = field(init=False, repr=False)
 
-    async def _ensure_permission(
-        self,
-        *,
-        permission: Permission,
-        telegram_user_id: int | None,
-    ) -> None:
-        if telegram_user_id is None:
-            raise AuthorizationError(permission)
-
-        if permission == Permission.MANAGE_OPERATORS:
-            if telegram_user_id != self.super_admin_telegram_user_id:
-                raise AuthorizationError(permission)
-            return
-
-        if telegram_user_id == self.super_admin_telegram_user_id:
-            return
-
-        is_operator = await self.operator_repository.exists_active_by_telegram_user_id(
-            telegram_user_id=telegram_user_id
-        )
-        if not is_operator:
-            raise AuthorizationError(permission)
-
-    async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None:
-        if self.sla_deadline_scheduler is None:
-            return
-
-        evaluation = await self._evaluate_ticket_sla_state(
-            ticket_public_id=ticket_public_id
-        )
-        if evaluation is None:
-            return
-
-        next_deadline_at = min(
-            (
-                deadline.deadline_at
-                for deadline in (
-                    evaluation.first_response,
-                    evaluation.resolution,
-                    evaluation.stale_assignment,
-                )
-                if deadline.deadline_at is not None
-                and deadline.remaining_seconds is not None
-                and deadline.remaining_seconds > 0
-            ),
-            default=None,
-        )
-        if next_deadline_at is None:
-            await self.sla_deadline_scheduler.cancel(ticket_id=str(ticket_public_id))
-            return
-
-        await self.sla_deadline_scheduler.schedule(
-            ticket_id=str(ticket_public_id),
-            deadline_at=next_deadline_at,
-        )
-
     def __post_init__(self) -> None:
+        if not self.super_admin_telegram_user_ids:
+            raise RuntimeError("Не настроены Telegram user id супер администраторов.")
+
+        self._permissions = HelpdeskPermissionGuard(
+            operator_repository=self.operator_repository,
+            super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
+        )
         self._create_ticket_from_client_message = CreateTicketFromClientMessageUseCase(
             ticket_repository=self.ticket_repository,
             ticket_message_repository=self.ticket_message_repository,
@@ -212,19 +159,17 @@ class HelpdeskService:
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
         )
-        if self.super_admin_telegram_user_id is None:
-            raise RuntimeError("Не настроен Telegram user id супер администратора.")
         self._list_operators = ListOperatorsUseCase(
             operator_repository=self.operator_repository,
-            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
+            super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
         )
         self._promote_operator = PromoteOperatorUseCase(
             operator_repository=self.operator_repository,
-            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
+            super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
         )
         self._revoke_operator = RevokeOperatorUseCase(
             operator_repository=self.operator_repository,
-            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
+            super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
         )
         self._list_macros = ListMacrosUseCase(macro_repository=self.macro_repository)
         self._apply_macro_to_ticket = ApplyMacroToTicketUseCase(
@@ -261,9 +206,7 @@ class HelpdeskService:
             ticket_repository=self.ticket_repository,
             ticket_event_repository=self.ticket_event_repository,
         )
-        self._get_basic_stats = BasicStatsUseCase(
-            ticket_repository=self.ticket_repository
-        )
+        self._get_basic_stats = BasicStatsUseCase(ticket_repository=self.ticket_repository)
         self._evaluate_ticket_sla_state = EvaluateTicketSLAStateUseCase(
             ticket_repository=self.ticket_repository,
             sla_policy_repository=self.sla_policy_repository,
@@ -285,8 +228,48 @@ class HelpdeskService:
             operator_repository=self.operator_repository,
             sla_policy_repository=self.sla_policy_repository,
         )
-        self._stats_service = HelpdeskStatsService(
-            ticket_repository=self.ticket_repository,
+        self._stats_service = HelpdeskStatsService(ticket_repository=self.ticket_repository)
+
+    async def _ensure_permission(
+        self,
+        *,
+        permission: Permission,
+        telegram_user_id: int | None,
+    ) -> None:
+        await self._permissions.ensure_allowed(
+            permission=permission,
+            telegram_user_id=telegram_user_id,
+        )
+
+    async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None:
+        if self.sla_deadline_scheduler is None:
+            return
+
+        evaluation = await self._evaluate_ticket_sla_state(ticket_public_id=ticket_public_id)
+        if evaluation is None:
+            return
+
+        next_deadline_at = min(
+            (
+                deadline.deadline_at
+                for deadline in (
+                    evaluation.first_response,
+                    evaluation.resolution,
+                    evaluation.stale_assignment,
+                )
+                if deadline.deadline_at is not None
+                and deadline.remaining_seconds is not None
+                and deadline.remaining_seconds > 0
+            ),
+            default=None,
+        )
+        if next_deadline_at is None:
+            await self.sla_deadline_scheduler.cancel(ticket_id=str(ticket_public_id))
+            return
+
+        await self.sla_deadline_scheduler.schedule(
+            ticket_id=str(ticket_public_id),
+            deadline_at=next_deadline_at,
         )
 
     async def create_ticket_from_client_message(
@@ -364,19 +347,14 @@ class HelpdeskService:
             permission=Permission.ACCESS_OPERATOR,
             telegram_user_id=actor_telegram_user_id,
         )
-        result = await self._close_ticket(ticket_public_id=ticket_public_id)
-        if result is not None:
-            await self._sync_sla_deadline(ticket_public_id=result.public_id)
-        return result
+        return await self.close_ticket(ticket_public_id=ticket_public_id)
 
     async def get_next_queued_ticket(
         self,
         *,
         prioritize_priority: bool = False,
     ) -> QueuedTicketSummary | None:
-        return await self._get_next_queued_ticket(
-            prioritize_priority=prioritize_priority
-        )
+        return await self._get_next_queued_ticket(prioritize_priority=prioritize_priority)
 
     async def list_queued_tickets(
         self,
@@ -623,10 +601,7 @@ class HelpdeskService:
             permission=Permission.ACCESS_OPERATOR,
             telegram_user_id=actor_telegram_user_id,
         )
-        result = await self._escalate_ticket(ticket_public_id=ticket_public_id)
-        if result is not None:
-            await self._sync_sla_deadline(ticket_public_id=result.public_id)
-        return result
+        return await self.escalate_ticket(ticket_public_id=ticket_public_id)
 
     async def get_basic_stats(self) -> TicketStats:
         return await self._get_basic_stats()

@@ -1,26 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 
-from domain.contracts.repositories import (
-    MacroRepository,
-    OperatorRepository,
-    OperatorTicketLoadRecord,
-    SLAPolicyRepository,
-    TagRepository,
-    TicketEventRepository,
-    TicketMessageRepository,
-    TicketRepository,
-    TicketTagRepository,
-)
+from domain.contracts.repositories import OperatorTicketLoadRecord
 from domain.entities.ticket import Ticket as TicketEntity
 from domain.entities.ticket import TicketDetails
 from domain.enums.tickets import (
@@ -29,56 +16,16 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import (
-    Macro,
-    Operator,
-    SLAPolicy,
-    Tag,
-    TicketEvent,
-    TicketMessage,
-    TicketTag,
-)
+from infrastructure.db.models import Operator, Tag, TicketEvent, TicketMessage, TicketTag
 from infrastructure.db.models import Ticket as TicketModel
+from infrastructure.db.repositories.base import (
+    OperatorTicketLoadRow,
+    apply_queue_ordering,
+    utcnow,
+)
 
 
-def utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-def normalize_tag_name(name: str) -> str:
-    return " ".join(name.strip().lower().split())
-
-
-def apply_queue_ordering(
-    statement: Select[tuple[TicketModel]],
-    *,
-    prioritize_priority: bool,
-) -> Select[tuple[TicketModel]]:
-    if not prioritize_priority:
-        return statement.order_by(TicketModel.created_at.asc(), TicketModel.id.asc())
-
-    priority_rank = case(
-        (TicketModel.priority == TicketPriority.URGENT, 0),
-        (TicketModel.priority == TicketPriority.HIGH, 1),
-        (TicketModel.priority == TicketPriority.NORMAL, 2),
-        (TicketModel.priority == TicketPriority.LOW, 3),
-        else_=4,
-    )
-    return statement.order_by(
-        priority_rank.asc(),
-        TicketModel.created_at.asc(),
-        TicketModel.id.asc(),
-    )
-
-
-@dataclass(slots=True, frozen=True)
-class OperatorTicketLoadRow:
-    operator_id: int
-    display_name: str
-    ticket_count: int
-
-
-class SqlAlchemyTicketRepository(TicketRepository):
+class SqlAlchemyTicketRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -336,7 +283,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         return float(average_seconds)
 
 
-class SqlAlchemyTicketMessageRepository(TicketMessageRepository):
+class SqlAlchemyTicketMessageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -376,7 +323,7 @@ class SqlAlchemyTicketMessageRepository(TicketMessageRepository):
         return int(current_min) - 1
 
 
-class SqlAlchemyTicketEventRepository(TicketEventRepository):
+class SqlAlchemyTicketEventRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -403,208 +350,3 @@ class SqlAlchemyTicketEventRepository(TicketEventRepository):
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none() is not None
-
-
-class SqlAlchemyOperatorRepository(OperatorRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
-        statement = (
-            select(Operator.id)
-            .where(
-                Operator.telegram_user_id == telegram_user_id,
-                Operator.is_active.is_(True),
-            )
-            .limit(1)
-        )
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none() is not None
-
-    async def list_active(self) -> Sequence[Operator]:
-        statement = (
-            select(Operator)
-            .where(Operator.is_active.is_(True))
-            .order_by(Operator.display_name.asc(), Operator.id.asc())
-        )
-        result = await self.session.execute(statement)
-        return result.scalars().all()
-
-    async def promote(
-        self,
-        *,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
-    ) -> Operator:
-        statement = select(Operator).where(Operator.telegram_user_id == telegram_user_id)
-        result = await self.session.execute(statement)
-        operator = result.scalar_one_or_none()
-
-        if operator is None:
-            operator = Operator(
-                telegram_user_id=telegram_user_id,
-                username=username,
-                display_name=display_name,
-                is_active=True,
-            )
-            self.session.add(operator)
-        else:
-            operator.display_name = display_name
-            if username is not None:
-                operator.username = username
-            operator.is_active = True
-
-        await self.session.flush()
-        return operator
-
-    async def revoke(self, *, telegram_user_id: int) -> Operator | None:
-        statement = (
-            select(Operator)
-            .where(
-                Operator.telegram_user_id == telegram_user_id,
-                Operator.is_active.is_(True),
-            )
-            .limit(1)
-        )
-        result = await self.session.execute(statement)
-        operator = result.scalar_one_or_none()
-        if operator is None:
-            return None
-
-        operator.is_active = False
-        await self.session.flush()
-        return operator
-
-    async def get_or_create(
-        self,
-        *,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
-    ) -> int:
-        statement = select(Operator).where(Operator.telegram_user_id == telegram_user_id)
-        result = await self.session.execute(statement)
-        operator = result.scalar_one_or_none()
-
-        if operator is None:
-            operator = Operator(
-                telegram_user_id=telegram_user_id,
-                username=username,
-                display_name=display_name,
-                is_active=True,
-            )
-            self.session.add(operator)
-        else:
-            operator.username = username
-            operator.display_name = display_name
-            operator.is_active = True
-
-        await self.session.flush()
-        return operator.id
-
-
-class SqlAlchemyMacroRepository(MacroRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def list_all(self) -> Sequence[Macro]:
-        statement = select(Macro).order_by(Macro.title.asc(), Macro.id.asc())
-        result = await self.session.execute(statement)
-        return result.scalars().all()
-
-    async def get_by_id(self, *, macro_id: int) -> Macro | None:
-        statement = select(Macro).where(Macro.id == macro_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
-
-
-class SqlAlchemySLAPolicyRepository(SLAPolicyRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def get_for_priority(self, *, priority: TicketPriority) -> SLAPolicy | None:
-        priority_rank = case(
-            (SLAPolicy.priority == priority, 0),
-            else_=1,
-        )
-        statement = (
-            select(SLAPolicy)
-            .where((SLAPolicy.priority == priority) | (SLAPolicy.priority.is_(None)))
-            .order_by(priority_rank.asc(), SLAPolicy.id.asc())
-            .limit(1)
-        )
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
-
-
-class SqlAlchemyTagRepository(TagRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def get_or_create(self, *, name: str) -> int:
-        normalized_name = normalize_tag_name(name)
-        statement = select(Tag).where(Tag.name == normalized_name)
-        result = await self.session.execute(statement)
-        tag = result.scalar_one_or_none()
-
-        if tag is None:
-            tag = Tag(name=normalized_name)
-            self.session.add(tag)
-            await self.session.flush()
-
-        return tag.id
-
-    async def get_by_name(self, *, name: str) -> Tag | None:
-        normalized_name = normalize_tag_name(name)
-        statement = select(Tag).where(Tag.name == normalized_name)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
-
-    async def list_all(self) -> Sequence[Tag]:
-        statement = select(Tag).order_by(Tag.name.asc(), Tag.id.asc())
-        result = await self.session.execute(statement)
-        return result.scalars().all()
-
-
-class SqlAlchemyTicketTagRepository(TicketTagRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def list_for_ticket(self, *, ticket_id: int) -> Sequence[Tag]:
-        statement = (
-            select(Tag)
-            .join(TicketTag, TicketTag.tag_id == Tag.id)
-            .where(TicketTag.ticket_id == ticket_id)
-            .order_by(Tag.name.asc(), Tag.id.asc())
-        )
-        result = await self.session.execute(statement)
-        return result.scalars().all()
-
-    async def add(self, *, ticket_id: int, tag_id: int) -> bool:
-        statement = select(TicketTag).where(
-            TicketTag.ticket_id == ticket_id,
-            TicketTag.tag_id == tag_id,
-        )
-        result = await self.session.execute(statement)
-        ticket_tag = result.scalar_one_or_none()
-        if ticket_tag is not None:
-            return False
-
-        self.session.add(TicketTag(ticket_id=ticket_id, tag_id=tag_id))
-        await self.session.flush()
-        return True
-
-    async def remove(self, *, ticket_id: int, tag_id: int) -> bool:
-        statement = select(TicketTag).where(
-            TicketTag.ticket_id == ticket_id,
-            TicketTag.tag_id == tag_id,
-        )
-        result = await self.session.execute(statement)
-        ticket_tag = result.scalar_one_or_none()
-        if ticket_tag is None:
-            return False
-
-        await self.session.delete(ticket_tag)
-        await self.session.flush()
-        return True

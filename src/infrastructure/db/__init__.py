@@ -8,6 +8,7 @@ from infrastructure.db.repositories import (
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
+    SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.session import (
     build_engine,
@@ -27,6 +28,7 @@ __all__ = [
     "SqlAlchemyTicketEventRepository",
     "SqlAlchemyTicketMessageRepository",
     "SqlAlchemyTicketRepository",
+    "SqlAlchemyTicketTagRepository",
     "build_engine",
     "build_session_factory",
     "dispose_engine",

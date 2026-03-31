@@ -1,0 +1,25 @@
+HELP_BUTTON_TEXT = "Помощь"
+QUEUE_BUTTON_TEXT = "Очередь"
+TAKE_NEXT_BUTTON_TEXT = "Взять следующий"
+STATS_BUTTON_TEXT = "Статистика"
+CANCEL_BUTTON_TEXT = "Отмена"
+OPERATORS_BUTTON_TEXT = "Операторы"
+ADD_OPERATOR_BUTTON_TEXT = "Добавить оператора"
+REMOVE_OPERATOR_BUTTON_TEXT = "Удалить оператора"
+
+USER_NAVIGATION_BUTTONS = frozenset({HELP_BUTTON_TEXT})
+OPERATOR_NAVIGATION_BUTTONS = frozenset(
+    {
+        QUEUE_BUTTON_TEXT,
+        TAKE_NEXT_BUTTON_TEXT,
+        STATS_BUTTON_TEXT,
+        CANCEL_BUTTON_TEXT,
+    }
+)
+SUPER_ADMIN_NAVIGATION_BUTTONS = frozenset(
+    {
+        OPERATORS_BUTTON_TEXT,
+        ADD_OPERATOR_BUTTON_TEXT,
+        REMOVE_OPERATOR_BUTTON_TEXT,
+    }
+)

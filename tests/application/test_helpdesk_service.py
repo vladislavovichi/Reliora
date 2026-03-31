@@ -547,7 +547,7 @@ def build_service(
     sla_policy_repository: Any | None = None,
     tag_repository: StubTagRepository | None = None,
     ticket_tag_repository: StubTicketTagRepository | None = None,
-    super_admin_telegram_user_id: int = 42,
+    super_admin_telegram_user_ids: frozenset[int] | None = None,
 ) -> HelpdeskService:
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
@@ -572,7 +572,7 @@ def build_service(
         tag_repository=active_tag_repository,
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
-        super_admin_telegram_user_id=super_admin_telegram_user_id,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids or frozenset({42}),
     )
 
 
@@ -739,13 +739,13 @@ async def test_list_operators_rejects_non_admin_actor_when_actor_is_provided() -
             )
         ),
         operator_repository=operator_repository,
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     try:
         await service.list_operators(actor_telegram_user_id=1001)
     except AuthorizationError as exc:
-        assert str(exc) == "Это действие доступно только супер администратору."
+        assert str(exc) == "Это действие доступно только супер администраторам."
     else:
         raise AssertionError("expected AuthorizationError")
 
@@ -806,7 +806,7 @@ async def test_revoke_operator_rejects_super_admin_target() -> None:
             )
         ),
         operator_repository=StubOperatorManagementRepository(),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     try:
@@ -869,7 +869,7 @@ async def test_assign_next_ticket_to_operator_rejects_regular_user_actor() -> No
             queued_tickets=[queued_ticket],
         ),
         operator_repository=StubOperatorManagementRepository(active_operator_ids=set()),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     try:
@@ -879,7 +879,7 @@ async def test_assign_next_ticket_to_operator_rejects_regular_user_actor() -> No
             actor_telegram_user_id=2002,
         )
     except AuthorizationError as exc:
-        assert str(exc) == "Это действие доступно только операторам и супер администратору."
+        assert str(exc) == "Это действие доступно только операторам и супер администраторам."
     else:
         raise AssertionError("expected AuthorizationError")
 

@@ -2,15 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from aiogram.types import CallbackQuery, Message
-
-from application.services.authorization import Permission, get_permission_denied_message
-from bot.presentation import (
-    OPERATOR_NAVIGATION_BUTTONS,
-    SUPER_ADMIN_NAVIGATION_BUTTONS,
-    build_main_menu,
-)
-from domain.enums.roles import UserRole
+from application.services.authorization import Permission
+from bot.texts.buttons import OPERATOR_NAVIGATION_BUTTONS, SUPER_ADMIN_NAVIGATION_BUTTONS
 
 PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
     "queue": Permission.ACCESS_OPERATOR,
@@ -88,20 +81,3 @@ def resolve_required_permission(
             return permission
 
     return None
-
-
-async def deny_event_access(
-    event: Message | CallbackQuery,
-    *,
-    permission: Permission,
-    role: UserRole = UserRole.USER,
-) -> None:
-    message_text = get_permission_denied_message(permission)
-    if isinstance(event, CallbackQuery):
-        await event.answer(message_text, show_alert=True)
-        return
-
-    await event.answer(
-        message_text,
-        reply_markup=build_main_menu(role),
-    )

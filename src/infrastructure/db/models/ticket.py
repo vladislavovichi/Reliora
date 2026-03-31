@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from enum import Enum as PythonEnum
+from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -18,7 +18,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
 from domain.enums.tickets import (
     TicketEventType,
@@ -27,89 +26,11 @@ from domain.enums.tickets import (
     TicketStatus,
 )
 from infrastructure.db.base import Base
+from infrastructure.db.models.mixins import CreatedAtMixin, TimestampMixin, enum_values
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-def enum_values(enum_cls: type[PythonEnum]) -> list[str]:
-    return [member.value for member in enum_cls]
-
-
-class CreatedAtMixin:
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        server_default=func.now(),
-        nullable=False,
-    )
-
-
-class TimestampMixin(CreatedAtMixin):
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
-        server_default=func.now(),
-        nullable=False,
-    )
-
-
-class Operator(CreatedAtMixin, Base):
-    __tablename__ = "operators"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    telegram_user_id: Mapped[int] = mapped_column(
-        BigInteger, unique=True, nullable=False, index=True
-    )
-    username: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        nullable=False,
-        default=True,
-        server_default="true",
-    )
-
-    assigned_tickets: Mapped[list[Ticket]] = relationship(
-        back_populates="assigned_operator",
-        foreign_keys="Ticket.assigned_operator_id",
-    )
-    sent_messages: Mapped[list[TicketMessage]] = relationship(
-        back_populates="sender_operator"
-    )
-
-
-class Macro(CreatedAtMixin, Base):
-    __tablename__ = "macros"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    title: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
-    body: Mapped[str] = mapped_column(Text, nullable=False)
-
-
-class SLAPolicy(Base):
-    __tablename__ = "sla_policies"
-    __table_args__ = (
-        CheckConstraint(
-            "first_response_minutes > 0", name="first_response_minutes_positive"
-        ),
-        CheckConstraint("resolution_minutes > 0", name="resolution_minutes_positive"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
-    first_response_minutes: Mapped[int] = mapped_column(nullable=False)
-    resolution_minutes: Mapped[int] = mapped_column(nullable=False)
-    priority: Mapped[TicketPriority | None] = mapped_column(
-        Enum(
-            TicketPriority,
-            name="ticket_priority",
-            values_callable=enum_values,
-        ),
-        nullable=True,
-        index=True,
-    )
+if TYPE_CHECKING:
+    from infrastructure.db.models.catalog import Tag
+    from infrastructure.db.models.operator import Operator
 
 
 class Ticket(TimestampMixin, Base):
@@ -211,9 +132,7 @@ class TicketMessage(CreatedAtMixin, Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
     ticket: Mapped[Ticket] = relationship(back_populates="messages")
-    sender_operator: Mapped[Operator | None] = relationship(
-        back_populates="sent_messages"
-    )
+    sender_operator: Mapped[Operator | None] = relationship(back_populates="sent_messages")
 
 
 class TicketEvent(CreatedAtMixin, Base):
@@ -238,18 +157,6 @@ class TicketEvent(CreatedAtMixin, Base):
     payload_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
     ticket: Mapped[Ticket] = relationship(back_populates="events")
-
-
-class Tag(CreatedAtMixin, Base):
-    __tablename__ = "tags"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-
-    ticket_tags: Mapped[list[TicketTag]] = relationship(
-        back_populates="tag",
-        cascade="all, delete-orphan",
-    )
 
 
 class TicketTag(Base):

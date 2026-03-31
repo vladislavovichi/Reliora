@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NoReturn
 
 from application.services.authorization import (
     AuthorizationError,
@@ -18,11 +19,35 @@ class FakeOperatorRepository:
     async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
         return telegram_user_id in self.active_operator_ids
 
+    async def list_active(self) -> NoReturn:
+        raise NotImplementedError
+
+    async def promote(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> NoReturn:
+        raise NotImplementedError
+
+    async def revoke(self, *, telegram_user_id: int) -> NoReturn:
+        raise NotImplementedError
+
+    async def get_or_create(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> NoReturn:
+        raise NotImplementedError
+
 
 async def test_resolve_role_returns_super_admin_from_config() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids={42, 1001}),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     result = await service.resolve_role(telegram_user_id=42)
@@ -33,7 +58,7 @@ async def test_resolve_role_returns_super_admin_from_config() -> None:
 async def test_resolve_role_returns_operator_from_repository() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids={1001}),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     result = await service.resolve_role(telegram_user_id=1001)
@@ -44,7 +69,7 @@ async def test_resolve_role_returns_operator_from_repository() -> None:
 async def test_resolve_role_falls_back_to_regular_user() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids={1001}),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     result = await service.resolve_role(telegram_user_id=2002)
@@ -55,7 +80,7 @@ async def test_resolve_role_falls_back_to_regular_user() -> None:
 async def test_super_admin_has_all_permissions() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids=set()),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42, 84}),
     )
 
     assert (
@@ -84,7 +109,7 @@ async def test_super_admin_has_all_permissions() -> None:
 async def test_operator_cannot_manage_operators() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids={1001}),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     assert (
@@ -106,7 +131,7 @@ async def test_operator_cannot_manage_operators() -> None:
 async def test_regular_user_has_no_protected_permissions() -> None:
     service = AuthorizationService(
         operator_repository=FakeOperatorRepository(active_operator_ids={1001}),
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     assert (
@@ -120,16 +145,16 @@ async def test_regular_user_has_no_protected_permissions() -> None:
 
 def test_get_permission_denied_message_returns_russian_text() -> None:
     assert get_permission_denied_message(Permission.ACCESS_OPERATOR) == (
-        "Это действие доступно только операторам и супер администратору."
+        "Это действие доступно только операторам и супер администраторам."
     )
     assert get_permission_denied_message(Permission.MANAGE_OPERATORS) == (
-        "Это действие доступно только супер администратору."
+        "Это действие доступно только супер администраторам."
     )
 
 
 def test_authorization_error_uses_permission_specific_message() -> None:
     assert str(AuthorizationError(Permission.ACCESS_OPERATOR)) == (
-        "Это действие доступно только операторам и супер администратору."
+        "Это действие доступно только операторам и супер администраторам."
     )
 
 
@@ -137,7 +162,7 @@ async def test_revoked_operator_loses_operator_permissions() -> None:
     repository = FakeOperatorRepository(active_operator_ids={1001})
     service = AuthorizationService(
         operator_repository=repository,
-        super_admin_telegram_user_id=42,
+        super_admin_telegram_user_ids=frozenset({42}),
     )
 
     repository.active_operator_ids.remove(1001)
@@ -145,3 +170,14 @@ async def test_revoked_operator_loses_operator_permissions() -> None:
     result = await service.resolve_role(telegram_user_id=1001)
 
     assert result == UserRole.USER
+
+
+async def test_second_super_admin_is_recognized_from_configured_set() -> None:
+    service = AuthorizationService(
+        operator_repository=FakeOperatorRepository(active_operator_ids={1001}),
+        super_admin_telegram_user_ids=frozenset({42, 84}),
+    )
+
+    result = await service.resolve_role(telegram_user_id=84)
+
+    assert result == UserRole.SUPER_ADMIN
