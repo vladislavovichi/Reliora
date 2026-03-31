@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
+from bot.presentation import HELP_BUTTON_TEXT, build_help_text, build_main_menu, build_start_text
 from domain.enums.roles import UserRole
 
 router = Router(name="system")
 
 
 @router.message(CommandStart())
-async def handle_start(message: Message) -> None:
-    await message.answer(
-        "Бот поддержки запущен.\n"
-        "Отправьте сообщение, чтобы создать новую заявку.\n"
-        "Используйте /help, чтобы посмотреть доступные команды."
-    )
+async def handle_start(
+    message: Message,
+    event_user_role: UserRole = UserRole.USER,
+) -> None:
+    await _send_start_message(message, role=event_user_role)
 
 
 @router.message(Command("help"))
@@ -23,7 +23,15 @@ async def handle_help_with_role(
     message: Message,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
-    await message.answer(_build_help_text(event_user_role))
+    await _send_help_message(message, role=event_user_role)
+
+
+@router.message(F.text == HELP_BUTTON_TEXT)
+async def handle_help_button(
+    message: Message,
+    event_user_role: UserRole = UserRole.USER,
+) -> None:
+    await _send_help_message(message, role=event_user_role)
 
 
 @router.message(Command("ping"))
@@ -31,37 +39,15 @@ async def handle_ping(message: Message) -> None:
     await message.answer("понг")
 
 
-def _build_help_text(role: UserRole) -> str:
-    lines = [
-        "Доступные команды:",
-        "/start - показать стартовое сообщение",
-        "/help - показать эту справку",
-        "/ping - проверить доступность бота",
-    ]
+async def _send_start_message(message: Message, *, role: UserRole) -> None:
+    await message.answer(
+        build_start_text(role),
+        reply_markup=build_main_menu(role),
+    )
 
-    if role in {UserRole.OPERATOR, UserRole.SUPER_ADMIN}:
-        lines.extend(
-            [
-                "/stats - показать статистику по заявкам",
-                "/queue - показать ближайшие заявки в очереди",
-                "/take - взять следующую заявку из очереди",
-                "/ticket <ticket_public_id> - показать детали заявки",
-                "/macros [ticket_public_id] - показать доступные макросы",
-                "/tags <ticket_public_id> - показать теги заявки",
-                "/alltags - показать все доступные теги",
-                "/addtag <ticket_public_id> <tag> - добавить тег к заявке",
-                "/rmtag <ticket_public_id> <tag> - снять тег с заявки",
-                "/cancel - отменить текущее действие оператора",
-            ]
-        )
 
-    if role == UserRole.SUPER_ADMIN:
-        lines.extend(
-            [
-                "/operators - показать список операторов",
-                "/add_operator <telegram_user_id> [display_name] - выдать права оператора",
-                "/remove_operator <telegram_user_id> - снять права оператора",
-            ]
-        )
-
-    return "\n".join(lines)
+async def _send_help_message(message: Message, *, role: UserRole) -> None:
+    await message.answer(
+        build_help_text(role),
+        reply_markup=build_main_menu(role),
+    )

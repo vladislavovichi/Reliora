@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram.types import CallbackQuery, Message
 
 from application.services.authorization import Permission
+from bot.presentation import OPERATOR_NAVIGATION_BUTTONS, SUPER_ADMIN_NAVIGATION_BUTTONS
 
 OPERATOR_COMMANDS = frozenset(
     {
@@ -64,6 +65,12 @@ def resolve_required_permission(
         return Permission.MANAGE_OPERATORS
 
     if command_name in OPERATOR_COMMANDS:
+        return Permission.ACCESS_OPERATOR
+
+    if message_text in SUPER_ADMIN_NAVIGATION_BUTTONS:
+        return Permission.MANAGE_OPERATORS
+
+    if message_text in OPERATOR_NAVIGATION_BUTTONS:
         return Permission.ACCESS_OPERATOR
 
     if callback_data is not None and any(

@@ -22,6 +22,17 @@ from application.use_cases.tickets import (
     TicketDetailsSummary,
 )
 from bot.callbacks import AdminOperatorCallback, OperatorActionCallback, OperatorMacroCallback
+from bot.presentation import (
+    ADD_OPERATOR_BUTTON_TEXT,
+    CANCEL_BUTTON_TEXT,
+    OPERATORS_BUTTON_TEXT,
+    QUEUE_BUTTON_TEXT,
+    REMOVE_OPERATOR_BUTTON_TEXT,
+    STATS_BUTTON_TEXT,
+    TAKE_NEXT_BUTTON_TEXT,
+    build_add_operator_guidance,
+    build_remove_operator_guidance,
+)
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 from domain.tickets import InvalidTicketTransitionError, format_status_for_humans
 from infrastructure.config import Settings
@@ -44,12 +55,15 @@ async def handle_cancel(
     message: Message,
     state: FSMContext,
 ) -> None:
-    if await state.get_state() is None:
-        await message.answer("Сейчас нет активного действия оператора.")
-        return
+    await _cancel_operator_action(message, state)
 
-    await state.clear()
-    await message.answer("Действие оператора отменено.")
+
+@router.message(F.text == CANCEL_BUTTON_TEXT)
+async def handle_cancel_button(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    await _cancel_operator_action(message, state)
 
 
 @router.message(Command("queue"))
@@ -59,29 +73,27 @@ async def handle_queue(
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
-    if not await global_rate_limiter.allow():
-        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
-        return
+    await _send_queue(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
 
-    if message.from_user is not None:
-        await operator_presence.touch(operator_id=message.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        queued_tickets = await helpdesk_service.list_queued_tickets(limit=10)
-
-    if not queued_tickets:
-        await message.answer("Очередь пуста.")
-        return
-
-    await message.answer("Заявки в очереди:")
-    for ticket in queued_tickets:
-        await message.answer(
-            _format_queued_ticket(ticket),
-            reply_markup=_build_ticket_actions_markup(
-                ticket_public_id=ticket.public_id,
-                status=ticket.status,
-            ),
-        )
+@router.message(F.text == QUEUE_BUTTON_TEXT)
+async def handle_queue_button(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    await _send_queue(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
 
 
 @router.message(Command("take"))
@@ -92,53 +104,29 @@ async def handle_take_next(
     operator_presence: OperatorPresenceHelper,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
-    if message.from_user is None:
-        await message.answer("Не удалось определить оператора для этого действия.")
-        return
+    await _take_next_ticket(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+        ticket_lock_manager=ticket_lock_manager,
+    )
 
-    if not await global_rate_limiter.allow():
-        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
-        return
 
-    await operator_presence.touch(operator_id=message.from_user.id)
-
-    queue_lock = ticket_lock_manager.for_ticket("queue-next")
-    if not await queue_lock.acquire():
-        await message.answer("Очередь сейчас занята. Попробуйте чуть позже.")
-        return
-
-    try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            ticket = await helpdesk_service.assign_next_ticket_to_operator(
-                telegram_user_id=message.from_user.id,
-                display_name=message.from_user.full_name,
-                username=message.from_user.username,
-            )
-            ticket_details = None
-            if ticket is not None:
-                ticket_details = await helpdesk_service.get_ticket_details(
-                    ticket_public_id=ticket.public_id
-                )
-    finally:
-        await queue_lock.release()
-
-    if ticket is None:
-        await message.answer("Сейчас нет доступных заявок в очереди.")
-        return
-
-    if ticket_details is None:
-        await message.answer(
-            f"Следующая заявка {ticket.public_number} взята в работу. "
-            f"Текущий статус: {_format_status(ticket.status)}."
-        )
-        return
-
-    await message.answer(
-        _format_ticket_details(ticket_details),
-        reply_markup=_build_ticket_actions_markup(
-            ticket_public_id=ticket_details.public_id,
-            status=ticket_details.status,
-        ),
+@router.message(F.text == TAKE_NEXT_BUTTON_TEXT)
+async def handle_take_next_button(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    await _take_next_ticket(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+        ticket_lock_manager=ticket_lock_manager,
     )
 
 
@@ -410,17 +398,27 @@ async def handle_stats(
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
-    if not await global_rate_limiter.allow():
-        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
-        return
+    await _send_operational_stats(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
 
-    if message.from_user is not None:
-        await operator_presence.touch(operator_id=message.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        stats = await helpdesk_service.get_operational_stats()
-
-    await message.answer(_format_operational_stats(stats))
+@router.message(F.text == STATS_BUTTON_TEXT)
+async def handle_stats_button(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    await _send_operational_stats(
+        message,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
 
 
 @router.message(Command("operators"))
@@ -431,23 +429,40 @@ async def handle_operators(
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
-    if not await global_rate_limiter.allow():
-        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
-        return
-
-    if message.from_user is not None:
-        await operator_presence.touch(operator_id=message.from_user.id)
-
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators()
-
-    await message.answer(
-        _format_operator_list_response(
-            operators=operators,
-            super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
-        ),
-        reply_markup=_build_operator_management_markup(operators=operators),
+    await _send_operator_list(
+        message,
+        settings=settings,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
     )
+
+
+@router.message(F.text == OPERATORS_BUTTON_TEXT)
+async def handle_operators_button(
+    message: Message,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    await _send_operator_list(
+        message,
+        settings=settings,
+        helpdesk_service_factory=helpdesk_service_factory,
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
+
+
+@router.message(F.text == ADD_OPERATOR_BUTTON_TEXT)
+async def handle_add_operator_button(message: Message) -> None:
+    await message.answer(build_add_operator_guidance())
+
+
+@router.message(F.text == REMOVE_OPERATOR_BUTTON_TEXT)
+async def handle_remove_operator_button(message: Message) -> None:
+    await message.answer(build_remove_operator_guidance())
 
 
 @router.message(Command("add_operator"))
@@ -1245,6 +1260,155 @@ async def handle_escalate_action(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,
         ),
+    )
+
+
+async def _cancel_operator_action(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    if await state.get_state() is None:
+        await message.answer("Сейчас нет активного действия оператора.")
+        return
+
+    await state.clear()
+    await message.answer("Действие оператора отменено.")
+
+
+async def _send_queue(
+    message: Message,
+    *,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        queued_tickets = await helpdesk_service.list_queued_tickets(limit=10)
+
+    if not queued_tickets:
+        await message.answer("Очередь пуста.")
+        return
+
+    await message.answer("Заявки в очереди:")
+    for ticket in queued_tickets:
+        await message.answer(
+            _format_queued_ticket(ticket),
+            reply_markup=_build_ticket_actions_markup(
+                ticket_public_id=ticket.public_id,
+                status=ticket.status,
+            ),
+        )
+
+
+async def _take_next_ticket(
+    message: Message,
+    *,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    ticket_lock_manager: TicketLockManager,
+) -> None:
+    if message.from_user is None:
+        await message.answer("Не удалось определить оператора для этого действия.")
+        return
+
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    await operator_presence.touch(operator_id=message.from_user.id)
+
+    queue_lock = ticket_lock_manager.for_ticket("queue-next")
+    if not await queue_lock.acquire():
+        await message.answer("Очередь сейчас занята. Попробуйте чуть позже.")
+        return
+
+    try:
+        async with helpdesk_service_factory() as helpdesk_service:
+            ticket = await helpdesk_service.assign_next_ticket_to_operator(
+                telegram_user_id=message.from_user.id,
+                display_name=message.from_user.full_name,
+                username=message.from_user.username,
+            )
+            ticket_details = None
+            if ticket is not None:
+                ticket_details = await helpdesk_service.get_ticket_details(
+                    ticket_public_id=ticket.public_id
+                )
+    finally:
+        await queue_lock.release()
+
+    if ticket is None:
+        await message.answer("Сейчас нет доступных заявок в очереди.")
+        return
+
+    if ticket_details is None:
+        await message.answer(
+            f"Следующая заявка {ticket.public_number} взята в работу. "
+            f"Текущий статус: {_format_status(ticket.status)}."
+        )
+        return
+
+    await message.answer(
+        _format_ticket_details(ticket_details),
+        reply_markup=_build_ticket_actions_markup(
+            ticket_public_id=ticket_details.public_id,
+            status=ticket_details.status,
+        ),
+    )
+
+
+async def _send_operational_stats(
+    message: Message,
+    *,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        stats = await helpdesk_service.get_operational_stats()
+
+    await message.answer(_format_operational_stats(stats))
+
+
+async def _send_operator_list(
+    message: Message,
+    *,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        operators = await helpdesk_service.list_operators()
+
+    await message.answer(
+        _format_operator_list_response(
+            operators=operators,
+            super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        ),
+        reply_markup=_build_operator_management_markup(operators=operators),
     )
 
 
