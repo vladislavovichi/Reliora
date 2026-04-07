@@ -15,9 +15,11 @@ from bot.formatters.macros import (
     format_operator_macro_preview,
     paginate_macros,
 )
-from bot.formatters.operator import format_ticket_details
+from bot.formatters.operator import format_active_ticket_context, format_ticket_details
+from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
+from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.macros import (
     build_operator_macro_picker_markup,
     build_operator_macro_preview_markup,
@@ -46,7 +48,9 @@ from bot.texts.operator import (
 from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
+    OperatorActiveTicketStore,
     OperatorPresenceHelper,
+    TicketLiveSessionStore,
     TicketLockManager,
 )
 
@@ -61,6 +65,8 @@ async def handle_open_macros(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -85,6 +91,13 @@ async def handle_open_macros(
     if not macros:
         await respond_to_operator(callback, MACROS_EMPTY_TEXT)
         return
+
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
 
     await _render_picker(
         callback=callback,
@@ -102,6 +115,8 @@ async def handle_macro_page(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -126,6 +141,13 @@ async def handle_macro_page(
     if not macros:
         await respond_to_operator(callback, MACROS_EMPTY_TEXT)
         return
+
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
 
     await _render_picker(
         callback=callback,
@@ -151,6 +173,8 @@ async def handle_macro_preview(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -172,6 +196,13 @@ async def handle_macro_preview(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
+
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
 
     macro = next((item for item in macros if item.id == callback_data.macro_id), None)
     if macro is None:
@@ -203,6 +234,8 @@ async def handle_macro_preview_back(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -228,6 +261,13 @@ async def handle_macro_preview_back(
         await respond_to_operator(callback, MACROS_EMPTY_TEXT)
         return
 
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
+
     await _render_picker(
         callback=callback,
         ticket_details=ticket_details,
@@ -244,6 +284,8 @@ async def handle_macro_ticket_back(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -264,13 +306,24 @@ async def handle_macro_ticket_back(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
+
+    is_active_context = await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
     if not isinstance(callback.message, Message):
         await callback.answer(build_view_opened_text(ticket_details.public_number))
         return
 
     await callback.answer(build_view_opened_text(ticket_details.public_number))
     await callback.message.edit_text(
-        format_ticket_details(ticket_details),
+        (
+            format_active_ticket_context(ticket_details)
+            if is_active_context
+            else format_ticket_details(ticket_details)
+        ),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,
@@ -286,6 +339,8 @@ async def handle_apply_macro(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
@@ -335,10 +390,20 @@ async def handle_apply_macro(
         await respond_to_operator(callback, APPLY_MACRO_FAILED_TEXT)
         return
 
+    is_active_context = False
+    if ticket_details is not None:
+        is_active_context = await activate_ticket_for_operator(
+            active_ticket_store=operator_active_ticket_store,
+            operator_telegram_user_id=callback.from_user.id,
+            ticket_details=ticket_details,
+            ticket_live_session_store=ticket_live_session_store,
+        )
+
     delivery_error = await deliver_text_to_chat(
         bot,
         chat_id=macro_result.client_chat_id,
         text=macro_result.macro.body,
+        reply_markup=build_client_ticket_markup(ticket_public_id=ticket_public_id),
         logger=logger,
         operation="apply_macro",
     )
@@ -364,7 +429,11 @@ async def handle_apply_macro(
         )
 
     await callback.message.edit_text(
-        format_ticket_details(ticket_details),
+        (
+            format_active_ticket_context(ticket_details)
+            if is_active_context
+            else format_ticket_details(ticket_details)
+        ),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,

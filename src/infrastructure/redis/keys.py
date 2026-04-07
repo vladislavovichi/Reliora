@@ -15,3 +15,11 @@ def chat_rate_limit_key(chat_id: int) -> str:
 
 def operator_presence_key(operator_id: int) -> str:
     return f"presence:operator:{operator_id}"
+
+
+def operator_active_ticket_key(operator_id: int) -> str:
+    return f"operator:{operator_id}:active_ticket"
+
+
+def ticket_live_session_key(ticket_public_id: str) -> str:
+    return f"ticket:{ticket_public_id}:live_session"

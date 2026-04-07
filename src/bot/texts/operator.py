@@ -13,6 +13,8 @@ TAG_ACTION_STALE_TEXT = "Экран меток устарел. Откройте 
 OPERATOR_UNKNOWN_TEXT = "Не удалось определить оператора."
 REPLY_CONTEXT_LOST_TEXT = "Не удалось продолжить ответ. Откройте заявку ещё раз."
 REASSIGN_CONTEXT_LOST_TEXT = "Не удалось продолжить передачу. Откройте заявку ещё раз."
+ACTIVE_TICKET_REQUIRED_TEXT = "Откройте диалог из «Мои заявки» или возьмите новую заявку."
+ACTIVE_TICKET_UNAVAILABLE_TEXT = "Текущий диалог больше недоступен. Откройте другую заявку."
 INVALID_REASSIGN_TARGET_TEXT = (
     "Не удалось распознать оператора. Отправьте Telegram ID и при необходимости добавьте имя."
 )
@@ -67,7 +69,11 @@ def build_reply_mode_enabled_text(public_number: str) -> str:
 
 
 def build_reply_mode_callback_text(public_number: str) -> str:
-    return f"Можно отвечать по заявке {public_number}."
+    return f"Текущий диалог — {public_number}."
+
+
+def build_active_ticket_opened_text(public_number: str) -> str:
+    return f"Текущий диалог — {public_number}."
 
 
 def build_reassign_mode_enabled_text() -> str:
@@ -85,6 +91,10 @@ def build_view_opened_text(public_number: str) -> str:
     return f"Заявка {public_number} открыта."
 
 
+def build_more_actions_opened_text(public_number: str) -> str:
+    return f"Ещё по заявке {public_number}."
+
+
 def build_take_answer_text(public_number: str, *, reassigned: bool) -> str:
     if reassigned:
         return f"Заявка {public_number} передана другому оператору."
@@ -96,12 +106,12 @@ def build_take_next_fallback_text(public_number: str, status: str) -> str:
 
 
 def build_close_text(public_number: str) -> str:
-    return f"Заявка {public_number} закрыта."
+    return f"Заявка {public_number} закрыта.\nДиалог завершён."
 
 
 def build_close_delivery_failed_text(public_number: str, error_text: str) -> str:
     return (
-        f"Заявка {public_number} закрыта, "
+        f"Заявка {public_number} закрыта. Диалог завершён, "
         f"но клиент не получил уведомление: {error_text}"
     )
 
@@ -122,7 +132,11 @@ def build_reply_delivery_failed_text(public_number: str, error_text: str) -> str
 
 
 def build_forwarded_client_message_text(public_number: str, body: str) -> str:
-    return f"Новое сообщение в заявке {public_number}\n\n{body}"
+    return f"Другая заявка · {public_number}\nТекущий диалог не менялся.\n\n{body}"
+
+
+def build_active_client_message_text(public_number: str, body: str) -> str:
+    return f"Текущий диалог · {public_number}\nКлиент\n\n{body}"
 
 
 def build_macro_applied_text(title: str) -> str:
@@ -139,6 +153,10 @@ def build_macro_saved_text(title: str) -> str:
 
 def build_macro_delivery_failed_text(title: str, error_text: str) -> str:
     return f"Макрос «{title}» сохранён, но клиент его не получил: {error_text}"
+
+
+def build_client_finished_ticket_text(public_number: str) -> str:
+    return f"Клиент завершил обращение {public_number}."
 
 
 def build_promote_operator_result_text(

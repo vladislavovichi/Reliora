@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -37,6 +38,45 @@ class OperatorPresenceHelper(Protocol):
 
     async def clear(self, *, operator_id: int) -> None:
         """Clear operator presence information."""
+
+
+class OperatorActiveTicketStore(Protocol):
+    async def get_active_ticket(self, *, operator_id: int) -> str | None:
+        """Return the public ticket id currently active for the operator."""
+
+    async def set_active_ticket(self, *, operator_id: int, ticket_public_id: str) -> None:
+        """Persist the active public ticket id for the operator."""
+
+    async def clear(self, *, operator_id: int) -> None:
+        """Clear the active ticket context for the operator."""
+
+    async def clear_if_matches(self, *, operator_id: int, ticket_public_id: str) -> None:
+        """Clear the active context if it still points to the provided ticket id."""
+
+
+@dataclass(slots=True, frozen=True)
+class TicketLiveSession:
+    ticket_public_id: str
+    client_chat_id: int
+    operator_telegram_user_id: int | None
+    last_activity_at: datetime
+
+
+class TicketLiveSessionStore(Protocol):
+    async def get_session(self, *, ticket_public_id: str) -> TicketLiveSession | None:
+        """Return the current live session metadata for the ticket."""
+
+    async def refresh_session(
+        self,
+        *,
+        ticket_public_id: str,
+        client_chat_id: int,
+        operator_telegram_user_id: int | None,
+    ) -> TicketLiveSession:
+        """Create or refresh the ticket-scoped live session."""
+
+    async def delete_session(self, *, ticket_public_id: str) -> None:
+        """Remove the live session for the ticket."""
 
 
 class SLADeadlineScheduler(Protocol):

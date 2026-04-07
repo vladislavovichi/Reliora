@@ -12,7 +12,9 @@ from application.use_cases.tickets.summaries import (
     TicketMessageSummary,
 )
 from bot.formatters.operator import (
+    format_active_ticket_context,
     format_queue_page,
+    format_ticket_more_actions,
     format_ticket_details,
     format_ticket_history_chunks,
 )
@@ -20,6 +22,7 @@ from bot.formatters.system import build_help_text, build_start_text, format_diag
 from bot.keyboards.inline.operator_actions import (
     build_queue_markup,
     build_ticket_actions_markup,
+    build_ticket_more_actions_markup,
 )
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
@@ -198,18 +201,78 @@ def test_build_ticket_actions_markup_adds_macro_action_for_active_ticket() -> No
     markup = build_ticket_actions_markup(ticket_public_id=uuid4(), status=TicketStatus.ASSIGNED)
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert ("Ответить", "Макросы") in rows
-    assert ("Метки", "Передать") in rows
-    assert ("Эскалация", "Закрыть") in rows
+    assert rows == (("Закрыть", "Макросы", "Ещё"),)
 
 
 def test_build_ticket_actions_markup_hides_transfer_for_queued_ticket() -> None:
     markup = build_ticket_actions_markup(ticket_public_id=uuid4(), status=TicketStatus.QUEUED)
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert ("Взять",) in rows
-    assert ("Метки",) in rows
+    assert ("Взять", "Ещё") in rows
     assert all("Передать" not in row for row in rows)
+
+
+def test_build_ticket_more_actions_markup_groups_secondary_actions() -> None:
+    markup = build_ticket_more_actions_markup(
+        ticket_public_id=uuid4(),
+        status=TicketStatus.ASSIGNED,
+    )
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == (("Метки", "Передать"), ("Эскалация", "Карточка"))
+
+
+def test_format_active_ticket_context_stays_compact_and_obvious() -> None:
+    ticket = TicketDetailsSummary(
+        public_id=uuid4(),
+        public_number="HD-AAAA1111",
+        client_chat_id=1001,
+        status=TicketStatus.ASSIGNED,
+        priority="high",
+        subject="Не могу войти в личный кабинет",
+        assigned_operator_id=7,
+        assigned_operator_name="Иван Петров",
+        assigned_operator_telegram_user_id=1001,
+        created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        tags=("billing", "vip"),
+        last_message_text="Проблема началась после смены пароля и теперь доступ не работает.",
+        last_message_sender_type=TicketMessageSenderType.CLIENT,
+        message_history=(),
+    )
+
+    result = format_active_ticket_context(ticket)
+
+    assert result.startswith("Текущий диалог")
+    assert "HD-AAAA1111 · В работе • высокий приоритет" in result
+    assert "Не могу войти в личный кабинет" in result
+    assert "Оператор · Иван Петров" in result
+    assert "Теги · billing, vip" in result
+
+
+def test_format_ticket_more_actions_reads_like_structured_secondary_surface() -> None:
+    ticket = TicketDetailsSummary(
+        public_id=uuid4(),
+        public_number="HD-AAAA1111",
+        client_chat_id=1001,
+        status=TicketStatus.ASSIGNED,
+        priority="high",
+        subject="Не могу войти в личный кабинет",
+        assigned_operator_id=7,
+        assigned_operator_name="Иван Петров",
+        assigned_operator_telegram_user_id=1001,
+        created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        tags=(),
+        last_message_text="Уже проверяем доступ.",
+        last_message_sender_type=TicketMessageSenderType.OPERATOR,
+        message_history=(),
+    )
+
+    result = format_ticket_more_actions(ticket, is_active=True)
+
+    assert result.startswith("Текущий диалог")
+    assert "\nЕщё" in result
+    assert "\nИзменить\nМетки · Передать" in result
+    assert "\nСтатус и детали\nЭскалация · Карточка" in result
 
 
 def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None:

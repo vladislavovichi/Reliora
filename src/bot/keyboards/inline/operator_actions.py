@@ -25,66 +25,92 @@ def build_ticket_actions_markup(
     builder = InlineKeyboardBuilder()
     callback_value = str(ticket_public_id)
 
-    first_row: list[tuple[str, str]] = []
     if status == TicketStatus.QUEUED:
-        first_row.append(
-            (
+        builder.row(
+            _build_callback_button(
                 "Взять",
                 OperatorActionCallback(action="take", ticket_public_id=callback_value).pack(),
-            )
+            ),
+            _build_callback_button(
+                "Ещё",
+                OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
+            ),
         )
-    elif status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
-        first_row.append(
-            (
-                "Ответить",
-                OperatorActionCallback(action="reply", ticket_public_id=callback_value).pack(),
-            )
-        )
-        first_row.append(
-            (
+        return builder.as_markup()
+
+    if status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
+        builder.row(
+            _build_callback_button(
+                "Закрыть",
+                OperatorActionCallback(action="close", ticket_public_id=callback_value).pack(),
+            ),
+            _build_callback_button(
                 "Макросы",
                 OperatorActionCallback(action="macros", ticket_public_id=callback_value).pack(),
-            )
+            ),
+            _build_callback_button(
+                "Ещё",
+                OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
+            ),
         )
-    if first_row:
-        builder.row(*[_build_callback_button(text, data) for text, data in first_row])
 
-    second_row: list[tuple[str, str]] = []
+    return builder.as_markup()
+
+
+def build_ticket_more_actions_markup(
+    *,
+    ticket_public_id: UUID,
+    status: TicketStatus,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    callback_value = str(ticket_public_id)
+
+    change_row: list[InlineKeyboardButton] = []
     if status != TicketStatus.CLOSED:
-        second_row.append(
-            (
+        change_row.append(
+            _build_callback_button(
                 "Метки",
                 OperatorActionCallback(action="tags", ticket_public_id=callback_value).pack(),
             )
         )
+
     if status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
-        second_row.append(
-            (
+        change_row.append(
+            _build_callback_button(
                 "Передать",
                 OperatorActionCallback(action="reassign", ticket_public_id=callback_value).pack(),
             )
         )
-    if second_row:
-        builder.row(*[_build_callback_button(text, data) for text, data in second_row])
+    if change_row:
+        builder.row(*change_row)
 
-    third_row: list[tuple[str, str]] = []
+    status_row: list[InlineKeyboardButton] = []
     if status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:
-        third_row.append(
-            (
+        status_row.append(
+            _build_callback_button(
                 "Эскалация",
                 OperatorActionCallback(action="escalate", ticket_public_id=callback_value).pack(),
             )
         )
-    if status != TicketStatus.CLOSED:
-        third_row.append(
-            (
-                "Закрыть",
-                OperatorActionCallback(action="close", ticket_public_id=callback_value).pack(),
-            )
-        )
-    if third_row:
-        builder.row(*[_build_callback_button(text, data) for text, data in third_row])
 
+    status_row.append(
+        _build_callback_button(
+            "Карточка",
+            OperatorActionCallback(action="card", ticket_public_id=callback_value).pack(),
+        )
+    )
+    builder.row(*status_row)
+    return builder.as_markup()
+
+
+def build_ticket_switch_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        _build_callback_button(
+            "Открыть",
+            OperatorActionCallback(action="view", ticket_public_id=str(ticket_public_id)).pack(),
+        )
+    )
     return builder.as_markup()
 
 

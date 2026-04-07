@@ -60,14 +60,25 @@ def format_operator_ticket_page(
     )
 
 
-def format_ticket_details(ticket: TicketDetailsSummary) -> str:
+def format_ticket_details(
+    ticket: TicketDetailsSummary,
+    *,
+    is_active: bool = False,
+) -> str:
     lines = [
         f"Заявка {ticket.public_number}",
         _format_ticket_heading(ticket),
-        "",
-        "Тема",
-        ticket.subject,
     ]
+    if is_active:
+        lines.extend(["", "Текущий диалог"])
+
+    lines.extend(
+        [
+            "",
+            "Тема",
+            ticket.subject,
+        ]
+    )
 
     _append_section(lines, "Оператор", _format_assigned_operator(ticket))
     _append_section(lines, "Создана", format_timestamp(ticket.created_at))
@@ -78,6 +89,42 @@ def format_ticket_details(ticket: TicketDetailsSummary) -> str:
         "Последнее сообщение",
         format_last_message(ticket.last_message_text, ticket.last_message_sender_type),
     )
+    return "\n".join(lines)
+
+
+def format_active_ticket_context(ticket: TicketDetailsSummary) -> str:
+    lines = [
+        "Текущий диалог",
+        _format_ticket_context_line(ticket),
+        _shorten_text(ticket.subject, 96),
+    ]
+
+    meta_lines = _build_ticket_context_meta(ticket)
+    if meta_lines:
+        lines.append("")
+        lines.extend(meta_lines)
+
+    return "\n".join(lines)
+
+
+def format_ticket_more_actions(
+    ticket: TicketDetailsSummary,
+    *,
+    is_active: bool = False,
+) -> str:
+    lines = [format_active_ticket_context(ticket) if is_active else format_ticket_details(ticket)]
+    lines.extend(["", "Ещё"])
+
+    change_actions = ["Метки"]
+    if ticket.status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
+        change_actions.append("Передать")
+    if change_actions:
+        lines.extend(["", "Изменить", " · ".join(change_actions)])
+
+    status_actions = ["Карточка"]
+    if ticket.status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:
+        status_actions.insert(0, "Эскалация")
+    lines.extend(["", "Статус и детали", " · ".join(status_actions)])
     return "\n".join(lines)
 
 
@@ -367,6 +414,10 @@ def _format_ticket_heading(ticket: TicketDetailsSummary) -> str:
     )
 
 
+def _format_ticket_context_line(ticket: TicketDetailsSummary) -> str:
+    return f"{ticket.public_number} · {_format_ticket_heading(ticket)}"
+
+
 def _format_assigned_operator(ticket: TicketDetailsSummary) -> str:
     if ticket.assigned_operator_id is None:
         return "не назначен"
@@ -380,6 +431,13 @@ def _append_section(lines: list[str], title: str, value: str | None) -> None:
     if not value:
         return
     lines.extend(["", title, value])
+
+
+def _build_ticket_context_meta(ticket: TicketDetailsSummary) -> tuple[str, ...]:
+    items: list[str] = [f"Оператор · {_format_assigned_operator(ticket)}"]
+    if ticket.tags:
+        items.append(f"Теги · {format_tags(ticket.tags)}")
+    return tuple(items)
 
 
 def _shorten_text(text: str, limit: int) -> str:

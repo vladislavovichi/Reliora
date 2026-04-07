@@ -137,6 +137,8 @@ async def build_runtime(settings: Settings) -> AppRuntime:
                 global_rate_limiter=redis_workflow.global_rate_limiter,
                 chat_rate_limiter=redis_workflow.chat_rate_limiter,
                 operator_presence=redis_workflow.operator_presence,
+                ticket_live_session_store=redis_workflow.ticket_live_session_store,
+                operator_active_ticket_store=redis_workflow.operator_active_ticket_store,
                 ticket_lock_manager=redis_workflow.ticket_lock_manager,
                 ticket_stream_publisher=redis_workflow.ticket_stream_publisher,
             )

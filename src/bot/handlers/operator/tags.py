@@ -8,7 +8,12 @@ from aiogram.types import CallbackQuery, Message
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TagSummary
 from bot.callbacks import OperatorActionCallback, OperatorTagCallback
-from bot.formatters.operator import format_ticket_details, format_ticket_tags_response
+from bot.formatters.operator import (
+    format_active_ticket_context,
+    format_ticket_details,
+    format_ticket_tags_response,
+)
+from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
@@ -22,7 +27,9 @@ from bot.texts.common import (
 from bot.texts.operator import TAG_ACTION_STALE_TEXT, TAGS_UPDATED_TEXT
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
+    OperatorActiveTicketStore,
     OperatorPresenceHelper,
+    TicketLiveSessionStore,
     TicketLockManager,
 )
 
@@ -36,6 +43,8 @@ async def handle_open_tags(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -58,6 +67,19 @@ async def handle_open_tags(
     if ticket_tags is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
+        )
+    if ticket_details is not None:
+        await activate_ticket_for_operator(
+            active_ticket_store=operator_active_ticket_store,
+            operator_telegram_user_id=callback.from_user.id,
+            ticket_details=ticket_details,
+            ticket_live_session_store=ticket_live_session_store,
+        )
     if not isinstance(callback.message, Message):
         await callback.answer(TAGS_UPDATED_TEXT)
         return
@@ -84,6 +106,8 @@ async def handle_toggle_tag(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
@@ -144,6 +168,19 @@ async def handle_toggle_tag(
     if refreshed_tags is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
+        )
+    if ticket_details is not None:
+        await activate_ticket_for_operator(
+            active_ticket_store=operator_active_ticket_store,
+            operator_telegram_user_id=callback.from_user.id,
+            ticket_details=ticket_details,
+            ticket_live_session_store=ticket_live_session_store,
+        )
     if not isinstance(callback.message, Message):
         await callback.answer(TAGS_UPDATED_TEXT)
         return
@@ -170,6 +207,8 @@ async def handle_back_to_ticket(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -189,13 +228,24 @@ async def handle_back_to_ticket(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
+
+    is_active_context = await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
     if not isinstance(callback.message, Message):
         await callback.answer(ticket_details.public_number)
         return
 
     await callback.answer(ticket_details.public_number)
     await callback.message.edit_text(
-        format_ticket_details(ticket_details),
+        (
+            format_active_ticket_context(ticket_details)
+            if is_active_context
+            else format_ticket_details(ticket_details)
+        ),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,

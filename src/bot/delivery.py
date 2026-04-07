@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramNetworkError,
@@ -12,7 +13,11 @@ from aiogram.exceptions import (
 )
 
 from bot.texts.client import build_operator_reply_text, build_ticket_closed_text
-from bot.texts.operator import build_forwarded_client_message_text
+from bot.texts.operator import (
+    build_active_client_message_text,
+    build_client_finished_ticket_text,
+    build_forwarded_client_message_text,
+)
 
 DEFAULT_SEND_ATTEMPTS = 3
 
@@ -22,12 +27,13 @@ async def send_message_with_retry(
     *,
     chat_id: int,
     text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
     logger: logging.Logger,
     operation: str,
 ) -> None:
     for attempt in range(1, DEFAULT_SEND_ATTEMPTS + 1):
         try:
-            await bot.send_message(chat_id, text)
+            await bot.send_message(chat_id, text, reply_markup=reply_markup)
             if attempt > 1:
                 logger.info(
                     "Telegram delivery recovered operation=%s chat_id=%s attempt=%s",
@@ -68,12 +74,14 @@ async def deliver_operator_reply_to_client(
     chat_id: int,
     public_number: str,
     body: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
     logger: logging.Logger,
 ) -> str | None:
     return await _deliver_text(
         bot,
         chat_id=chat_id,
         text=build_operator_reply_text(public_number, body),
+        reply_markup=reply_markup,
         logger=logger,
         operation="operator_reply",
     )
@@ -85,12 +93,19 @@ async def deliver_client_message_to_operator(
     chat_id: int,
     public_number: str,
     body: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    active_context: bool = False,
     logger: logging.Logger,
 ) -> str | None:
     return await _deliver_text(
         bot,
         chat_id=chat_id,
-        text=build_forwarded_client_message_text(public_number, body),
+        text=(
+            build_active_client_message_text(public_number, body)
+            if active_context
+            else build_forwarded_client_message_text(public_number, body)
+        ),
+        reply_markup=reply_markup,
         logger=logger,
         operation="client_message_forward",
     )
@@ -107,8 +122,27 @@ async def deliver_ticket_closed_to_client(
         bot,
         chat_id=chat_id,
         text=build_ticket_closed_text(public_number),
+        reply_markup=None,
         logger=logger,
         operation="ticket_closed",
+    )
+
+
+async def deliver_ticket_closed_to_operator(
+    bot: Bot,
+    *,
+    chat_id: int,
+    public_number: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    logger: logging.Logger,
+) -> str | None:
+    return await _deliver_text(
+        bot,
+        chat_id=chat_id,
+        text=build_client_finished_ticket_text(public_number),
+        reply_markup=reply_markup,
+        logger=logger,
+        operation="ticket_closed_by_client",
     )
 
 
@@ -117,6 +151,7 @@ async def deliver_text_to_chat(
     *,
     chat_id: int,
     text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
     logger: logging.Logger,
     operation: str,
 ) -> str | None:
@@ -124,6 +159,7 @@ async def deliver_text_to_chat(
         bot,
         chat_id=chat_id,
         text=text,
+        reply_markup=reply_markup,
         logger=logger,
         operation=operation,
     )
@@ -134,6 +170,7 @@ async def _deliver_text(
     *,
     chat_id: int,
     text: str,
+    reply_markup: InlineKeyboardMarkup | None,
     logger: logging.Logger,
     operation: str,
 ) -> str | None:
@@ -142,6 +179,7 @@ async def _deliver_text(
             bot,
             chat_id=chat_id,
             text=text,
+            reply_markup=reply_markup,
             logger=logger,
             operation=operation,
         )

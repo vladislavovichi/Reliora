@@ -32,6 +32,7 @@ from infrastructure.db.session import ping_database_engine, session_scope
 from infrastructure.redis.client import ping_redis_client
 from infrastructure.redis.contracts import SLADeadlineScheduler
 from infrastructure.redis.locks import RedisTicketLockManager
+from infrastructure.redis.operator_context import RedisTicketLiveSessionStore
 from infrastructure.redis.presence import RedisOperatorPresenceHelper
 from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
 from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
@@ -108,11 +109,14 @@ def build_helpdesk_service_factory(
 
 def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
     sla_deadline_scheduler = RedisSLADeadlineScheduler(redis)
+    ticket_live_session_store = RedisTicketLiveSessionStore(redis)
     return RedisWorkflowRuntime(
         ticket_lock_manager=RedisTicketLockManager(redis),
         global_rate_limiter=RedisGlobalRateLimiter(redis),
         chat_rate_limiter=RedisChatRateLimiter(redis),
         operator_presence=RedisOperatorPresenceHelper(redis),
+        ticket_live_session_store=ticket_live_session_store,
+        operator_active_ticket_store=ticket_live_session_store,
         sla_deadline_scheduler=sla_deadline_scheduler,
         ticket_stream_publisher=RedisTicketStreamPublisher(redis),
         ticket_stream_consumer=RedisTicketStreamConsumer(redis),

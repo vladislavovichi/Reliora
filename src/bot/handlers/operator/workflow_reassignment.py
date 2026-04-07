@@ -7,7 +7,12 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
-from bot.formatters.operator import format_ticket_details
+from bot.formatters.operator import format_active_ticket_context, format_ticket_details
+from bot.handlers.operator.active_context import (
+    activate_ticket_for_operator,
+    clear_active_ticket_for_operator,
+    refresh_live_session_for_ticket,
+)
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_reassign_target, parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
@@ -33,7 +38,9 @@ from domain.enums.tickets import TicketEventType
 from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
+    OperatorActiveTicketStore,
     OperatorPresenceHelper,
+    TicketLiveSessionStore,
     TicketLockManager,
 )
 
@@ -48,6 +55,8 @@ async def handle_reassign_action(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
@@ -69,6 +78,13 @@ async def handle_reassign_action(
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
 
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
+
     await state.set_state(OperatorTicketStates.reassigning)
     await state.update_data(ticket_public_id=str(ticket_public_id))
     await respond_to_operator(
@@ -85,6 +101,8 @@ async def handle_reassign_message(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     if message.text is None:
@@ -157,8 +175,32 @@ async def handle_reassign_message(
     if ticket_details is None:
         return
 
+    await refresh_live_session_for_ticket(
+        ticket_live_session_store=ticket_live_session_store,
+        ticket_details=ticket_details,
+    )
+    if actor_telegram_user_id is not None and actor_telegram_user_id == target[0]:
+        is_active_context = await activate_ticket_for_operator(
+            active_ticket_store=operator_active_ticket_store,
+            operator_telegram_user_id=target[0],
+            ticket_details=ticket_details,
+            ticket_live_session_store=ticket_live_session_store,
+        )
+    else:
+        if actor_telegram_user_id is not None:
+            await clear_active_ticket_for_operator(
+                active_ticket_store=operator_active_ticket_store,
+                operator_telegram_user_id=actor_telegram_user_id,
+                ticket_public_id=str(ticket_details.public_id),
+            )
+        is_active_context = False
+
     await message.answer(
-        format_ticket_details(ticket_details),
+        (
+            format_active_ticket_context(ticket_details)
+            if is_active_context
+            else format_ticket_details(ticket_details)
+        ),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,

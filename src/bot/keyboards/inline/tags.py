@@ -35,7 +35,7 @@ def build_ticket_tags_markup(
 
     builder.row(
         _button(
-            "Назад",
+            "К диалогу",
             OperatorTagCallback(
                 action="ticket",
                 ticket_public_id=callback_value,

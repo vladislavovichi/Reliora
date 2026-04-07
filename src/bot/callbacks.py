@@ -6,7 +6,23 @@ from aiogram.filters.callback_data import CallbackData
 
 
 class OperatorActionCallback(CallbackData, prefix="operator"):
-    action: Literal["take", "reply", "close", "escalate", "reassign", "view", "macros", "tags"]
+    action: Literal[
+        "take",
+        "reply",
+        "close",
+        "escalate",
+        "reassign",
+        "view",
+        "macros",
+        "tags",
+        "more",
+        "card",
+    ]
+    ticket_public_id: str
+
+
+class ClientTicketCallback(CallbackData, prefix="client_ticket"):
+    action: Literal["finish", "finish_confirm", "finish_cancel"]
     ticket_public_id: str
 
 

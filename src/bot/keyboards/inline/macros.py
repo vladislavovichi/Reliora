@@ -75,7 +75,7 @@ def build_operator_macro_picker_markup(
 
     builder.row(
         _button(
-            "Назад",
+            "К диалогу",
             OperatorMacroCallback(
                 action="ticket",
                 ticket_public_id=callback_value,
@@ -106,7 +106,7 @@ def build_operator_macro_preview_markup(
             ).pack(),
         ),
         _button(
-            "Назад",
+            "К списку",
             OperatorMacroCallback(
                 action="back",
                 ticket_public_id=callback_value,

@@ -26,6 +26,7 @@ from bot.formatters.operator import (
     format_operator_ticket_page,
     format_queue_page,
 )
+from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.admin.states import AdminMacroStates, AdminOperatorStates
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
@@ -58,7 +59,9 @@ from bot.texts.operator import (
 from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
+    OperatorActiveTicketStore,
     OperatorPresenceHelper,
+    TicketLiveSessionStore,
     TicketLockManager,
 )
 
@@ -86,6 +89,8 @@ async def handle_cancel(
     state: FSMContext,
     settings: Settings,
     helpdesk_service_factory: HelpdeskServiceFactory,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     state_name = await state.get_state()
     if state_name is None:
@@ -103,6 +108,8 @@ async def handle_cancel(
             message=message,
             state_data=state_data,
             helpdesk_service_factory=helpdesk_service_factory,
+            operator_active_ticket_store=operator_active_ticket_store,
+            ticket_live_session_store=ticket_live_session_store,
         )
         return
     if state_name == AdminOperatorStates.adding_operator.state:
@@ -259,6 +266,8 @@ async def handle_take_next(
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     from bot.formatters.operator import format_status
@@ -311,10 +320,17 @@ async def handle_take_next(
         message.from_user.id,
         ticket.public_number,
     )
+    await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=message.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
     await send_ticket_details(
         message=message,
         ticket_details=ticket_details,
         include_history=True,
+        is_active_context=True,
     )
 
 
@@ -323,6 +339,8 @@ async def _restore_ticket_after_cancel(
     message: Message,
     state_data: dict[str, object],
     helpdesk_service_factory: HelpdeskServiceFactory,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
     from bot.handlers.operator.workflow_ticket_actions import send_ticket_details
 
@@ -342,9 +360,16 @@ async def _restore_ticket_after_cancel(
     if ticket_details is None:
         return
 
+    is_active_context = await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=message.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
     await send_ticket_details(
         message=message,
         ticket_details=ticket_details,
+        is_active_context=is_active_context,
     )
 
 
