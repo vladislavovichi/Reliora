@@ -145,16 +145,16 @@ async def test_regular_user_has_no_protected_permissions() -> None:
 
 def test_get_permission_denied_message_returns_russian_text() -> None:
     assert get_permission_denied_message(Permission.ACCESS_OPERATOR) == (
-        "Это действие доступно только операторам и супер администраторам."
+        "Доступно только операторам и суперадминистраторам."
     )
     assert get_permission_denied_message(Permission.MANAGE_OPERATORS) == (
-        "Это действие доступно только супер администраторам."
+        "Доступно только суперадминистраторам."
     )
 
 
 def test_authorization_error_uses_permission_specific_message() -> None:
     assert str(AuthorizationError(Permission.ACCESS_OPERATOR)) == (
-        "Это действие доступно только операторам и супер администраторам."
+        "Доступно только операторам и суперадминистраторам."
     )
 
 

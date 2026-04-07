@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -336,9 +337,29 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
     ticket.id = 1
     session = build_session(
         build_result(scalar=ticket),
-        build_result(scalar="Operator One"),
+        build_result(rows=[("Operator One", 1001)]),
         build_result(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
         build_result(scalar_items=["billing", "vip"]),
+        build_result(
+            rows=[
+                (
+                    11,
+                    TicketMessageSenderType.CLIENT,
+                    None,
+                    None,
+                    "First client message",
+                    datetime(2026, 4, 7, 9, 0, tzinfo=UTC),
+                ),
+                (
+                    12,
+                    TicketMessageSenderType.OPERATOR,
+                    77,
+                    "Operator One",
+                    "Operator answer",
+                    datetime(2026, 4, 7, 9, 5, tzinfo=UTC),
+                ),
+            ]
+        ),
     )
     repository = SqlAlchemyTicketRepository(session)
 
@@ -347,8 +368,13 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
     assert result is not None
     assert result.public_id == ticket.public_id
     assert result.assigned_operator_name == "Operator One"
+    assert result.assigned_operator_telegram_user_id == 1001
     assert result.last_message_text == "Latest client message"
     assert result.tags == ("billing", "vip")
+    assert [message.text for message in result.message_history] == [
+        "First client message",
+        "Operator answer",
+    ]
 
 
 async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:

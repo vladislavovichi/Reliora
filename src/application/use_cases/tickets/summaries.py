@@ -7,7 +7,7 @@ from uuid import UUID
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
 from domain.contracts.repositories import OperatorRecord
-from domain.entities.ticket import Ticket
+from domain.entities.ticket import Ticket, TicketMessageDetails
 from domain.entities.ticket import TicketDetails as DomainTicketDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 
@@ -48,6 +48,25 @@ def build_queued_ticket_summary(ticket: Ticket) -> QueuedTicketSummary:
 
 
 @dataclass(slots=True)
+class TicketMessageSummary:
+    sender_type: TicketMessageSenderType
+    sender_operator_id: int | None
+    sender_operator_name: str | None
+    text: str
+    created_at: datetime
+
+
+def build_ticket_message_summary(message: TicketMessageDetails) -> TicketMessageSummary:
+    return TicketMessageSummary(
+        sender_type=message.sender_type,
+        sender_operator_id=message.sender_operator_id,
+        sender_operator_name=message.sender_operator_name,
+        text=message.text,
+        created_at=message.created_at,
+    )
+
+
+@dataclass(slots=True)
 class TicketDetailsSummary:
     public_id: UUID
     public_number: str
@@ -57,9 +76,12 @@ class TicketDetailsSummary:
     subject: str
     assigned_operator_id: int | None
     assigned_operator_name: str | None
+    assigned_operator_telegram_user_id: int | None
+    created_at: datetime
     tags: tuple[str, ...]
     last_message_text: str | None
     last_message_sender_type: TicketMessageSenderType | None
+    message_history: tuple[TicketMessageSummary, ...]
 
 
 def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSummary:
@@ -72,9 +94,14 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         subject=ticket.subject,
         assigned_operator_id=ticket.assigned_operator_id,
         assigned_operator_name=ticket.assigned_operator_name,
+        assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
+        created_at=ticket.created_at,
         tags=ticket.tags,
         last_message_text=ticket.last_message_text,
         last_message_sender_type=ticket.last_message_sender_type,
+        message_history=tuple(
+            build_ticket_message_summary(message) for message in ticket.message_history
+        ),
     )
 
 

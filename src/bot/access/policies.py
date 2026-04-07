@@ -28,6 +28,7 @@ PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
 PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
     ("admin_operator:", Permission.MANAGE_OPERATORS),
     ("operator:", Permission.ACCESS_OPERATOR),
+    ("operator_queue:", Permission.ACCESS_OPERATOR),
     ("operator_macro:", Permission.ACCESS_OPERATOR),
 )
 PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {

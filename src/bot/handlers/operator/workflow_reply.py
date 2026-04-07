@@ -3,14 +3,13 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
-from bot.delivery import send_message_with_retry
+from bot.delivery import deliver_operator_reply_to_client
 from bot.formatters.operator import format_ticket_details
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
@@ -26,7 +25,6 @@ from bot.texts.operator import (
     OPERATOR_UNKNOWN_TEXT,
     REPLY_CONTEXT_LOST_TEXT,
     REPLY_MODE_COMMAND_BLOCK_TEXT,
-    build_client_reply_text,
     build_reply_delivery_failed_text,
     build_reply_mode_callback_text,
     build_reply_mode_enabled_text,
@@ -183,14 +181,10 @@ async def _deliver_reply(
     public_number: str,
     body: str,
 ) -> str | None:
-    try:
-        await send_message_with_retry(
-            bot,
-            chat_id=chat_id,
-            text=build_client_reply_text(public_number, body),
-            logger=logger,
-            operation="operator_reply",
-        )
-    except TelegramAPIError as exc:
-        return str(exc)
-    return None
+    return await deliver_operator_reply_to_client(
+        bot,
+        chat_id=chat_id,
+        public_number=public_number,
+        body=body,
+        logger=logger,
+    )

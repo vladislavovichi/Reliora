@@ -6,8 +6,8 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from application.use_cases.tickets.summaries import MacroSummary
-from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
+from application.use_cases.tickets.summaries import MacroSummary, QueuedTicketSummary
+from bot.callbacks import OperatorActionCallback, OperatorMacroCallback, OperatorQueueCallback
 from bot.formatters.operator import format_macro_button_text
 from domain.enums.tickets import TicketStatus
 
@@ -63,7 +63,7 @@ def build_ticket_actions_markup(
     if status != TicketStatus.CLOSED:
         builder.row(
             _build_callback_button(
-                "Переназначить",
+                "Передать",
                 OperatorActionCallback(action="reassign", ticket_public_id=callback_value).pack(),
             )
         )
@@ -88,6 +88,57 @@ def build_macro_actions_markup(
                 ).pack(),
             )
         )
+    return builder.as_markup()
+
+
+def build_queue_markup(
+    *,
+    tickets: Sequence[QueuedTicketSummary],
+    current_page: int,
+    total_pages: int,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    for ticket in tickets:
+        callback_value = str(ticket.public_id)
+        builder.row(
+            _build_callback_button(
+                ticket.public_number,
+                OperatorActionCallback(action="view", ticket_public_id=callback_value).pack(),
+            ),
+            _build_callback_button(
+                "Взять",
+                OperatorActionCallback(action="take", ticket_public_id=callback_value).pack(),
+            ),
+        )
+
+    if total_pages > 1:
+        pagination_row: list[InlineKeyboardButton] = []
+        if current_page > 1:
+            pagination_row.append(
+                _build_callback_button(
+                    "← Назад",
+                    OperatorQueueCallback(action="page", page=current_page - 1).pack(),
+                )
+            )
+
+        pagination_row.append(
+            _build_callback_button(
+                f"{current_page} из {total_pages}",
+                OperatorQueueCallback(action="noop", page=current_page).pack(),
+            )
+        )
+
+        if current_page < total_pages:
+            pagination_row.append(
+                _build_callback_button(
+                    "Дальше ›",
+                    OperatorQueueCallback(action="page", page=current_page + 1).pack(),
+                )
+            )
+
+        builder.row(*pagination_row)
+
     return builder.as_markup()
 
 

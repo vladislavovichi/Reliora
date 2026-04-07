@@ -38,11 +38,11 @@ class InvalidTicketTransitionError(ValueError):
 
 def format_status_for_humans(status: TicketStatus) -> str:
     status_labels = {
-        TicketStatus.NEW: "новый",
+        TicketStatus.NEW: "новая",
         TicketStatus.QUEUED: "в очереди",
-        TicketStatus.ASSIGNED: "назначен",
-        TicketStatus.ESCALATED: "эскалирован",
-        TicketStatus.CLOSED: "закрыт",
+        TicketStatus.ASSIGNED: "в работе",
+        TicketStatus.ESCALATED: "на эскалации",
+        TicketStatus.CLOSED: "закрыта",
     }
     return status_labels.get(status, status.value)
 

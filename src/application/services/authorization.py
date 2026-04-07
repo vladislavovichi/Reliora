@@ -32,8 +32,8 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
 
 def get_permission_denied_message(permission: Permission) -> str:
     if permission in {Permission.MANAGE_OPERATORS, Permission.ACCESS_ADMIN}:
-        return "Это действие доступно только супер администраторам."
-    return "Это действие доступно только операторам и супер администраторам."
+        return "Доступно только суперадминистраторам."
+    return "Доступно только операторам и суперадминистраторам."
 
 
 class AuthorizationError(Exception):

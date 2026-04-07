@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from aiogram import F, Router
+import logging
+
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
 from bot.callbacks import OperatorActionCallback
-from bot.formatters.operator import format_ticket_details
+from bot.delivery import deliver_ticket_closed_to_client
+from bot.formatters.operator import format_ticket_details, format_ticket_history_chunks
 from bot.handlers.operator.common import operator_ticket_action, respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
@@ -16,6 +19,7 @@ from bot.texts.common import (
     TICKET_NOT_FOUND_TEXT,
 )
 from bot.texts.operator import (
+    build_close_delivery_failed_text,
     build_close_text,
     build_escalate_text,
     build_take_answer_text,
@@ -30,6 +34,7 @@ from infrastructure.redis.contracts import (
 )
 
 router = Router(name="operator_workflow_ticket_actions")
+logger = logging.getLogger(__name__)
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "view"))
@@ -127,6 +132,7 @@ async def handle_take_action(
             ticket.public_number,
             reassigned=ticket.event_type == TicketEventType.REASSIGNED,
         ),
+        include_history=True,
     )
 
 
@@ -134,6 +140,7 @@ async def handle_take_action(
 async def handle_close_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
+    bot: Bot,
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
@@ -174,10 +181,23 @@ async def handle_close_action(
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
 
+    delivery_error: str | None = None
+    if ticket_details is not None:
+        delivery_error = await deliver_ticket_closed_to_client(
+            bot,
+            chat_id=ticket_details.client_chat_id,
+            public_number=ticket.public_number,
+            logger=logger,
+        )
+
     await _answer_with_ticket_details(
         callback=callback,
         ticket_details=ticket_details,
-        fallback_text=build_close_text(ticket.public_number),
+        fallback_text=(
+            build_close_text(ticket.public_number)
+            if delivery_error is None
+            else build_close_delivery_failed_text(ticket.public_number, delivery_error)
+        ),
     )
 
 
@@ -237,6 +257,7 @@ async def _answer_with_ticket_details(
     callback: CallbackQuery,
     ticket_details: TicketDetailsSummary | None,
     fallback_text: str,
+    include_history: bool = False,
 ) -> None:
     if callback.message is None or ticket_details is None:
         await respond_to_operator(callback, fallback_text)
@@ -250,3 +271,8 @@ async def _answer_with_ticket_details(
             status=ticket_details.status,
         ),
     )
+    if not include_history:
+        return
+
+    for chunk in format_ticket_history_chunks(ticket_details):
+        await callback.message.answer(chunk)

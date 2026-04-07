@@ -3,12 +3,11 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Router
-from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorMacroCallback
-from bot.delivery import send_message_with_retry
+from bot.delivery import deliver_text_to_chat
 from bot.formatters.operator import format_ticket_details
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
@@ -125,14 +124,10 @@ async def handle_apply_macro(
 
 
 async def _deliver_macro(*, bot: Bot, chat_id: int, body: str) -> str | None:
-    try:
-        await send_message_with_retry(
-            bot,
-            chat_id=chat_id,
-            text=body,
-            logger=logger,
-            operation="apply_macro",
-        )
-    except TelegramAPIError as exc:
-        return str(exc)
-    return None
+    return await deliver_text_to_chat(
+        bot,
+        chat_id=chat_id,
+        text=body,
+        logger=logger,
+        operation="apply_macro",
+    )

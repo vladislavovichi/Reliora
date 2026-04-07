@@ -15,34 +15,31 @@ class CommandHint:
 
 
 COMMON_COMMAND_HINTS = (
-    CommandHint("/start", "показать приветствие и главное меню"),
-    CommandHint("/help", "показать справку по доступным действиям"),
+    CommandHint("/start", "открыть главное меню"),
+    CommandHint("/help", "показать краткую справку"),
 )
 OPERATOR_COMMAND_HINTS = (
-    CommandHint("/queue", "показать ближайшие заявки в очереди"),
-    CommandHint("/take", "взять следующую заявку"),
-    CommandHint("/stats", "показать операционную статистику"),
-    CommandHint("/health", "показать статус зависимостей и runtime"),
+    CommandHint("/stats", "показать статистику"),
+    CommandHint("/health", "проверить состояние сервиса"),
     CommandHint("/ticket <ticket_public_id>", "открыть карточку заявки"),
-    CommandHint("/macros [ticket_public_id]", "показать доступные макросы"),
+    CommandHint("/macros [ticket_public_id]", "показать макросы"),
     CommandHint("/tags <ticket_public_id>", "показать теги заявки"),
-    CommandHint("/alltags", "показать все доступные теги"),
+    CommandHint("/alltags", "показать все теги"),
     CommandHint("/addtag <ticket_public_id> <tag>", "добавить тег к заявке"),
     CommandHint("/rmtag <ticket_public_id> <tag>", "снять тег с заявки"),
-    CommandHint("/cancel", "отменить текущее действие оператора"),
+    CommandHint("/cancel", "отменить текущее действие"),
 )
 SUPER_ADMIN_COMMAND_HINTS = (
-    CommandHint("/operators", "показать список операторов"),
-    CommandHint("/add_operator <telegram_user_id> [display_name]", "выдать права оператора"),
+    CommandHint("/add_operator <telegram_user_id> [display_name]", "добавить оператора"),
     CommandHint("/remove_operator <telegram_user_id>", "снять права оператора"),
 )
 
 
 def format_diagnostics_report(report: DiagnosticsReport) -> str:
-    status_line = "Статус сервиса: OK" if report.is_healthy else "Статус сервиса: DEGRADED"
+    status_line = "Сервис работает стабильно." if report.is_healthy else "Есть проблемы с сервисом."
     lines = [status_line, ""]
     lines.extend(
-        f"- {check.name}: {'OK' if check.ok else 'FAIL'} ({check.detail})"
+        f"- {check.name}: {'в порядке' if check.ok else 'ошибка'} ({check.detail})"
         for check in report.checks
     )
     return "\n".join(lines)
@@ -51,41 +48,43 @@ def format_diagnostics_report(report: DiagnosticsReport) -> str:
 def get_start_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
-            "Здравствуйте. Вы вошли как супер администратор.",
-            "Доступны рабочие действия оператора и управление операторами.",
-            "Для верхнего уровня используйте меню ниже, "
-            "для действий по заявке используйте inline-кнопки под карточкой.",
+            "Вы вошли как суперадминистратор.",
+            "Здесь доступны рабочие действия оператора и управление командой.",
+            "Меню ниже отвечает за навигацию, кнопки под заявкой — за действия по ней.",
         ]
     if role == UserRole.OPERATOR:
         return [
-            "Здравствуйте. Вы вошли как оператор.",
-            "Используйте меню ниже для очереди, статистики и отмены текущего действия.",
-            "Для работы с конкретной заявкой используйте inline-кнопки под карточкой.",
+            "Вы вошли как оператор.",
+            "Очередь, статистика и быстрые действия доступны в меню ниже.",
+            "Для работы с конкретной заявкой используйте кнопки под её карточкой.",
         ]
     return [
-        "Здравствуйте. Это бот поддержки.",
-        "Просто отправьте сообщение одним текстом, "
-        "и бот создаст новую заявку или добавит его в уже открытую.",
-        "Если нужна подсказка, используйте кнопку «Помощь» или команду /help.",
+        "Это бот поддержки.",
+        "Просто отправьте сообщение в чат — бот создаст заявку или добавит его в текущую.",
+        "Если понадобится подсказка, откройте справку кнопкой ниже или командой /help.",
     ]
 
 
 def get_help_intro_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
-            "Справка для супер администратора.",
-            "У вас есть все рабочие действия оператора и управление списком операторов.",
+            "Справка для суперадминистратора.",
+            (
+                "Основные действия собраны в меню, "
+                "а работа с заявками доступна через кнопки под карточкой."
+            ),
         ]
     if role == UserRole.OPERATOR:
         return [
             "Справка для оператора.",
-            "Основные действия вынесены в меню, "
-            "а действия по заявке доступны через inline-кнопки под карточкой.",
+            (
+                "Очередь и быстрые действия находятся в меню, "
+                "работа с заявкой — в кнопках под карточкой."
+            ),
         ]
     return [
-        "Справка для пользователя.",
-        "Чтобы создать новую заявку или продолжить уже открытую, "
-        "просто отправьте сообщение в этот чат.",
+        "Справка.",
+        "Чтобы создать заявку или продолжить текущую, просто отправьте сообщение в этот чат.",
     ]
 
 

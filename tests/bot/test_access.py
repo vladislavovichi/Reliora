@@ -9,7 +9,7 @@ from bot.access.policies import (
     extract_command_name,
     resolve_required_permission,
 )
-from bot.texts.buttons import ADD_OPERATOR_BUTTON_TEXT, QUEUE_BUTTON_TEXT
+from bot.texts.buttons import OPERATORS_BUTTON_TEXT, QUEUE_BUTTON_TEXT
 
 
 def test_extract_command_name_strips_bot_suffix_and_args() -> None:
@@ -62,13 +62,12 @@ def test_protected_command_permissions_cover_admin_commands() -> None:
 
 def test_protected_message_permissions_cover_navigation_buttons() -> None:
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[QUEUE_BUTTON_TEXT] == Permission.ACCESS_OPERATOR
-    assert (
-        PROTECTED_MESSAGE_TEXT_PERMISSIONS[ADD_OPERATOR_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
-    )
+    assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[OPERATORS_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
 
 
 def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> None:
     assert ("operator:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
+    assert ("operator_queue:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_macro:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("admin_operator:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
 
@@ -115,7 +114,7 @@ def test_resolve_required_permission_for_super_admin_command() -> None:
 
 
 def test_resolve_required_permission_for_super_admin_navigation_button() -> None:
-    result = resolve_required_permission(message_text=ADD_OPERATOR_BUTTON_TEXT)
+    result = resolve_required_permission(message_text=OPERATORS_BUTTON_TEXT)
 
     assert result == Permission.MANAGE_OPERATORS
 

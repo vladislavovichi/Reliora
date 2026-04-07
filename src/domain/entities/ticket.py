@@ -25,6 +25,16 @@ class Ticket(Protocol):
 
 
 @dataclass(slots=True)
+class TicketMessageDetails:
+    telegram_message_id: int
+    sender_type: TicketMessageSenderType
+    sender_operator_id: int | None
+    sender_operator_name: str | None
+    text: str
+    created_at: datetime
+
+
+@dataclass(slots=True)
 class TicketDetails:
     id: int
     public_id: UUID
@@ -34,6 +44,7 @@ class TicketDetails:
     subject: str
     assigned_operator_id: int | None
     assigned_operator_name: str | None
+    assigned_operator_telegram_user_id: int | None
     created_at: datetime
     updated_at: datetime
     first_response_at: datetime | None
@@ -41,3 +52,4 @@ class TicketDetails:
     tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
+    message_history: tuple[TicketMessageDetails, ...] = ()

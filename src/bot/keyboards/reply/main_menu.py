@@ -3,12 +3,10 @@ from __future__ import annotations
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 from bot.texts.buttons import (
-    ADD_OPERATOR_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
-    REMOVE_OPERATOR_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
 )
@@ -37,15 +35,7 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
         placeholder = "Выберите действие"
 
         if role == UserRole.SUPER_ADMIN:
-            keyboard_rows.extend(
-                [
-                    [KeyboardButton(text=OPERATORS_BUTTON_TEXT)],
-                    [
-                        KeyboardButton(text=ADD_OPERATOR_BUTTON_TEXT),
-                        KeyboardButton(text=REMOVE_OPERATOR_BUTTON_TEXT),
-                    ],
-                ]
-            )
+            keyboard_rows.append([KeyboardButton(text=OPERATORS_BUTTON_TEXT)])
 
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
 

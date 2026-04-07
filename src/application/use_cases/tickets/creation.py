@@ -6,6 +6,7 @@ from application.use_cases.tickets.common import (
     build_ticket_subject,
     build_ticket_summary,
 )
+from application.use_cases.tickets.messaging import AddMessageToTicketUseCase
 from application.use_cases.tickets.summaries import TicketSummary
 from domain.contracts.repositories import (
     TicketEventRepository,
@@ -13,7 +14,6 @@ from domain.contracts.repositories import (
     TicketRepository,
 )
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
-from domain.tickets import ensure_message_addable
 
 
 class CreateTicketFromClientMessageUseCase:
@@ -26,6 +26,11 @@ class CreateTicketFromClientMessageUseCase:
         self.ticket_repository = ticket_repository
         self.ticket_message_repository = ticket_message_repository
         self.ticket_event_repository = ticket_event_repository
+        self._add_message_to_ticket = AddMessageToTicketUseCase(
+            ticket_repository=ticket_repository,
+            ticket_message_repository=ticket_message_repository,
+            ticket_event_repository=ticket_event_repository,
+        )
 
     async def __call__(
         self,
@@ -36,30 +41,15 @@ class CreateTicketFromClientMessageUseCase:
     ) -> TicketSummary:
         active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
         if active_ticket is not None:
-            if active_ticket.id is None:
-                raise RuntimeError("Не найден идентификатор активной заявки.")
-
-            ensure_message_addable(active_ticket.status)
-            await self.ticket_message_repository.add(
-                ticket_id=active_ticket.id,
+            result = await self._add_message_to_ticket(
+                ticket_public_id=active_ticket.public_id,
                 telegram_message_id=telegram_message_id,
                 sender_type=TicketMessageSenderType.CLIENT,
                 text=text,
             )
-            await self.ticket_event_repository.add(
-                ticket_id=active_ticket.id,
-                event_type=TicketEventType.CLIENT_MESSAGE_ADDED,
-                payload_json=build_message_payload(
-                    telegram_message_id=telegram_message_id,
-                    sender_type=TicketMessageSenderType.CLIENT,
-                    sender_operator_id=None,
-                ),
-            )
-            return build_ticket_summary(
-                active_ticket,
-                created=False,
-                event_type=TicketEventType.CLIENT_MESSAGE_ADDED,
-            )
+            if result is None:
+                raise RuntimeError("Не удалось добавить сообщение в активную заявку.")
+            return result
 
         ticket = await self.ticket_repository.create(
             client_chat_id=client_chat_id,

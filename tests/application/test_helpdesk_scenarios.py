@@ -21,7 +21,7 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
-from domain.entities.ticket import TicketDetails
+from domain.entities.ticket import TicketDetails, TicketMessageDetails
 from domain.enums.roles import UserRole
 from domain.enums.tickets import (
     TicketEventType,
@@ -45,8 +45,10 @@ class InMemoryTicketRecord:
     first_response_at: datetime | None = None
     closed_at: datetime | None = None
     assigned_operator_name: str | None = None
+    assigned_operator_telegram_user_id: int | None = None
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
+    message_history: tuple[TicketMessageDetails, ...] = ()
     tags: tuple[str, ...] = ()
 
 
@@ -56,6 +58,7 @@ class InMemoryOperatorRepository:
     display_names: dict[int, str] = field(default_factory=dict)
     usernames: dict[int, str | None] = field(default_factory=dict)
     operator_ids_by_telegram_user_id: dict[int, int] = field(default_factory=dict)
+    telegram_user_ids_by_operator_id: dict[int, int] = field(default_factory=dict)
     operator_display_names: dict[int, str] = field(default_factory=dict)
     next_operator_id: int = 1
 
@@ -67,6 +70,7 @@ class InMemoryOperatorRepository:
         operator_id = self.next_operator_id
         self.next_operator_id += 1
         self.operator_ids_by_telegram_user_id[telegram_user_id] = operator_id
+        self.telegram_user_ids_by_operator_id[operator_id] = telegram_user_id
         return operator_id
 
     async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
@@ -136,6 +140,7 @@ class InMemoryOperatorRepository:
 @dataclass(slots=True)
 class InMemoryTicketRepository:
     operator_display_names: dict[int, str]
+    operator_telegram_user_ids: dict[int, int]
     next_ticket_id: int = 1
     tickets: dict[UUID, InMemoryTicketRecord] = field(default_factory=dict)
 
@@ -179,6 +184,7 @@ class InMemoryTicketRepository:
             subject=ticket.subject,
             assigned_operator_id=ticket.assigned_operator_id,
             assigned_operator_name=ticket.assigned_operator_name,
+            assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
@@ -186,6 +192,7 @@ class InMemoryTicketRepository:
             tags=ticket.tags,
             last_message_text=ticket.last_message_text,
             last_message_sender_type=ticket.last_message_sender_type,
+            message_history=ticket.message_history,
         )
 
     async def get_active_by_client_chat_id(
@@ -256,6 +263,7 @@ class InMemoryTicketRepository:
         ticket.status = TicketStatus.ASSIGNED
         ticket.assigned_operator_id = operator_id
         ticket.assigned_operator_name = self.operator_display_names.get(operator_id)
+        ticket.assigned_operator_telegram_user_id = self.operator_telegram_user_ids.get(operator_id)
         ticket.updated_at = datetime.now(UTC)
         return ticket
 
@@ -272,6 +280,7 @@ class InMemoryTicketRepository:
         ticket.status = TicketStatus.ASSIGNED
         ticket.assigned_operator_id = operator_id
         ticket.assigned_operator_name = self.operator_display_names.get(operator_id)
+        ticket.assigned_operator_telegram_user_id = self.operator_telegram_user_ids.get(operator_id)
         ticket.updated_at = datetime.now(UTC)
         return ticket
 
@@ -329,13 +338,28 @@ class InMemoryTicketRepository:
         self,
         *,
         ticket_id: int,
+        telegram_message_id: int,
         text: str,
         sender_type: TicketMessageSenderType,
+        sender_operator_id: int | None = None,
+        sender_operator_name: str | None = None,
+        created_at: datetime | None = None,
     ) -> None:
         for ticket in self.tickets.values():
             if ticket.id == ticket_id:
                 ticket.last_message_text = text
                 ticket.last_message_sender_type = sender_type
+                ticket.message_history = (
+                    *ticket.message_history,
+                    TicketMessageDetails(
+                        telegram_message_id=telegram_message_id,
+                        sender_type=sender_type,
+                        sender_operator_id=sender_operator_id,
+                        sender_operator_name=sender_operator_name,
+                        text=text,
+                        created_at=created_at or datetime.now(UTC),
+                    ),
+                )
                 return
 
 
@@ -364,8 +388,16 @@ class InMemoryMessageRepository:
         )
         self.ticket_repository.set_last_message(
             ticket_id=ticket_id,
+            telegram_message_id=telegram_message_id,
             text=text,
             sender_type=sender_type,
+            sender_operator_id=sender_operator_id,
+            sender_operator_name=self.ticket_repository.operator_display_names.get(
+                sender_operator_id
+            )
+            if sender_operator_id is not None
+            else None,
+            created_at=datetime.now(UTC),
         )
 
     async def allocate_internal_telegram_message_id(
@@ -459,7 +491,8 @@ class HelpdeskScenario:
 def helpdesk_scenario() -> HelpdeskScenario:
     operator_repository = InMemoryOperatorRepository()
     ticket_repository = InMemoryTicketRepository(
-        operator_display_names=operator_repository.operator_display_names
+        operator_display_names=operator_repository.operator_display_names,
+        operator_telegram_user_ids=operator_repository.telegram_user_ids_by_operator_id,
     )
     message_repository = InMemoryMessageRepository(ticket_repository=ticket_repository)
     event_repository = InMemoryEventRepository()
@@ -545,7 +578,9 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
 
     assert ticket_details is not None
     assert ticket_details.assigned_operator_name == "Operator One"
+    assert ticket_details.assigned_operator_telegram_user_id == operator_telegram_user_id
     assert ticket_details.last_message_sender_type == TicketMessageSenderType.CLIENT
+    assert ticket_details.message_history[0].text == "Не могу войти в личный кабинет"
 
     operator_reply = await service.reply_to_ticket_as_operator(
         ticket_public_id=created_ticket.public_id,
@@ -568,6 +603,10 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     assert updated_details is not None
     assert updated_details.last_message_text == "Уже проверяем доступ, вернемся с ответом."
     assert updated_details.last_message_sender_type == TicketMessageSenderType.OPERATOR
+    assert [item.text for item in updated_details.message_history] == [
+        "Не могу войти в личный кабинет",
+        "Уже проверяем доступ, вернемся с ответом.",
+    ]
     created_ticket_record = helpdesk_scenario.ticket_repository.tickets[created_ticket.public_id]
     assert created_ticket_record.first_response_at is not None
 

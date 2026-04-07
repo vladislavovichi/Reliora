@@ -10,6 +10,11 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
     ticket_public_id: str
 
 
+class OperatorQueueCallback(CallbackData, prefix="operator_queue"):
+    action: Literal["page", "noop"]
+    page: int
+
+
 class OperatorMacroCallback(CallbackData, prefix="operator_macro"):
     ticket_public_id: str
     macro_id: int

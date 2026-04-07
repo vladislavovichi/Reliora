@@ -14,7 +14,7 @@ from application.use_cases.tickets.summaries import (
     OperatorManagementError,
     SLAAutoReassignmentTarget,
 )
-from domain.entities.ticket import TicketDetails
+from domain.entities.ticket import TicketDetails, TicketMessageDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -97,6 +97,9 @@ class StubTicketRepository:
             subject=ticket.subject,
             assigned_operator_id=ticket.assigned_operator_id,
             assigned_operator_name=getattr(ticket, "assigned_operator_name", None),
+            assigned_operator_telegram_user_id=getattr(
+                ticket, "assigned_operator_telegram_user_id", None
+            ),
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
@@ -104,6 +107,7 @@ class StubTicketRepository:
             tags=tuple(getattr(ticket, "tags", ())),
             last_message_text=getattr(ticket, "last_message_text", None),
             last_message_sender_type=getattr(ticket, "last_message_sender_type", None),
+            message_history=tuple(getattr(ticket, "message_history", ())),
         )
 
     async def get_next_queued_ticket(
@@ -502,8 +506,10 @@ def build_ticket(
     status: TicketStatus,
     assigned_operator_id: int | None = None,
     assigned_operator_name: str | None = None,
+    assigned_operator_telegram_user_id: int | None = None,
     last_message_text: str | None = None,
     last_message_sender_type: TicketMessageSenderType | None = None,
+    message_history: tuple[TicketMessageDetails, ...] = (),
     tags: tuple[str, ...] = (),
     priority: TicketPriority = TicketPriority.NORMAL,
     created_at: datetime | None = None,
@@ -525,8 +531,10 @@ def build_ticket(
         first_response_at=first_response_at,
         closed_at=closed_at,
         assigned_operator_name=assigned_operator_name,
+        assigned_operator_telegram_user_id=assigned_operator_telegram_user_id,
         last_message_text=last_message_text,
         last_message_sender_type=last_message_sender_type,
+        message_history=message_history,
         tags=tags,
     )
 
@@ -738,7 +746,7 @@ async def test_list_operators_rejects_non_admin_actor_when_actor_is_provided() -
     try:
         await service.list_operators(actor_telegram_user_id=1001)
     except AuthorizationError as exc:
-        assert str(exc) == "Это действие доступно только супер администраторам."
+        assert str(exc) == "Доступно только суперадминистраторам."
     else:
         raise AssertionError("expected AuthorizationError")
 
@@ -805,7 +813,7 @@ async def test_revoke_operator_rejects_super_admin_target() -> None:
     try:
         await service.revoke_operator(telegram_user_id=42)
     except OperatorManagementError as exc:
-        assert str(exc) == "Нельзя снять права у супер администратора."
+        assert str(exc) == "Нельзя снять права у суперадминистратора."
     else:
         raise AssertionError("expected OperatorManagementError")
 
@@ -872,7 +880,7 @@ async def test_assign_next_ticket_to_operator_rejects_regular_user_actor() -> No
             actor_telegram_user_id=2002,
         )
     except AuthorizationError as exc:
-        assert str(exc) == "Это действие доступно только операторам и супер администраторам."
+        assert str(exc) == "Доступно только операторам и суперадминистраторам."
     else:
         raise AssertionError("expected AuthorizationError")
 
@@ -1026,8 +1034,19 @@ async def test_get_ticket_details_returns_operator_facing_summary_with_tags() ->
         status=TicketStatus.ASSIGNED,
         assigned_operator_id=7,
         assigned_operator_name="Operator One",
+        assigned_operator_telegram_user_id=1001,
         last_message_text="Client says hello",
         last_message_sender_type=TicketMessageSenderType.CLIENT,
+        message_history=(
+            TicketMessageDetails(
+                telegram_message_id=11,
+                sender_type=TicketMessageSenderType.CLIENT,
+                sender_operator_id=None,
+                sender_operator_name=None,
+                text="Client says hello",
+                created_at=datetime.now(UTC),
+            ),
+        ),
         tags=("billing", "vip"),
     )
     service = build_service(ticket_repository=StubTicketRepository(created_ticket=ticket))
@@ -1038,8 +1057,10 @@ async def test_get_ticket_details_returns_operator_facing_summary_with_tags() ->
     assert result.public_id == public_id
     assert result.public_number.startswith("HD-")
     assert result.assigned_operator_name == "Operator One"
+    assert result.assigned_operator_telegram_user_id == 1001
     assert result.last_message_text == "Client says hello"
     assert result.last_message_sender_type == TicketMessageSenderType.CLIENT
+    assert result.message_history[0].text == "Client says hello"
     assert result.tags == ("billing", "vip")
 
 

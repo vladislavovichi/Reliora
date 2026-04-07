@@ -11,6 +11,9 @@ from aiogram.exceptions import (
     TelegramServerError,
 )
 
+from bot.texts.client import build_operator_reply_text, build_ticket_closed_text
+from bot.texts.operator import build_forwarded_client_message_text
+
 DEFAULT_SEND_ATTEMPTS = 3
 
 
@@ -57,3 +60,91 @@ async def send_message_with_retry(
             await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
         except TelegramAPIError:
             raise
+
+
+async def deliver_operator_reply_to_client(
+    bot: Bot,
+    *,
+    chat_id: int,
+    public_number: str,
+    body: str,
+    logger: logging.Logger,
+) -> str | None:
+    return await _deliver_text(
+        bot,
+        chat_id=chat_id,
+        text=build_operator_reply_text(public_number, body),
+        logger=logger,
+        operation="operator_reply",
+    )
+
+
+async def deliver_client_message_to_operator(
+    bot: Bot,
+    *,
+    chat_id: int,
+    public_number: str,
+    body: str,
+    logger: logging.Logger,
+) -> str | None:
+    return await _deliver_text(
+        bot,
+        chat_id=chat_id,
+        text=build_forwarded_client_message_text(public_number, body),
+        logger=logger,
+        operation="client_message_forward",
+    )
+
+
+async def deliver_ticket_closed_to_client(
+    bot: Bot,
+    *,
+    chat_id: int,
+    public_number: str,
+    logger: logging.Logger,
+) -> str | None:
+    return await _deliver_text(
+        bot,
+        chat_id=chat_id,
+        text=build_ticket_closed_text(public_number),
+        logger=logger,
+        operation="ticket_closed",
+    )
+
+
+async def deliver_text_to_chat(
+    bot: Bot,
+    *,
+    chat_id: int,
+    text: str,
+    logger: logging.Logger,
+    operation: str,
+) -> str | None:
+    return await _deliver_text(
+        bot,
+        chat_id=chat_id,
+        text=text,
+        logger=logger,
+        operation=operation,
+    )
+
+
+async def _deliver_text(
+    bot: Bot,
+    *,
+    chat_id: int,
+    text: str,
+    logger: logging.Logger,
+    operation: str,
+) -> str | None:
+    try:
+        await send_message_with_retry(
+            bot,
+            chat_id=chat_id,
+            text=text,
+            logger=logger,
+            operation=operation,
+        )
+    except TelegramAPIError as exc:
+        return str(exc)
+    return None

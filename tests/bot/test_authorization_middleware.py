@@ -114,7 +114,7 @@ async def test_authorization_middleware_denies_regular_user_operator_command() -
     assert result is None
     handler.assert_not_awaited()
     message_answer_mock(message).assert_awaited_once_with(
-        "Это действие доступно только операторам и супер администраторам.",
+        "Доступно только операторам и суперадминистраторам.",
         reply_markup=build_main_menu(UserRole.USER),
     )
 
@@ -139,7 +139,7 @@ async def test_authorization_middleware_denies_regular_user_operator_callback() 
     assert result is None
     handler.assert_not_awaited()
     callback_answer_mock(callback).assert_awaited_once_with(
-        "Это действие доступно только операторам и супер администраторам.",
+        "Доступно только операторам и суперадминистраторам.",
         show_alert=True,
     )
 
@@ -222,6 +222,6 @@ async def test_authorization_middleware_denies_revoked_operator_on_next_request(
     handler.assert_not_awaited()
     assert second_data["event_user_role"] == UserRole.USER
     message_answer_mock(second_message).assert_awaited_once_with(
-        "Это действие доступно только операторам и супер администраторам.",
+        "Доступно только операторам и суперадминистраторам.",
         reply_markup=build_main_menu(UserRole.USER),
     )

@@ -19,35 +19,22 @@ from bot.keyboards.inline.admin import (
     build_operator_management_markup,
     build_operator_revoke_confirmation_markup,
 )
-from bot.texts.buttons import ADD_OPERATOR_BUTTON_TEXT, REMOVE_OPERATOR_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
 from bot.texts.operator import (
     OPERATORS_EMPTY_TEXT,
     REVOKE_CANCELLED_TEXT,
     REVOKE_CONFIRM_PROMPT_TEXT,
-    add_operator_guidance,
     build_promote_operator_result_text,
     build_revoke_confirm_message,
     build_revoke_operator_result_text,
     invalid_add_operator_usage_text,
     invalid_remove_operator_usage_text,
-    remove_operator_guidance,
 )
 from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_operator_mutations")
 logger = logging.getLogger(__name__)
-
-
-@router.message(F.text == ADD_OPERATOR_BUTTON_TEXT)
-async def handle_add_operator_button(message: Message) -> None:
-    await message.answer(add_operator_guidance())
-
-
-@router.message(F.text == REMOVE_OPERATOR_BUTTON_TEXT)
-async def handle_remove_operator_button(message: Message) -> None:
-    await message.answer(remove_operator_guidance())
 
 
 @router.message(Command("add_operator"))
