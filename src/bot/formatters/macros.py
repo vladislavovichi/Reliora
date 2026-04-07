@@ -23,7 +23,7 @@ def format_macro_library(macros: Sequence[MacroSummary]) -> str:
     lines = ["Макросы", ""]
     for index, macro in enumerate(macros, start=1):
         lines.extend([f"{index}. {macro.title}", f"   {format_macro_preview(macro.body)}", ""])
-    lines.append("Откройте заявку, чтобы отправить макрос.")
+    lines.append("Макросы доступны из карточки заявки.")
     return "\n".join(lines)
 
 

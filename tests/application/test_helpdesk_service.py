@@ -14,6 +14,7 @@ from application.use_cases.tickets.summaries import (
     MacroManagementError,
     OperatorManagementError,
     SLAAutoReassignmentTarget,
+    TagSummary,
 )
 from domain.entities.ticket import TicketDetails, TicketMessageDetails
 from domain.enums.tickets import (
@@ -1352,7 +1353,10 @@ async def test_list_ticket_tags_and_available_tags_return_normalized_names() -> 
 
     assert ticket_tags is not None
     assert ticket_tags.tags == ("billing",)
-    assert available_tags == ["billing", "vip"]
+    assert available_tags == [
+        TagSummary(id=11, name="billing"),
+        TagSummary(id=10, name="vip"),
+    ]
 
 
 async def test_evaluate_ticket_sla_state_detects_approaching_deadlines() -> None:

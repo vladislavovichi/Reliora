@@ -7,7 +7,9 @@ from application.services.stats import HelpdeskOperationalStats
 from application.use_cases.tickets.summaries import (
     MacroSummary,
     OperatorSummary,
+    OperatorTicketSummary,
     QueuedTicketSummary,
+    TagSummary,
     TicketDetailsSummary,
     TicketMessageSummary,
 )
@@ -34,20 +36,28 @@ def format_queue_page(
     current_page: int,
     total_pages: int,
 ) -> str:
-    lines = ["Очередь", f"Страница {current_page} / {total_pages}", ""]
+    return _format_ticket_index_page(
+        title="Очередь",
+        tickets=tickets,
+        current_page=current_page,
+        total_pages=total_pages,
+        footer="Откройте заявку, чтобы посмотреть историю и действия.",
+    )
 
-    for index, ticket in enumerate(tickets, start=1):
-        lines.extend(
-            [
-                f"{index}. {ticket.public_number}",
-                f"   {_format_queue_meta(ticket)}",
-                f"   {_shorten_text(ticket.subject, 72)}",
-                "",
-            ]
-        )
 
-    lines.append("Нажмите на заявку, чтобы открыть карточку.")
-    return "\n".join(lines)
+def format_operator_ticket_page(
+    tickets: Sequence[OperatorTicketSummary],
+    *,
+    current_page: int,
+    total_pages: int,
+) -> str:
+    return _format_ticket_index_page(
+        title="Мои заявки",
+        tickets=tickets,
+        current_page=current_page,
+        total_pages=total_pages,
+        footer="Откройте заявку, чтобы продолжить диалог.",
+    )
 
 
 def format_ticket_details(ticket: TicketDetailsSummary) -> str:
@@ -151,7 +161,15 @@ def format_operator_list_response(
     super_admin_telegram_user_ids: Sequence[int],
 ) -> str:
     super_admins = ", ".join(str(item) for item in super_admin_telegram_user_ids) or "-"
-    lines = ["Команда", "", "Суперадминистраторы", super_admins, "", "Операторы"]
+    lines = [
+        "Операторы",
+        f"В команде: {len(operators)}",
+        "",
+        "Суперадминистраторы",
+        super_admins,
+        "",
+        "Команда",
+    ]
 
     if not operators:
         lines.append("- пока пусто")
@@ -159,28 +177,40 @@ def format_operator_list_response(
         for operator in operators:
             lines.append(f"- {format_operator_line(operator)}")
 
-    lines.extend(
-        [
-            "",
-            "Команды",
-            "/add_operator <telegram_user_id> [display_name]",
-            "/remove_operator <telegram_user_id>",
-        ]
-    )
+    lines.extend(["", "Выберите оператора ниже или добавьте нового."])
+    return "\n".join(lines)
+
+
+def format_operator_detail_response(operator: OperatorSummary) -> str:
+    lines = [
+        "Оператор",
+        "",
+        "Имя",
+        operator.display_name,
+        "",
+        "Telegram ID",
+        str(operator.telegram_user_id),
+    ]
+    if operator.username:
+        lines.extend(["", "Username", f"@{operator.username}"])
     return "\n".join(lines)
 
 
 def format_ticket_tags_response(
     public_number: str,
     ticket_tags: Sequence[str],
-    available_tags: Sequence[str],
+    available_tags: Sequence[TagSummary],
 ) -> str:
     lines = [
         f"Заявка {public_number}",
-        f"Теги: {format_tags(ticket_tags)}",
-        f"Доступные: {format_tags(available_tags)}",
-        "Добавить: /addtag <ticket_public_id> <tag>",
-        "Снять: /rmtag <ticket_public_id> <tag>",
+        "",
+        "Метки",
+        format_tags(ticket_tags),
+        "",
+        "Каталог",
+        format_tags(tuple(tag.name for tag in available_tags)),
+        "",
+        "Нажмите на метку ниже, чтобы добавить или снять её.",
     ]
     return "\n".join(lines)
 
@@ -265,6 +295,11 @@ def format_operator_line(operator: OperatorSummary) -> str:
     if operator.username:
         parts.append(f"@{operator.username}")
     return " · ".join(parts)
+
+
+def format_tag_button_text(tag: TagSummary, *, selected: bool) -> str:
+    prefix = "Снять" if selected else "Добавить"
+    return f"{prefix} · {tag.name}"
 
 
 def format_operational_stats(stats: HelpdeskOperationalStats) -> str:
@@ -375,3 +410,31 @@ def format_duration(seconds: int | None) -> str:
     if not parts:
         parts.append(f"{remaining_seconds} сек")
     return " ".join(parts[:2])
+
+
+def _format_ticket_index_page(
+    *,
+    title: str,
+    tickets: Sequence[QueuedTicketSummary | OperatorTicketSummary],
+    current_page: int,
+    total_pages: int,
+    footer: str,
+) -> str:
+    lines = [title, f"Страница {current_page} / {total_pages}", ""]
+
+    for index, ticket in enumerate(tickets, start=1):
+        lines.extend(
+            [
+                f"{index}. {ticket.public_number}",
+                f"   {_format_ticket_list_meta(ticket.priority, ticket.status)}",
+                f"   {_shorten_text(ticket.subject, 72)}",
+                "",
+            ]
+        )
+
+    lines.append(footer)
+    return "\n".join(lines)
+
+
+def _format_ticket_list_meta(priority: str, status: TicketStatus) -> str:
+    return f"{format_status(status).capitalize()} • {format_priority(priority)} приоритет"

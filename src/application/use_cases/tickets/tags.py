@@ -5,7 +5,11 @@ from uuid import UUID
 
 from application.use_cases.tickets.common import build_ticket_summary
 from application.use_cases.tickets.identifiers import format_public_ticket_number
-from application.use_cases.tickets.summaries import TicketTagMutationResult, TicketTagsSummary
+from application.use_cases.tickets.summaries import (
+    TagSummary,
+    TicketTagMutationResult,
+    TicketTagsSummary,
+)
 from domain.contracts.repositories import (
     TagRepository,
     TicketEventRepository,
@@ -41,9 +45,9 @@ class ListAvailableTagsUseCase:
     def __init__(self, tag_repository: TagRepository) -> None:
         self.tag_repository = tag_repository
 
-    async def __call__(self) -> Sequence[str]:
+    async def __call__(self) -> Sequence[TagSummary]:
         tags = await self.tag_repository.list_all()
-        return [tag.name for tag in tags]
+        return [TagSummary(id=tag.id, name=tag.name) for tag in tags]
 
 
 class AddTagToTicketUseCase:

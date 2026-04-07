@@ -6,6 +6,7 @@ from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
+    MY_TICKETS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
@@ -19,7 +20,7 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
 
     if role == UserRole.USER:
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
-        placeholder = "Опишите вопрос одним сообщением"
+        placeholder = "Сообщение в поддержку"
     else:
         keyboard_rows.extend(
             [
@@ -28,12 +29,12 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
                     KeyboardButton(text=TAKE_NEXT_BUTTON_TEXT),
                 ],
                 [
+                    KeyboardButton(text=MY_TICKETS_BUTTON_TEXT),
                     KeyboardButton(text=STATS_BUTTON_TEXT),
-                    KeyboardButton(text=CANCEL_BUTTON_TEXT),
                 ],
             ]
         )
-        placeholder = "Выберите раздел"
+        placeholder = "Выберите действие"
 
         if role == UserRole.SUPER_ADMIN:
             keyboard_rows.append(
@@ -43,7 +44,12 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
                 ]
             )
 
-        keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
+        keyboard_rows.append(
+            [
+                KeyboardButton(text=HELP_BUTTON_TEXT),
+                KeyboardButton(text=CANCEL_BUTTON_TEXT),
+            ]
+        )
 
     return ReplyKeyboardMarkup(
         keyboard=keyboard_rows,

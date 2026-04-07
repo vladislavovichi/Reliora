@@ -26,6 +26,7 @@ from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
+    MY_TICKETS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
@@ -47,50 +48,46 @@ def test_build_start_text_for_user_stays_user_friendly() -> None:
 def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
     result = build_start_text(UserRole.SUPER_ADMIN)
 
-    assert "Рабочее меню суперадминистратора." in result
+    assert "Панель суперадминистратора." in result
     assert "команда и макросы" in result
 
 
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
     result = build_help_text(UserRole.USER)
 
-    assert "/start - открыть главное меню" in result
+    assert "/start - открыть меню заново" in result
     assert "/help - показать краткую справку" in result
     assert "/queue" not in result
     assert "/operators" not in result
 
 
-def test_build_help_text_for_operator_includes_operator_commands_only() -> None:
+def test_build_help_text_for_operator_is_menu_first() -> None:
     result = build_help_text(UserRole.OPERATOR)
 
-    assert "/stats - открыть статистику" in result
-    assert "/health - проверить состояние сервиса" in result
-    assert "/ticket <ticket_public_id> - открыть карточку заявки" in result
-    assert "/macros " not in result
-    assert "/queue - " not in result
-    assert "/take - " not in result
+    assert "Навигация" in result
+    assert f"«{QUEUE_BUTTON_TEXT}» - открыть новые заявки." in result
+    assert f"«{MY_TICKETS_BUTTON_TEXT}» - вернуться к активным диалогам." in result
+    assert "/start - открыть меню заново" in result
+    assert "/health" not in result
+    assert "/ticket" not in result
     assert "/operators" not in result
 
 
-def test_build_help_text_for_super_admin_includes_admin_commands() -> None:
+def test_build_help_text_for_super_admin_is_menu_first() -> None:
     result = build_help_text(UserRole.SUPER_ADMIN)
 
-    assert "/health - проверить состояние сервиса" in result
-    assert (
-        "/add_operator <telegram_user_id> [display_name] - "
-        "добавить оператора в команду"
-    ) in result
-    assert "/remove_operator <telegram_user_id> - снять роль оператора" in result
-    assert "/queue - " not in result
-    assert "/operators - " not in result
-    assert f"«{MACROS_BUTTON_TEXT}» - открыть макросы" in result
+    assert f"«{OPERATORS_BUTTON_TEXT}» - открыть состав команды и управление ролями." in result
+    assert f"«{MACROS_BUTTON_TEXT}» - открыть библиотеку и редактирование макросов." in result
+    assert "/add_operator" not in result
+    assert "/remove_operator" not in result
+    assert "/health" not in result
 
 
 def test_build_main_menu_for_user_is_minimal() -> None:
     keyboard = build_main_menu(UserRole.USER)
 
     assert _keyboard_rows(keyboard) == ((HELP_BUTTON_TEXT,),)
-    assert keyboard.input_field_placeholder == "Опишите вопрос одним сообщением"
+    assert keyboard.input_field_placeholder == "Сообщение в поддержку"
 
 
 def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
@@ -98,10 +95,10 @@ def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
 
     assert _keyboard_rows(keyboard) == (
         (QUEUE_BUTTON_TEXT, TAKE_NEXT_BUTTON_TEXT),
-        (STATS_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
-        (HELP_BUTTON_TEXT,),
+        (MY_TICKETS_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
     )
-    assert keyboard.input_field_placeholder == "Выберите раздел"
+    assert keyboard.input_field_placeholder == "Выберите действие"
 
 
 def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
@@ -109,11 +106,11 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
 
     assert _keyboard_rows(keyboard) == (
         (QUEUE_BUTTON_TEXT, TAKE_NEXT_BUTTON_TEXT),
-        (STATS_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
+        (MY_TICKETS_BUTTON_TEXT, STATS_BUTTON_TEXT),
         (OPERATORS_BUTTON_TEXT, MACROS_BUTTON_TEXT),
-        (HELP_BUTTON_TEXT,),
+        (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
     )
-    assert keyboard.input_field_placeholder == "Выберите раздел"
+    assert keyboard.input_field_placeholder == "Выберите действие"
 
 
 def test_format_queue_page_returns_compact_paginated_text() -> None:
@@ -139,9 +136,9 @@ def test_format_queue_page_returns_compact_paginated_text() -> None:
     assert "Очередь" in result
     assert "Страница 2 / 3" in result
     assert "1. HD-AAAA1111" in result
-    assert "   Высокий приоритет" in result
+    assert "   В очереди • высокий приоритет" in result
     assert "   Не приходит письмо" in result
-    assert "Нажмите на заявку, чтобы открыть карточку." in result
+    assert "Откройте заявку, чтобы посмотреть историю и действия." in result
 
 
 def test_build_queue_markup_contains_ticket_actions_and_pagination() -> None:
@@ -202,6 +199,8 @@ def test_build_ticket_actions_markup_adds_macro_action_for_active_ticket() -> No
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
     assert ("Ответить", "Макросы") in rows
+    assert ("Метки", "Передать") in rows
+    assert ("Эскалация", "Закрыть") in rows
 
 
 def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None:

@@ -110,6 +110,25 @@ class SqlAlchemyTicketReadRepository:
         result = await self.session.execute(statement)
         return cast(Sequence[TicketEntity], result.scalars().all())
 
+    async def list_open_tickets_for_operator(
+        self,
+        *,
+        operator_telegram_user_id: int,
+        limit: int | None = None,
+    ) -> Sequence[TicketEntity]:
+        statement = (
+            select(TicketModel)
+            .join(Operator, TicketModel.assigned_operator_id == Operator.id)
+            .where(TicketModel.status != TicketStatus.CLOSED)
+            .where(Operator.telegram_user_id == operator_telegram_user_id)
+            .order_by(TicketModel.updated_at.desc(), TicketModel.id.desc())
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        result = await self.session.execute(statement)
+        return cast(Sequence[TicketEntity], result.scalars().all())
+
     async def _get_assigned_operator_details(
         self,
         operator_id: int | None,

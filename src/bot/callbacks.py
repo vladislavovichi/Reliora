@@ -6,12 +6,13 @@ from aiogram.filters.callback_data import CallbackData
 
 
 class OperatorActionCallback(CallbackData, prefix="operator"):
-    action: Literal["take", "reply", "close", "escalate", "reassign", "view", "macros"]
+    action: Literal["take", "reply", "close", "escalate", "reassign", "view", "macros", "tags"]
     ticket_public_id: str
 
 
 class OperatorQueueCallback(CallbackData, prefix="operator_queue"):
     action: Literal["page", "noop"]
+    scope: Literal["queue", "mine"]
     page: int
 
 
@@ -22,8 +23,22 @@ class OperatorMacroCallback(CallbackData, prefix="operator_macro"):
     page: int
 
 
+class OperatorTagCallback(CallbackData, prefix="operator_tag"):
+    action: Literal["toggle", "ticket"]
+    ticket_public_id: str
+    tag_id: int
+
+
 class AdminOperatorCallback(CallbackData, prefix="admin_operator"):
-    action: Literal["refresh", "revoke", "confirm_revoke", "cancel_revoke"]
+    action: Literal[
+        "refresh",
+        "view",
+        "add",
+        "back_list",
+        "revoke",
+        "confirm_revoke",
+        "cancel_revoke",
+    ]
     telegram_user_id: int
 
 

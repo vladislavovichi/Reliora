@@ -48,20 +48,6 @@ def parse_reassign_target(text: str) -> tuple[int, str] | None:
     return telegram_user_id, display_name
 
 
-def parse_telegram_user_id(value: str | None) -> int | None:
-    if value is None:
-        return None
-
-    stripped = value.strip()
-    if not stripped:
-        return None
-
-    try:
-        return int(stripped)
-    except ValueError:
-        return None
-
-
 def parse_operator_argument_with_optional_name(args: str | None) -> tuple[int, str] | None:
     if args is None:
         return None

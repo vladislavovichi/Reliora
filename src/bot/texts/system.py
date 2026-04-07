@@ -1,37 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from application.services.diagnostics import DiagnosticsReport
 from domain.enums.roles import UserRole
 
 PING_RESPONSE_TEXT = "понг"
-
-
-@dataclass(slots=True, frozen=True)
-class CommandHint:
-    command: str
-    description: str
-
-
-COMMON_COMMAND_HINTS = (
-    CommandHint("/start", "открыть главное меню"),
-    CommandHint("/help", "показать краткую справку"),
-)
-OPERATOR_COMMAND_HINTS = (
-    CommandHint("/stats", "открыть статистику"),
-    CommandHint("/health", "проверить состояние сервиса"),
-    CommandHint("/ticket <ticket_public_id>", "открыть карточку заявки"),
-    CommandHint("/tags <ticket_public_id>", "открыть теги заявки"),
-    CommandHint("/alltags", "показать доступные теги"),
-    CommandHint("/addtag <ticket_public_id> <tag>", "добавить тег к заявке"),
-    CommandHint("/rmtag <ticket_public_id> <tag>", "снять тег с заявки"),
-    CommandHint("/cancel", "отменить текущее действие"),
-)
-SUPER_ADMIN_COMMAND_HINTS = (
-    CommandHint("/add_operator <telegram_user_id> [display_name]", "добавить оператора в команду"),
-    CommandHint("/remove_operator <telegram_user_id>", "снять роль оператора"),
-)
 
 
 def format_diagnostics_report(report: DiagnosticsReport) -> str:
@@ -47,20 +19,20 @@ def format_diagnostics_report(report: DiagnosticsReport) -> str:
 def get_start_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
-            "Рабочее меню суперадминистратора.",
-            "Здесь доступны инструменты оператора, команда и макросы.",
-            "Откройте заявку, чтобы увидеть её детали и действия.",
+            "Панель суперадминистратора.",
+            "Ниже доступны очередь, личная работа, команда и макросы.",
+            "Откройте раздел и продолжайте работу кнопками в карточках.",
         ]
     if role == UserRole.OPERATOR:
         return [
-            "Рабочее меню оператора.",
-            "Очередь, статистика и быстрые действия доступны ниже.",
-            "Откройте заявку, чтобы увидеть детали и продолжить работу.",
+            "Рабочее место оператора.",
+            "Очередь, личные заявки и статистика уже в меню.",
+            "Откройте заявку, чтобы ответить, применить макрос или изменить метки.",
         ]
     return [
         "Поддержка в Telegram.",
-        "Напишите сообщение, и бот создаст заявку или добавит его в текущую.",
-        "Если понадобится подсказка, откройте справку кнопкой ниже.",
+        "Напишите сообщение в этот чат.",
+        "Бот сам создаст заявку и продолжит диалог здесь.",
     ]
 
 
@@ -68,23 +40,46 @@ def get_help_intro_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
             "Справка суперадминистратора.",
-            "Основные разделы доступны в меню, действия по заявкам — в карточке.",
+            "Основные разделы открываются из меню, действия по заявке находятся в её карточке.",
         ]
     if role == UserRole.OPERATOR:
         return [
             "Справка оператора.",
-            "Основные разделы доступны в меню, действия по заявкам — в карточке.",
+            "Основные разделы открываются из меню, действия по заявке находятся в её карточке.",
         ]
     return [
         "Справка.",
-        "Чтобы создать заявку или продолжить текущую, просто напишите в этот чат.",
+        "Чтобы создать заявку или продолжить текущую, просто напишите сообщение в этот чат.",
     ]
 
 
-def get_command_hints(role: UserRole) -> tuple[CommandHint, ...]:
-    command_hints = [*COMMON_COMMAND_HINTS]
-    if role in {UserRole.OPERATOR, UserRole.SUPER_ADMIN}:
-        command_hints.extend(OPERATOR_COMMAND_HINTS)
+def get_help_guidance_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
-        command_hints.extend(SUPER_ADMIN_COMMAND_HINTS)
-    return tuple(command_hints)
+        return [
+            "«Очередь» - новые заявки в работе команды.",
+            "«Взять следующую» - быстро забрать ближайшую заявку.",
+            "«Мои заявки» - вернуться к своим активным диалогам.",
+            "«Статистика» - посмотреть текущую нагрузку.",
+            "«Операторы» - открыть состав команды и управление ролями.",
+            "«Макросы» - открыть библиотеку и редактирование макросов.",
+            "«Отмена» - выйти из текущего шага.",
+        ]
+    if role == UserRole.OPERATOR:
+        return [
+            "«Очередь» - открыть новые заявки.",
+            "«Взять следующую» - сразу взять ближайшую заявку.",
+            "«Мои заявки» - вернуться к активным диалогам.",
+            "«Статистика» - посмотреть текущую нагрузку.",
+            "«Отмена» - выйти из текущего шага.",
+        ]
+    return [
+        "Напишите сообщение, чтобы создать заявку.",
+        "Когда оператор ответит, диалог продолжится в этом чате.",
+    ]
+
+
+def get_help_command_lines() -> tuple[str, str]:
+    return (
+        "/start - открыть меню заново",
+        "/help - показать краткую справку",
+    )

@@ -6,20 +6,12 @@ from application.services.authorization import Permission
 from bot.texts.buttons import OPERATOR_NAVIGATION_BUTTONS, SUPER_ADMIN_NAVIGATION_BUTTONS
 
 PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
+    "health": Permission.ACCESS_OPERATOR,
+    "cancel": Permission.ACCESS_OPERATOR,
     "queue": Permission.ACCESS_OPERATOR,
     "take": Permission.ACCESS_OPERATOR,
-    "ticket": Permission.ACCESS_OPERATOR,
-    "health": Permission.ACCESS_OPERATOR,
-    "macros": Permission.ACCESS_OPERATOR,
-    "tags": Permission.ACCESS_OPERATOR,
-    "alltags": Permission.ACCESS_OPERATOR,
-    "addtag": Permission.ACCESS_OPERATOR,
-    "rmtag": Permission.ACCESS_OPERATOR,
-    "cancel": Permission.ACCESS_OPERATOR,
     "stats": Permission.ACCESS_OPERATOR,
     "operators": Permission.MANAGE_OPERATORS,
-    "add_operator": Permission.MANAGE_OPERATORS,
-    "remove_operator": Permission.MANAGE_OPERATORS,
 }
 PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
     **{button_text: Permission.ACCESS_OPERATOR for button_text in OPERATOR_NAVIGATION_BUTTONS},
@@ -31,8 +23,10 @@ PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
     ("operator:", Permission.ACCESS_OPERATOR),
     ("operator_queue:", Permission.ACCESS_OPERATOR),
     ("operator_macro:", Permission.ACCESS_OPERATOR),
+    ("operator_tag:", Permission.ACCESS_OPERATOR),
 )
 PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {
+    "AdminOperatorStates:adding_operator": Permission.MANAGE_OPERATORS,
     "AdminMacroStates:creating_title": Permission.MANAGE_OPERATORS,
     "AdminMacroStates:creating_body": Permission.MANAGE_OPERATORS,
     "AdminMacroStates:creating_preview": Permission.MANAGE_OPERATORS,

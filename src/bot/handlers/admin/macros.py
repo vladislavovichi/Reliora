@@ -24,7 +24,7 @@ from bot.keyboards.inline.macros import (
     build_admin_macro_detail_markup,
     build_admin_macro_list_markup,
 )
-from bot.texts.buttons import MACROS_BUTTON_TEXT
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT, MACROS_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
 from bot.texts.macros import (
     MACRO_BODY_EDIT_PROMPT_TEXT,
@@ -39,6 +39,7 @@ from bot.texts.macros import (
     MACRO_DELETED_TEXT,
     MACRO_DRAFT_LOST_TEXT,
     MACRO_INPUT_COMMAND_BLOCK_TEXT,
+    MACRO_INPUT_NAVIGATION_BLOCK_TEXT,
     MACRO_NOT_FOUND_TEXT,
     MACRO_PAGE_UPDATED_TEXT,
     MACRO_TITLE_EDIT_PROMPT_TEXT,
@@ -409,6 +410,9 @@ async def handle_admin_macro_create_title(
     if message.text is None:
         await message.answer(MACRO_CREATE_TITLE_PROMPT_TEXT)
         return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(MACRO_INPUT_NAVIGATION_BLOCK_TEXT)
+        return
     if message.text.startswith("/"):
         await message.answer(MACRO_INPUT_COMMAND_BLOCK_TEXT)
         return
@@ -425,6 +429,9 @@ async def handle_admin_macro_create_body(
 ) -> None:
     if message.text is None:
         await message.answer(MACRO_CREATE_BODY_PROMPT_TEXT)
+        return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(MACRO_INPUT_NAVIGATION_BLOCK_TEXT)
         return
     if message.text.startswith("/"):
         await message.answer(MACRO_INPUT_COMMAND_BLOCK_TEXT)
@@ -462,6 +469,9 @@ async def handle_admin_macro_edit_title_message(
 ) -> None:
     if message.text is None:
         await message.answer(MACRO_TITLE_EDIT_PROMPT_TEXT)
+        return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(MACRO_INPUT_NAVIGATION_BLOCK_TEXT)
         return
     if message.text.startswith("/"):
         await message.answer(MACRO_INPUT_COMMAND_BLOCK_TEXT)
@@ -518,6 +528,9 @@ async def handle_admin_macro_edit_body_message(
 ) -> None:
     if message.text is None:
         await message.answer(MACRO_BODY_EDIT_PROMPT_TEXT)
+        return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(MACRO_INPUT_NAVIGATION_BLOCK_TEXT)
         return
     if message.text.startswith("/"):
         await message.answer(MACRO_INPUT_COMMAND_BLOCK_TEXT)

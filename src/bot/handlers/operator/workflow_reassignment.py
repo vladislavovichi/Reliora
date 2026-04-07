@@ -12,6 +12,7 @@ from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_reassign_target, parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
 from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
@@ -20,6 +21,7 @@ from bot.texts.common import (
 )
 from bot.texts.operator import (
     INVALID_REASSIGN_TARGET_TEXT,
+    OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT,
     REASSIGN_CONTEXT_LOST_TEXT,
     REASSIGN_MODE_COMMAND_BLOCK_TEXT,
     REASSIGN_TARGET_PROMPT_TEXT,
@@ -87,6 +89,9 @@ async def handle_reassign_message(
 ) -> None:
     if message.text is None:
         await message.answer(REASSIGN_TARGET_PROMPT_TEXT)
+        return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT)
         return
     if message.text.startswith("/"):
         await message.answer(REASSIGN_MODE_COMMAND_BLOCK_TEXT)

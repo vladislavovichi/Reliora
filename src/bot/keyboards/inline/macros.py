@@ -159,7 +159,7 @@ def build_admin_macro_list_markup(
 
     builder.row(
         _button(
-            "Создать",
+            "Новый",
             AdminMacroCallback(action="create", macro_id=0, page=current_page).pack(),
         )
     )
@@ -170,13 +170,13 @@ def build_admin_macro_detail_markup(*, macro_id: int, page: int) -> InlineKeyboa
     builder = InlineKeyboardBuilder()
     builder.row(
         _button(
-            "Изменить название",
+            "Название",
             AdminMacroCallback(action="edit_title", macro_id=macro_id, page=page).pack(),
         )
     )
     builder.row(
         _button(
-            "Изменить текст",
+            "Текст",
             AdminMacroCallback(action="edit_body", macro_id=macro_id, page=page).pack(),
         )
     )

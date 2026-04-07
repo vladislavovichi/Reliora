@@ -8,6 +8,7 @@ from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.use_cases.tickets.summaries import (
     OperatorReplyResult,
+    OperatorTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
     TicketStats,
@@ -150,6 +151,22 @@ class HelpdeskTicketOperations:
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
+
+    async def list_operator_tickets(
+        self,
+        *,
+        operator_telegram_user_id: int,
+        limit: int | None = None,
+        actor_telegram_user_id: int | None = None,
+    ) -> Sequence[OperatorTicketSummary]:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.tickets.list_operator_tickets(
+            operator_telegram_user_id=operator_telegram_user_id,
+            limit=limit,
+        )
 
     async def get_ticket_details(
         self,

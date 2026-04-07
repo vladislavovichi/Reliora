@@ -10,6 +10,7 @@ from application.services.helpdesk.ticket_operations import HelpdeskSLASync
 from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
     MacroSummary,
+    TagSummary,
     TicketTagMutationResult,
     TicketTagsSummary,
 )
@@ -142,7 +143,7 @@ class HelpdeskCatalogOperations:
         self,
         *,
         actor_telegram_user_id: int | None = None,
-    ) -> Sequence[str]:
+    ) -> Sequence[TagSummary]:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id,

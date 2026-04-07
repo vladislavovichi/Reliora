@@ -46,6 +46,14 @@ class TicketRepository(Protocol):
     async def list_open_tickets(self, *, limit: int | None = None) -> Sequence[Ticket]:
         """Return open tickets that are eligible for workflow evaluation."""
 
+    async def list_open_tickets_for_operator(
+        self,
+        *,
+        operator_telegram_user_id: int,
+        limit: int | None = None,
+    ) -> Sequence[Ticket]:
+        """Return open tickets currently assigned to the operator."""
+
     async def enqueue(self, *, ticket_public_id: UUID) -> Ticket | None:
         """Move a ticket into the queue."""
 

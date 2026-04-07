@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
@@ -264,7 +264,20 @@ async def _answer_with_ticket_details(
         return
 
     await callback.answer(fallback_text)
-    await callback.message.answer(
+    await send_ticket_details(
+        message=callback.message,
+        ticket_details=ticket_details,
+        include_history=include_history,
+    )
+
+
+async def send_ticket_details(
+    *,
+    message: Message,
+    ticket_details: TicketDetailsSummary,
+    include_history: bool = False,
+) -> None:
+    await message.answer(
         format_ticket_details(ticket_details),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
@@ -275,4 +288,4 @@ async def _answer_with_ticket_details(
         return
 
     for chunk in format_ticket_history_chunks(ticket_details):
-        await callback.message.answer(chunk)
+        await message.answer(chunk)

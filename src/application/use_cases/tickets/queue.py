@@ -5,9 +5,11 @@ from uuid import UUID
 
 from application.use_cases.tickets.common import build_status_payload, build_ticket_summary
 from application.use_cases.tickets.summaries import (
+    OperatorTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
     TicketSummary,
+    build_operator_ticket_summary,
     build_queued_ticket_summary,
     build_ticket_details_summary,
 )
@@ -122,6 +124,23 @@ class GetTicketDetailsUseCase:
             return None
 
         return build_ticket_details_summary(ticket)
+
+
+class ListOperatorTicketsUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(
+        self,
+        *,
+        operator_telegram_user_id: int,
+        limit: int | None = None,
+    ) -> Sequence[OperatorTicketSummary]:
+        tickets = await self.ticket_repository.list_open_tickets_for_operator(
+            operator_telegram_user_id=operator_telegram_user_id,
+            limit=limit,
+        )
+        return [build_operator_ticket_summary(ticket) for ticket in tickets]
 
 
 class AssignNextQueuedTicketUseCase:

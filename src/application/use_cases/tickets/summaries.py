@@ -48,6 +48,25 @@ def build_queued_ticket_summary(ticket: Ticket) -> QueuedTicketSummary:
 
 
 @dataclass(slots=True)
+class OperatorTicketSummary:
+    public_id: UUID
+    public_number: str
+    subject: str
+    priority: str
+    status: TicketStatus
+
+
+def build_operator_ticket_summary(ticket: Ticket) -> OperatorTicketSummary:
+    return OperatorTicketSummary(
+        public_id=ticket.public_id,
+        public_number=format_public_ticket_number(ticket.public_id),
+        subject=ticket.subject,
+        priority=ticket.priority.value,
+        status=ticket.status,
+    )
+
+
+@dataclass(slots=True)
 class TicketMessageSummary:
     sender_type: TicketMessageSenderType
     sender_operator_id: int | None
@@ -139,6 +158,12 @@ class MacroSummary:
     id: int
     title: str
     body: str
+
+
+@dataclass(slots=True)
+class TagSummary:
+    id: int
+    name: str
 
 
 @dataclass(slots=True)

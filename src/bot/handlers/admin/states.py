@@ -1,6 +1,10 @@
 from aiogram.fsm.state import State, StatesGroup
 
 
+class AdminOperatorStates(StatesGroup):
+    adding_operator = State()
+
+
 class AdminMacroStates(StatesGroup):
     creating_title = State()
     creating_body = State()
