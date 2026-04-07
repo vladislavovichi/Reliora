@@ -106,10 +106,6 @@ def build_queue_markup(
                 ticket.public_number,
                 OperatorActionCallback(action="view", ticket_public_id=callback_value).pack(),
             ),
-            _build_callback_button(
-                "Взять",
-                OperatorActionCallback(action="take", ticket_public_id=callback_value).pack(),
-            ),
         )
 
     if total_pages > 1:
@@ -117,14 +113,14 @@ def build_queue_markup(
         if current_page > 1:
             pagination_row.append(
                 _build_callback_button(
-                    "← Назад",
+                    "‹ Назад",
                     OperatorQueueCallback(action="page", page=current_page - 1).pack(),
                 )
             )
 
         pagination_row.append(
             _build_callback_button(
-                f"{current_page} из {total_pages}",
+                f"{current_page} / {total_pages}",
                 OperatorQueueCallback(action="noop", page=current_page).pack(),
             )
         )
@@ -132,7 +128,7 @@ def build_queue_markup(
         if current_page < total_pages:
             pagination_row.append(
                 _build_callback_button(
-                    "Дальше ›",
+                    "Далее ›",
                     OperatorQueueCallback(action="page", page=current_page + 1).pack(),
                 )
             )

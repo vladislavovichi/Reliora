@@ -1,30 +1,30 @@
 from __future__ import annotations
 
 QUEUE_EMPTY_TEXT = "Очередь пока пуста."
-QUEUE_HEADER_TEXT = "Очередь заявок"
-NO_QUEUE_TICKETS_TEXT = "В очереди пока нет заявок."
+QUEUE_HEADER_TEXT = "Очередь"
+NO_QUEUE_TICKETS_TEXT = "В очереди сейчас нет заявок."
 QUEUE_BUSY_TEXT = "Очередь сейчас занята. Попробуйте ещё раз через пару секунд."
 OPERATOR_ACTION_IDLE_TEXT = "Сейчас нечего отменять."
 OPERATOR_ACTION_CANCELLED_TEXT = "Действие отменено."
 MACROS_EMPTY_TEXT = "Макросов пока нет."
-TAGS_EMPTY_TEXT = "Тегов пока нет."
+TAGS_EMPTY_TEXT = "Теги пока не добавлены."
 OPERATOR_UNKNOWN_TEXT = "Не удалось определить оператора."
-REPLY_CONTEXT_LOST_TEXT = "Контекст ответа потерян. Откройте заявку снова."
-REASSIGN_CONTEXT_LOST_TEXT = "Контекст переназначения потерян. Откройте заявку снова."
+REPLY_CONTEXT_LOST_TEXT = "Не удалось продолжить ответ. Откройте заявку ещё раз."
+REASSIGN_CONTEXT_LOST_TEXT = "Не удалось продолжить передачу. Откройте заявку ещё раз."
 INVALID_REASSIGN_TARGET_TEXT = (
-    "Не удалось распознать данные оператора. Отправьте Telegram ID, "
-    "при необходимости добавьте имя."
+    "Не удалось распознать оператора. Отправьте Telegram ID "
+    "и при необходимости добавьте имя."
 )
 REPLY_MODE_COMMAND_BLOCK_TEXT = (
-    "Сейчас бот ждёт ответ. Отправьте текст или используйте /cancel."
+    "Сейчас открыт режим ответа. Отправьте сообщение или используйте /cancel."
 )
 REASSIGN_MODE_COMMAND_BLOCK_TEXT = (
-    "Сейчас бот ждёт данные нового оператора. Отправьте Telegram ID\nили используйте /cancel."
+    "Сейчас открыт режим передачи. Отправьте Telegram ID\nили используйте /cancel."
 )
-REASSIGN_TARGET_PROMPT_TEXT = "Укажите Telegram ID нового оператора."
+REASSIGN_TARGET_PROMPT_TEXT = "Укажите Telegram ID оператора."
 APPLY_MACRO_FAILED_TEXT = "Не удалось применить макрос."
-OPERATORS_EMPTY_TEXT = "Оператор с таким Telegram ID не найден."
-OPERATORS_REFRESHED_TEXT = "Список операторов обновлён."
+OPERATORS_EMPTY_TEXT = "Оператор не найден."
+OPERATORS_REFRESHED_TEXT = "Список обновлён."
 REVOKE_CONFIRM_PROMPT_TEXT = "Подтвердите снятие прав."
 REVOKE_CANCELLED_TEXT = "Снятие прав отменено."
 
@@ -58,19 +58,19 @@ def invalid_remove_tag_usage_text() -> str:
 
 
 def build_tag_added_text(ticket_public_number: str, tag: str, tags: str) -> str:
-    return f"Тег «{tag}» добавлен в заявку {ticket_public_number}.\nСейчас: {tags}"
+    return f"Тег «{tag}» добавлен.\nЗаявка: {ticket_public_number}\nСейчас: {tags}"
 
 
 def build_tag_already_added_text(ticket_public_number: str, tag: str, tags: str) -> str:
-    return f"Тег «{tag}» уже есть в заявке {ticket_public_number}.\nСейчас: {tags}"
+    return f"Тег «{tag}» уже есть.\nЗаявка: {ticket_public_number}\nСейчас: {tags}"
 
 
 def build_tag_removed_text(ticket_public_number: str, tag: str, tags: str) -> str:
-    return f"Тег «{tag}» снят с заявки {ticket_public_number}.\nСейчас: {tags}"
+    return f"Тег «{tag}» снят.\nЗаявка: {ticket_public_number}\nСейчас: {tags}"
 
 
 def build_tag_missing_text(ticket_public_number: str, tag: str, tags: str) -> str:
-    return f"Тега «{tag}» нет у заявки {ticket_public_number}.\nСейчас: {tags}"
+    return f"Тега «{tag}» нет.\nЗаявка: {ticket_public_number}\nСейчас: {tags}"
 
 
 def build_available_tags_text(tags: list[str] | tuple[str, ...]) -> str:
@@ -79,7 +79,7 @@ def build_available_tags_text(tags: list[str] | tuple[str, ...]) -> str:
 
 def build_reply_mode_enabled_text(public_number: str) -> str:
     return (
-        f"Отправьте ответ для заявки {public_number}.\n"
+        f"Отправьте ответ по заявке {public_number}.\n"
         "/cancel — отмена."
     )
 
@@ -90,7 +90,7 @@ def build_reply_mode_callback_text(public_number: str) -> str:
 
 def build_reassign_mode_enabled_text() -> str:
     return (
-        "Отправьте Telegram ID нового оператора, при необходимости добавьте имя.\n"
+        "Отправьте Telegram ID оператора, при необходимости добавьте имя.\n"
         "Пример: 123456789 Иван Иванов\n"
         "/cancel — отмена."
     )
@@ -101,7 +101,7 @@ def build_reassign_mode_callback_text(public_number: str) -> str:
 
 
 def build_view_opened_text(public_number: str) -> str:
-    return f"Открыта заявка {public_number}."
+    return f"Заявка {public_number} открыта."
 
 
 def build_take_answer_text(public_number: str, *, reassigned: bool) -> str:
@@ -111,7 +111,7 @@ def build_take_answer_text(public_number: str, *, reassigned: bool) -> str:
 
 
 def build_take_next_fallback_text(public_number: str, status: str) -> str:
-    return f"Заявка {public_number} взята в работу. Статус: {status}."
+    return f"Заявка {public_number} взята в работу.\nСтатус: {status}."
 
 
 def build_close_text(public_number: str) -> str:
@@ -121,7 +121,7 @@ def build_close_text(public_number: str) -> str:
 def build_close_delivery_failed_text(public_number: str, error_text: str) -> str:
     return (
         f"Заявка {public_number} закрыта, "
-        f"но уведомление клиенту не отправлено: {error_text}"
+        f"но клиент не получил уведомление: {error_text}"
     )
 
 
@@ -167,13 +167,17 @@ def build_promote_operator_result_text(
     changed: bool,
 ) -> str:
     if changed:
-        return f"{display_name} теперь оператор. Telegram ID: {telegram_user_id}."
-    return f"{display_name} уже в списке операторов. Telegram ID: {telegram_user_id}."
+        return f"{display_name} добавлен как оператор. Telegram ID {telegram_user_id}."
+    return f"{display_name} уже есть в команде. Telegram ID {telegram_user_id}."
 
 
 def build_revoke_operator_result_text(display_name: str, telegram_user_id: int) -> str:
-    return f"Права оператора сняты: {display_name}, Telegram ID {telegram_user_id}."
+    return f"Роль оператора снята: {display_name}, Telegram ID {telegram_user_id}."
 
 
 def build_revoke_confirm_message(telegram_user_id: int) -> str:
-    return f"Снять права оператора у пользователя с Telegram ID {telegram_user_id}?"
+    return f"Снять роль оператора у пользователя с Telegram ID {telegram_user_id}?"
+
+
+def build_queue_page_callback_text(page: int) -> str:
+    return f"Страница {page}"

@@ -18,7 +18,7 @@ def build_operator_management_markup(
     for operator in operators:
         builder.row(
             _build_callback_button(
-                f"Снять права · {format_operator_button_text(operator)}",
+                f"Снять роль · {format_operator_button_text(operator)}",
                 AdminOperatorCallback(
                     action="revoke",
                     telegram_user_id=operator.telegram_user_id,
@@ -42,14 +42,14 @@ def build_operator_revoke_confirmation_markup(
     builder = InlineKeyboardBuilder()
     builder.row(
         _build_callback_button(
-            "Да, снять",
+            "Снять роль",
             AdminOperatorCallback(
                 action="confirm_revoke",
                 telegram_user_id=telegram_user_id,
             ).pack(),
         ),
         _build_callback_button(
-            "Отменить",
+            "Отмена",
             AdminOperatorCallback(
                 action="cancel_revoke",
                 telegram_user_id=telegram_user_id,

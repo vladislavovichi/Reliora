@@ -3,8 +3,8 @@ from __future__ import annotations
 
 def build_ticket_created_text(public_number: str) -> str:
     return (
-        f"Принято. Заявка {public_number} создана. "
-        "Когда оператор подключится, он продолжит разговор здесь."
+        f"Заявка {public_number} создана. "
+        "Когда оператор подключится, разговор продолжится здесь."
     )
 
 

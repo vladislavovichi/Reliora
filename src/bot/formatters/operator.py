@@ -34,7 +34,7 @@ def format_queue_page(
     current_page: int,
     total_pages: int,
 ) -> str:
-    lines = ["Очередь заявок", f"Страница {current_page} из {total_pages}", ""]
+    lines = ["Очередь", f"Страница {current_page} / {total_pages}", ""]
 
     for index, ticket in enumerate(tickets, start=1):
         lines.extend(
@@ -46,7 +46,7 @@ def format_queue_page(
             ]
         )
 
-    lines.append("Выберите заявку.")
+    lines.append("Нажмите на заявку, чтобы открыть карточку.")
     return "\n".join(lines)
 
 
@@ -59,13 +59,13 @@ def format_ticket_details(ticket: TicketDetailsSummary) -> str:
         ticket.subject,
     ]
 
-    _append_section(lines, "Исполнитель", _format_assigned_operator(ticket))
+    _append_section(lines, "Оператор", _format_assigned_operator(ticket))
     _append_section(lines, "Создана", format_timestamp(ticket.created_at))
     if ticket.tags:
         _append_section(lines, "Теги", format_tags(ticket.tags))
     _append_section(
         lines,
-        "Контекст",
+        "Последнее сообщение",
         format_last_message(ticket.last_message_text, ticket.last_message_sender_type),
     )
     return "\n".join(lines)
@@ -73,11 +73,11 @@ def format_ticket_details(ticket: TicketDetailsSummary) -> str:
 
 def format_ticket_history_chunks(ticket: TicketDetailsSummary) -> tuple[str, ...]:
     if not ticket.message_history:
-        return ("Диалог\n\nСообщений пока нет.",)
+        return ("Переписка\n\nСообщений пока нет.",)
 
     chunks: list[str] = []
-    current_chunk = "Диалог"
-    continuation_header = "Диалог, продолжение"
+    current_chunk = "Переписка"
+    continuation_header = "Переписка, продолжение"
 
     for index, message in enumerate(ticket.message_history, start=1):
         for entry in format_ticket_history_entry_parts(index=index, message=message):
@@ -139,9 +139,9 @@ def format_macro_list(
         lines.append(f"{macro.id}. {macro.title} — {format_macro_preview(macro.body)}")
 
     if ticket_details is None:
-        lines.append("Откройте заявку, чтобы применить макрос кнопкой.")
+        lines.append("Откройте заявку, чтобы использовать макрос.")
     else:
-        lines.append("Выберите макрос ниже.")
+        lines.append("Выберите макрос.")
     return "\n".join(lines)
 
 
@@ -150,15 +150,11 @@ def format_operator_list_response(
     operators: Sequence[OperatorSummary],
     super_admin_telegram_user_ids: Sequence[int],
 ) -> str:
-    lines = [
-        "Операторы",
-        "Суперадминистраторы: " + ", ".join(str(item) for item in super_admin_telegram_user_ids),
-        "",
-        "Активные",
-    ]
+    super_admins = ", ".join(str(item) for item in super_admin_telegram_user_ids) or "-"
+    lines = ["Команда", "", "Суперадминистраторы", super_admins, "", "Операторы"]
 
     if not operators:
-        lines.append("- список пуст")
+        lines.append("- пока пусто")
     else:
         for operator in operators:
             lines.append(f"- {format_operator_line(operator)}")
@@ -180,8 +176,9 @@ def format_ticket_tags_response(
     available_tags: Sequence[str],
 ) -> str:
     lines = [
-        f"Теги заявки {public_number}: {format_tags(ticket_tags)}",
-        f"Все теги: {format_tags(available_tags)}",
+        f"Заявка {public_number}",
+        f"Теги: {format_tags(ticket_tags)}",
+        f"Доступные: {format_tags(available_tags)}",
         "Добавить: /addtag <ticket_public_id> <tag>",
         "Снять: /rmtag <ticket_public_id> <tag>",
     ]

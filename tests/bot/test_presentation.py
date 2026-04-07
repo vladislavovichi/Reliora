@@ -34,8 +34,8 @@ from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 def test_build_start_text_for_user_stays_user_friendly() -> None:
     result = build_start_text(UserRole.USER)
 
-    assert "бот поддержки" in result
-    assert "Просто отправьте сообщение в чат" in result
+    assert "Поддержка в Telegram." in result
+    assert "Напишите сообщение" in result
     assert "оператор" not in result
     assert "суперадминистратор" not in result
 
@@ -43,7 +43,7 @@ def test_build_start_text_for_user_stays_user_friendly() -> None:
 def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
     result = build_start_text(UserRole.SUPER_ADMIN)
 
-    assert "суперадминистратор" in result
+    assert "Рабочее меню суперадминистратора." in result
     assert "управление командой" in result
 
 
@@ -59,7 +59,7 @@ def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
 def test_build_help_text_for_operator_includes_operator_commands_only() -> None:
     result = build_help_text(UserRole.OPERATOR)
 
-    assert "/stats - показать статистику" in result
+    assert "/stats - открыть статистику" in result
     assert "/health - проверить состояние сервиса" in result
     assert "/ticket <ticket_public_id> - открыть карточку заявки" in result
     assert "/queue - " not in result
@@ -71,8 +71,11 @@ def test_build_help_text_for_super_admin_includes_admin_commands() -> None:
     result = build_help_text(UserRole.SUPER_ADMIN)
 
     assert "/health - проверить состояние сервиса" in result
-    assert "/add_operator <telegram_user_id> [display_name] - добавить оператора" in result
-    assert "/remove_operator <telegram_user_id> - снять права оператора" in result
+    assert (
+        "/add_operator <telegram_user_id> [display_name] - "
+        "добавить оператора в команду"
+    ) in result
+    assert "/remove_operator <telegram_user_id> - снять роль оператора" in result
     assert "/queue - " not in result
     assert "/operators - " not in result
 
@@ -81,7 +84,7 @@ def test_build_main_menu_for_user_is_minimal() -> None:
     keyboard = build_main_menu(UserRole.USER)
 
     assert _keyboard_rows(keyboard) == ((HELP_BUTTON_TEXT,),)
-    assert keyboard.input_field_placeholder == "Опишите проблему одним сообщением"
+    assert keyboard.input_field_placeholder == "Опишите вопрос одним сообщением"
 
 
 def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
@@ -92,7 +95,7 @@ def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
         (STATS_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
         (HELP_BUTTON_TEXT,),
     )
-    assert keyboard.input_field_placeholder == "Выберите действие"
+    assert keyboard.input_field_placeholder == "Выберите раздел"
 
 
 def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
@@ -104,7 +107,7 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
         (OPERATORS_BUTTON_TEXT,),
         (HELP_BUTTON_TEXT,),
     )
-    assert keyboard.input_field_placeholder == "Выберите действие"
+    assert keyboard.input_field_placeholder == "Выберите раздел"
 
 
 def test_format_queue_page_returns_compact_paginated_text() -> None:
@@ -127,12 +130,12 @@ def test_format_queue_page_returns_compact_paginated_text() -> None:
 
     result = format_queue_page(tickets, current_page=2, total_pages=3)
 
-    assert "Очередь заявок" in result
-    assert "Страница 2 из 3" in result
+    assert "Очередь" in result
+    assert "Страница 2 / 3" in result
     assert "1. HD-AAAA1111" in result
     assert "   Высокий приоритет" in result
     assert "   Не приходит письмо" in result
-    assert "Выберите заявку." in result
+    assert "Нажмите на заявку, чтобы открыть карточку." in result
 
 
 def test_build_queue_markup_contains_ticket_actions_and_pagination() -> None:
@@ -156,11 +159,7 @@ def test_build_queue_markup_contains_ticket_actions_and_pagination() -> None:
     markup = build_queue_markup(tickets=tickets, current_page=2, total_pages=4)
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (
-        ("HD-AAAA1111", "Взять"),
-        ("HD-BBBB2222", "Взять"),
-        ("← Назад", "2 из 4", "Дальше ›"),
-    )
+    assert rows == (("HD-AAAA1111",), ("HD-BBBB2222",), ("‹ Назад", "2 / 4", "Далее ›"))
 
 
 def test_format_ticket_details_returns_calm_operator_card() -> None:
@@ -186,10 +185,10 @@ def test_format_ticket_details_returns_calm_operator_card() -> None:
     assert "Заявка HD-AAAA1111" in result
     assert "В работе • высокий приоритет" in result
     assert "\nТема\nНе могу войти в личный кабинет" in result
-    assert "\nИсполнитель\nИван Петров" in result
+    assert "\nОператор\nИван Петров" in result
     assert "\nСоздана\n07.04.2026 12:30 UTC" in result
     assert "\nТеги\nbilling, vip" in result
-    assert "\nКонтекст\nКлиент — Проблема началась после смены пароля" in result
+    assert "\nПоследнее сообщение\nКлиент — Проблема началась после смены пароля" in result
 
 
 def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None:
@@ -227,7 +226,7 @@ def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None
 
     result = format_ticket_history_chunks(ticket)
 
-    assert result[0].startswith("Диалог")
+    assert result[0].startswith("Переписка")
     assert "Клиент · 07.04.2026 12:31 UTC\nНе могу войти в личный кабинет." in result[0]
     assert "Оператор Иван Петров · 07.04.2026 12:35 UTC\nУже проверяем доступ." in result[0]
 

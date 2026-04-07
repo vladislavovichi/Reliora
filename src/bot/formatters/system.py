@@ -30,7 +30,7 @@ def build_help_text(role: UserRole) -> str:
 
     navigation_lines = _build_navigation_help(role)
     if navigation_lines:
-        lines.extend(["", "Кнопки меню", *navigation_lines])
+        lines.extend(["", "Меню", *navigation_lines])
 
     return "\n".join(lines)
 
@@ -42,17 +42,17 @@ def _build_navigation_help(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
             f"«{QUEUE_BUTTON_TEXT}» - открыть очередь",
-            f"«{TAKE_NEXT_BUTTON_TEXT}» - взять заявку",
-            f"«{STATS_BUTTON_TEXT}» - посмотреть статистику",
+            f"«{TAKE_NEXT_BUTTON_TEXT}» - взять следующую заявку",
+            f"«{STATS_BUTTON_TEXT}» - открыть статистику",
             f"«{CANCEL_BUTTON_TEXT}» - отменить текущее действие",
-            f"«{OPERATORS_BUTTON_TEXT}» - открыть список операторов",
+            f"«{OPERATORS_BUTTON_TEXT}» - открыть команду",
             f"«{HELP_BUTTON_TEXT}» - открыть справку",
         ]
     if role == UserRole.OPERATOR:
         return [
             f"«{QUEUE_BUTTON_TEXT}» - открыть очередь",
-            f"«{TAKE_NEXT_BUTTON_TEXT}» - взять заявку",
-            f"«{STATS_BUTTON_TEXT}» - посмотреть статистику",
+            f"«{TAKE_NEXT_BUTTON_TEXT}» - взять следующую заявку",
+            f"«{STATS_BUTTON_TEXT}» - открыть статистику",
             f"«{CANCEL_BUTTON_TEXT}» - отменить текущее действие",
             f"«{HELP_BUTTON_TEXT}» - открыть справку",
         ]

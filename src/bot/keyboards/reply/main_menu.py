@@ -18,7 +18,7 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
 
     if role == UserRole.USER:
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
-        placeholder = "Опишите проблему одним сообщением"
+        placeholder = "Опишите вопрос одним сообщением"
     else:
         keyboard_rows.extend(
             [
@@ -32,7 +32,7 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
                 ],
             ]
         )
-        placeholder = "Выберите действие"
+        placeholder = "Выберите раздел"
 
         if role == UserRole.SUPER_ADMIN:
             keyboard_rows.append([KeyboardButton(text=OPERATORS_BUTTON_TEXT)])

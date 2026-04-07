@@ -34,6 +34,7 @@ from bot.texts.operator import (
     QUEUE_BUSY_TEXT,
     QUEUE_EMPTY_TEXT,
     QUEUE_HEADER_TEXT,
+    build_queue_page_callback_text,
     build_take_next_fallback_text,
     invalid_ticket_usage_text,
 )
@@ -126,7 +127,7 @@ async def handle_queue_page_noop(
     callback: CallbackQuery,
     callback_data: OperatorQueueCallback,
 ) -> None:
-    await callback.answer(f"Страница {callback_data.page}")
+    await callback.answer(build_queue_page_callback_text(callback_data.page))
 
 
 @router.message(Command("take"))
