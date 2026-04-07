@@ -104,7 +104,7 @@ async def handle_queue_page(
             actor_telegram_user_id=callback.from_user.id,
         )
 
-    if callback.message is None:
+    if not isinstance(callback.message, Message):
         await callback.answer(QUEUE_HEADER_TEXT)
         return
 
