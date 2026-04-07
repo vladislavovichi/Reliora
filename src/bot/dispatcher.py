@@ -32,8 +32,8 @@ def _register_middlewares(dispatcher: Dispatcher) -> None:
     authorization_middleware = AuthorizationMiddleware()
     dispatcher.message.outer_middleware(update_context_middleware)
     dispatcher.callback_query.outer_middleware(update_context_middleware)
-    dispatcher.message.middleware(authorization_middleware)
-    dispatcher.callback_query.middleware(authorization_middleware)
+    dispatcher.message.outer_middleware(authorization_middleware)
+    dispatcher.callback_query.outer_middleware(authorization_middleware)
 
 
 def _register_lifecycle(dispatcher: Dispatcher) -> None:
