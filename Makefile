@@ -1,9 +1,12 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose
+COMPOSE_FILE ?= ops/docker/compose.yml
 PYTHON ?= python3.12
 export PYTHONPATH ?= src
-ALEMBIC ?= $(POETRY) run alembic
+ALEMBIC_CONFIG ?= migrations/alembic.ini
+ALEMBIC ?= $(POETRY) run alembic -c $(ALEMBIC_CONFIG)
 APP_MODULE ?= app.main
+FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis app
 FULL_TIMEOUT ?= 180
 
@@ -90,18 +93,18 @@ check: lint test
 ci: lint test migration-check
 
 docker-up:
-	$(COMPOSE) up --build -d
+	$(COMPOSE) -f $(COMPOSE_FILE) up --build -d
 
 docker-down:
-	$(COMPOSE) down
+	$(COMPOSE) -f $(COMPOSE_FILE) down
 
 full:
-	COMPOSE="$(COMPOSE)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh ./docker/full.sh
+	COMPOSE="$(COMPOSE) -f $(COMPOSE_FILE)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
 
 full-down: docker-down
 
 logs:
-	$(COMPOSE) logs -f app
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f app
 
 up: docker-up
 

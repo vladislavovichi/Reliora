@@ -4,50 +4,46 @@
 
 ## Что это за проект
 
-Проект собран как production-oriented backend с явным `src/` layout, PostgreSQL для долговременного состояния, Redis для runtime-механик и `aiogram` для Telegram delivery.
+Репозиторий собран как production-oriented backend с явным `src/` layout:
 
-Репозиторий разделен по слоям:
+- `src/bot` отвечает за Telegram UX, тексты, клавиатуры и обработку update'ов;
+- `src/application` собирает продуктовые сценарии и orchestration;
+- `src/domain` хранит сущности, правила и контракты;
+- `src/infrastructure` инкапсулирует PostgreSQL, Redis, конфигурацию и logging;
+- `src/app` поднимает runtime, bootstrap и health-проверки.
 
-- `bot` отвечает за Telegram UX, тексты, клавиатуры и обработку update'ов;
-- `application` собирает продуктовые сценарии и orchestration;
-- `domain` хранит сущности, enum'ы, правила и контракты;
-- `infrastructure` инкапсулирует PostgreSQL, Redis, конфигурацию и logging;
-- `app` поднимает runtime, bootstrap и health-проверки.
+Операционные артефакты вынесены отдельно:
+
+- `ops/docker/` — Dockerfile, Compose и startup-скрипты;
+- `ops/env/` — расширенные шаблоны окружения;
+- `migrations/` — Alembic-окружение и ревизии.
 
 ## Возможности
 
-- прием первого клиентского сообщения с автоматическим созданием заявки;
-- продолжение диалога внутри уже открытой заявки;
-- операторская очередь с пагинацией и кнопочными сценариями;
-- активный контекст заявки для live-переписки;
-- эскалация, закрытие и переназначение заявок;
-- библиотека макросов с просмотром, отправкой и администрированием;
-- теги и каталог тегов для операторов;
+- создание заявки из первого сообщения клиента;
+- продолжение переписки в открытой заявке;
+- очередь оператора с пагинацией;
+- активный контекст заявки для live-диалога;
+- эскалация, закрытие и переназначение;
+- макросы и теги;
 - статистика и диагностические проверки;
 - роли `user`, `operator`, `super_admin`;
-- Redis-backed FSM и runtime locks для конкурентных действий.
+- Redis-backed FSM, rate limiting и runtime locks.
 
 ## Архитектура
 
-Рабочий поток выглядит так:
-
-1. Telegram update попадает в `bot`.
-2. Handler вызывает `application`-сервис.
-3. Сервис делегирует use case'ам и доменным правилам.
-4. `infrastructure` выполняет чтение, запись, блокировки, storage и delivery-поддержку.
-
-Ожидаемое направление зависимостей:
+Направление зависимостей:
 
 ```text
 bot -> application -> domain/contracts -> infrastructure
 ```
 
-Принципиальные ограничения:
+Принципы слоя:
 
-- `bot` не принимает продуктовых решений и не работает с raw DB/session;
-- `application` не знает о Telegram-разметке и клавиатурах;
-- `infrastructure` не определяет бизнес-правила helpdesk;
-- тексты, форматтеры и клавиатуры остаются presentation-слоем.
+- `bot` не принимает бизнес-решения и не работает с raw DB/session;
+- `application` не зависит от Telegram presentation;
+- `infrastructure` не определяет продуктовые workflow-правила;
+- тексты, форматтеры и клавиатуры остаются отдельным presentation-слоем.
 
 ## Роли и сценарии
 
@@ -55,25 +51,25 @@ bot -> application -> domain/contracts -> infrastructure
 
 - пишет в бот;
 - получает подтверждение создания заявки;
-- продолжает переписку по открытому обращению;
-- может завершить заявку кнопкой из карточки клиента.
+- продолжает диалог;
+- может завершить заявку из клиентской карточки.
 
 **Оператор**
 
 - берет заявки из очереди;
-- ведет диалог в активном контексте;
+- ведет активный диалог;
 - применяет макросы;
 - меняет теги;
-- закрывает, эскалирует и переназначает заявки;
-- смотрит операционную статистику.
+- закрывает, эскалирует и переназначает обращения;
+- смотрит статистику.
 
 **Суперадминистратор**
 
 - имеет все возможности оператора;
-- управляет составом операторов;
+- управляет операторами;
 - управляет библиотекой макросов.
 
-Суперадминистраторы задаются через `.env`:
+Суперадминистраторы задаются через:
 
 ```dotenv
 AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=12345,67890
@@ -86,9 +82,9 @@ AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=12345,67890
 - Python `3.12+`
 - Poetry
 - PostgreSQL и Redis, либо Docker Compose
-- заполненный `.env`
+- локальный `.env`
 
-Локальный старт:
+Базовый локальный старт:
 
 ```bash
 cp .env.example .env
@@ -98,13 +94,13 @@ make health
 make run
 ```
 
-Если нужен только bootstrap без Telegram polling, оставьте:
+Если нужен bootstrap без Telegram polling:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-Фактический entrypoint приложения:
+Фактический entrypoint:
 
 ```bash
 PYTHONPATH=src poetry run python -m app.main
@@ -112,7 +108,7 @@ PYTHONPATH=src poetry run python -m app.main
 
 ## Запуск через Docker
 
-Полный happy-path запуск со сборкой и проверкой health:
+Полный happy-path запуск:
 
 ```bash
 make full
@@ -126,16 +122,25 @@ make logs
 make docker-down
 ```
 
-Контейнер `app`:
-
-- ждет готовности `postgres` и `redis`;
-- применяет `alembic upgrade head` на старте;
-- поднимает приложение;
-- публикует healthcheck через `python -m app.healthcheck`.
+Root-level команды остаются короткими, хотя Docker-инфраструктура хранится в `ops/docker/`.
 
 ## Конфигурация
 
-Настройки читаются через `pydantic-settings` и сгруппированы по секциям:
+Для обычного старта достаточно корневого шаблона:
+
+```bash
+cp .env.example .env
+```
+
+Он содержит минимальный набор переменных для локального запуска.
+
+Расширенный шаблон с Docker-портами и дополнительными runtime-настройками:
+
+```text
+ops/env/local.env.example
+```
+
+Основные группы настроек:
 
 - `app`
 - `bot`
@@ -144,7 +149,7 @@ make docker-down
 - `redis`
 - `logging`
 
-Базовый набор переменных:
+Минимальный набор:
 
 ```dotenv
 APP__NAME=tg-helpdesk
@@ -153,14 +158,13 @@ APP__DRY_RUN=true
 
 BOT__TOKEN=
 
-AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=123456789,987654321
+AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=123456789
 
 DATABASE__HOST=postgres
 DATABASE__PORT=5432
 DATABASE__USER=helpdesk
 DATABASE__PASSWORD=helpdesk
 DATABASE__DATABASE=helpdesk
-DATABASE__ECHO=false
 
 REDIS__HOST=redis
 REDIS__PORT=6379
@@ -170,63 +174,33 @@ LOGGING__LEVEL=INFO
 LOGGING__STRUCTURED=true
 ```
 
-Дополнительно для локального Compose:
-
-- `POSTGRES_EXPOSE_PORT`
-- `REDIS_EXPOSE_PORT`
-
 ## Миграции
 
-Применить все миграции:
+Alembic-конфиг хранится в `migrations/alembic.ini`.
+
+Основные команды:
 
 ```bash
 make migrate
-```
-
-Создать новую ревизию:
-
-```bash
+make migration-check
 make make-migration name=add_some_change
 ```
 
-Проверить, что metadata и миграции согласованы:
+Прямые вызовы:
 
 ```bash
-make migration-check
-```
-
-Полезные прямые команды Alembic:
-
-```bash
-poetry run alembic current
-poetry run alembic history
-poetry run alembic upgrade head
+poetry run alembic -c migrations/alembic.ini current
+poetry run alembic -c migrations/alembic.ini history
+poetry run alembic -c migrations/alembic.ini upgrade head
 ```
 
 ## Тесты и качество
 
-Форматирование:
-
 ```bash
 make format
-```
-
-Линтинг и типы:
-
-```bash
 make lint
 make typecheck
-```
-
-Тесты:
-
-```bash
 make test
-```
-
-Полный локальный прогон:
-
-```bash
 make check
 make ci
 ```
@@ -240,18 +214,18 @@ make pre-commit-run
 
 ## Make-команды
 
-Основные цели `Makefile`:
+`Makefile` остается основным developer entrypoint. Внутренние пути до `ops/docker/` и `migrations/alembic.ini` скрыты внутри целей.
 
-- `make install` — установить зависимости;
-- `make run` — запустить приложение локально;
-- `make health` — прогнать bootstrap и readiness;
-- `make migrate` — применить миграции;
-- `make test` — запустить тесты;
-- `make lint` — запустить Ruff и mypy;
-- `make check` — локальный quality gate;
-- `make ci` — quality gate плюс проверка миграций;
-- `make docker-up` / `make docker-down` — управлять Compose stack;
-- `make full` — полный Docker happy-path запуск.
+На практике обычно достаточно:
+
+- `make install`
+- `make run`
+- `make health`
+- `make migrate`
+- `make test`
+- `make lint`
+- `make docker-up`
+- `make full`
 
 Полный список:
 
@@ -261,16 +235,16 @@ make help
 
 ## Эксплуатация / диагностика
 
-Операционные точки входа:
+Основные точки входа:
 
 ```bash
 make health
 make run
 make logs
-docker compose ps
+docker compose -f ops/docker/compose.yml ps
 ```
 
-`/health` доступна операторам и суперадминистраторам и показывает:
+Команда `/health` доступна операторам и суперадминистраторам и показывает:
 
 - состояние bootstrap;
 - доступность PostgreSQL;
@@ -278,43 +252,32 @@ docker compose ps
 - готовность Telegram runtime;
 - корректность Redis-backed FSM.
 
-Если приложение не выходит в polling:
-
-- проверьте `BOT__TOKEN`;
-- убедитесь, что `APP__DRY_RUN=false`;
-- прогоните `make health`.
-
 ## Структура проекта
 
 ```text
 .
-├── docker/
+├── Makefile
+├── README.md
 ├── migrations/
+│   ├── alembic.ini
+│   └── versions/
+├── ops/
+│   ├── docker/
+│   └── env/
 ├── src/
 │   ├── app/
 │   ├── application/
 │   ├── bot/
-│   │   ├── formatters/
-│   │   ├── handlers/
-│   │   │   ├── admin/
-│   │   │   ├── operator/
-│   │   │   └── user/
-│   │   ├── keyboards/
-│   │   └── texts/
 │   ├── domain/
 │   └── infrastructure/
-├── tests/
-├── Makefile
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
+└── tests/
 ```
 
 ## Дальнейшее развитие
 
-Ближайшие безопасные направления развития:
+Без смены текущей архитектурной линии проект безопасно расширяется в направлениях:
 
-- расширение SLA-автоматизации;
-- более глубокая наблюдаемость по runtime и delivery;
-- дополнительные сценарии операторской аналитики;
-- развитие внутренних application/use-case контрактов без размывания границ слоев.
+- SLA-автоматизация;
+- более глубокая runtime-наблюдаемость;
+- операционная аналитика;
+- дополнительные application/use-case сценарии без размывания слоев.

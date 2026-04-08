@@ -1,12 +1,13 @@
 services:
   app:
     build:
-      context: .
-    command: ["sh", "/app/docker/entrypoint.sh"]
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
     env_file:
-      - .env
+      - ../../.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -20,7 +21,7 @@ services:
       start_period: 20s
     restart: unless-stopped
     volumes:
-      - .:/app
+      - ../..:/app
 
   postgres:
     image: postgres:16-alpine

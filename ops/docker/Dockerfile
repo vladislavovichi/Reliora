@@ -17,9 +17,8 @@ RUN apt-get update \
 COPY pyproject.toml poetry.lock README.md ./
 RUN poetry install --only main --no-root
 
-COPY alembic.ini ./
 COPY migrations ./migrations
-COPY docker ./docker
+COPY ops/docker ./ops/docker
 COPY src ./src
 
-CMD ["sh", "/app/docker/entrypoint.sh"]
+CMD ["sh", "/app/ops/docker/entrypoint.sh"]
