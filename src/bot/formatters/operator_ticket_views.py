@@ -65,6 +65,7 @@ def format_ticket_details(
         lines.extend(["", "Текущий диалог"])
 
     lines.extend(["", "Тема", ticket.subject])
+    _append_section(lines, "Категория", ticket.category_title)
     _append_section(lines, "Оператор", _format_assigned_operator(ticket))
     _append_section(lines, "Создана", format_timestamp(ticket.created_at))
     if ticket.tags:
@@ -210,6 +211,8 @@ def _build_ticket_context_meta(ticket: TicketDetailsSummary) -> tuple[str, ...]:
     items: list[str] = [f"Оператор · {_format_assigned_operator(ticket)}"]
     if ticket.tags:
         items.append(f"Теги · {format_tags(ticket.tags)}")
+    if ticket.category_title:
+        items.insert(0, f"Категория · {ticket.category_title}")
     return tuple(items)
 
 

@@ -37,6 +37,7 @@ from bot.texts.buttons import (
     BACK_BUTTON_TEXT,
     BACK_TO_TICKET_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
+    CATEGORIES_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
     MY_TICKETS_BUTTON_TEXT,
@@ -53,7 +54,7 @@ def test_build_start_text_for_user_stays_user_friendly() -> None:
     result = build_start_text(UserRole.USER)
 
     assert "Поддержка в Telegram." in result
-    assert "Напишите сообщение" in result
+    assert "выберите тему обращения" in result.lower()
     assert "оператор" not in result
     assert "суперадминистратор" not in result
 
@@ -62,7 +63,7 @@ def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
     result = build_start_text(UserRole.SUPER_ADMIN)
 
     assert "Панель суперадминистратора." in result
-    assert "операторы и макросы" in result
+    assert "операторы, макросы и темы" in result
 
 
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
@@ -91,6 +92,7 @@ def test_build_help_text_for_super_admin_is_menu_first() -> None:
 
     assert f"«{OPERATORS_BUTTON_TEXT}» - открыть состав команды и управление ролями." in result
     assert f"«{MACROS_BUTTON_TEXT}» - открыть библиотеку и редактирование макросов." in result
+    assert f"«{CATEGORIES_BUTTON_TEXT}» - настроить темы новых обращений." in result
     assert "/add_operator" not in result
     assert "/remove_operator" not in result
     assert "/health" not in result
@@ -121,6 +123,7 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
         (QUEUE_BUTTON_TEXT, MY_TICKETS_BUTTON_TEXT),
         (TAKE_NEXT_BUTTON_TEXT, STATS_BUTTON_TEXT),
         (OPERATORS_BUTTON_TEXT, MACROS_BUTTON_TEXT),
+        (CATEGORIES_BUTTON_TEXT,),
         (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
     )
     assert keyboard.input_field_placeholder == "Главное меню"
@@ -190,6 +193,7 @@ def test_format_ticket_details_returns_calm_operator_card() -> None:
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        category_title="Доступ и вход",
         tags=("billing", "vip"),
         last_message_text="Проблема началась после смены пароля и теперь доступ не работает.",
         last_message_sender_type=TicketMessageSenderType.CLIENT,
@@ -201,6 +205,7 @@ def test_format_ticket_details_returns_calm_operator_card() -> None:
     assert "Заявка HD-AAAA1111" in result
     assert "В работе • высокий приоритет" in result
     assert "\nТема\nНе могу войти в личный кабинет" in result
+    assert "\nКатегория\nДоступ и вход" in result
     assert "\nОператор\nИван Петров" in result
     assert "\nСоздана\n07.04.2026 12:30 UTC" in result
     assert "\nТеги\nbilling, vip" in result
@@ -284,6 +289,7 @@ def test_format_active_ticket_context_stays_compact_and_obvious() -> None:
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        category_title="Доступ и вход",
         tags=("billing", "vip"),
         last_message_text="Проблема началась после смены пароля и теперь доступ не работает.",
         last_message_sender_type=TicketMessageSenderType.CLIENT,
@@ -295,6 +301,7 @@ def test_format_active_ticket_context_stays_compact_and_obvious() -> None:
     assert result.startswith("Текущий диалог")
     assert "HD-AAAA1111 · В работе • высокий приоритет" in result
     assert "Не могу войти в личный кабинет" in result
+    assert "Категория · Доступ и вход" in result
     assert "Оператор · Иван Петров" in result
     assert "Теги · billing, vip" in result
 

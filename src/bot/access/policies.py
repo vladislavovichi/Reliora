@@ -13,6 +13,7 @@ PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
     **{button_text: Permission.MANAGE_OPERATORS for button_text in SUPER_ADMIN_NAVIGATION_BUTTONS},
 }
 PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
+    ("admin_category:", Permission.MANAGE_OPERATORS),
     ("admin_macro:", Permission.MANAGE_OPERATORS),
     ("admin_operator:", Permission.MANAGE_OPERATORS),
     ("operator:", Permission.ACCESS_OPERATOR),
@@ -27,6 +28,8 @@ PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {
     "AdminMacroStates:creating_preview": Permission.MANAGE_OPERATORS,
     "AdminMacroStates:editing_title": Permission.MANAGE_OPERATORS,
     "AdminMacroStates:editing_body": Permission.MANAGE_OPERATORS,
+    "AdminCategoryStates:creating_title": Permission.MANAGE_OPERATORS,
+    "AdminCategoryStates:editing_title": Permission.MANAGE_OPERATORS,
     "OperatorTicketStates:replying": Permission.ACCESS_OPERATOR,
     "OperatorTicketStates:reassigning": Permission.ACCESS_OPERATOR,
 }

@@ -4,22 +4,22 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import MagicData
+from aiogram.filters import MagicData, StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import ClientTicketCallback
-from bot.delivery import deliver_client_message_to_operator, deliver_ticket_closed_to_operator
+from bot.delivery import deliver_ticket_closed_to_operator
 from bot.handlers.operator.active_context import delete_live_session_for_ticket
 from bot.handlers.operator.parsers import parse_ticket_public_id
+from bot.handlers.user.intake import start_client_intake
+from bot.handlers.user.workflow import process_client_ticket_message
 from bot.keyboards.inline.client_actions import (
     build_client_ticket_finish_confirmation_markup,
     build_client_ticket_markup,
 )
-from bot.keyboards.inline.operator_actions import (
-    build_ticket_actions_markup,
-    build_ticket_switch_markup,
-)
+from bot.keyboards.inline.operator_actions import build_ticket_switch_markup
 from bot.texts.client import (
     FINISH_TICKET_CANCELLED_TEXT,
     FINISH_TICKET_LOCKED_TEXT,
@@ -27,8 +27,6 @@ from bot.texts.client import (
     build_finish_ticket_prompt_text,
     build_ticket_already_closed_text,
     build_ticket_closed_text,
-    build_ticket_created_text,
-    build_ticket_message_added_text,
 )
 from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
 from domain.enums.roles import UserRole
@@ -47,9 +45,14 @@ router = Router(name="client")
 logger = logging.getLogger(__name__)
 
 
-@router.message(MagicData(F.event_user_role == UserRole.USER), F.text & ~F.text.startswith("/"))
+@router.message(
+    StateFilter(None),
+    MagicData(F.event_user_role == UserRole.USER),
+    F.text & ~F.text.startswith("/"),
+)
 async def handle_client_text(
     message: Message,
+    state: FSMContext,
     bot: Bot,
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
@@ -69,87 +72,28 @@ async def handle_client_text(
         await message.answer(CHAT_RATE_LIMIT_TEXT)
         return
 
-    try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            ticket = await helpdesk_service.create_ticket_from_client_message(
-                client_chat_id=message.chat.id,
-                telegram_message_id=message.message_id,
-                text=message.text,
-            )
-            ticket_details = await helpdesk_service.get_ticket_details(
-                ticket_public_id=ticket.public_id,
-            )
-    except InvalidTicketTransitionError as exc:
-        await message.answer(str(exc))
-        return
-
-    if ticket_details is None:
-        await message.answer(SERVICE_UNAVAILABLE_TEXT)
-        return
-
-    await ticket_live_session_store.refresh_session(
-        ticket_public_id=str(ticket.public_id),
-        client_chat_id=message.chat.id,
-        operator_telegram_user_id=ticket_details.assigned_operator_telegram_user_id,
-    )
-
-    logger.info(
-        "Client ticket message processed client_chat_id=%s ticket=%s created=%s",
-        message.chat.id,
-        ticket.public_number,
-        ticket.created,
-    )
-
-    if ticket.created:
-        await ticket_stream_publisher.publish_new_ticket(
-            ticket_id=str(ticket.public_id),
-            client_chat_id=message.chat.id,
-            subject=message.text.strip()[:255] or "Обращение клиента",
+    async with helpdesk_service_factory() as helpdesk_service:
+        active_ticket = await helpdesk_service.get_client_active_ticket(
+            client_chat_id=message.chat.id
         )
-        await message.answer(
-            build_ticket_created_text(ticket.public_number),
-            reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
-        )
-        return
-
-    operator_chat_id = ticket_details.assigned_operator_telegram_user_id
-    operator_connected = operator_chat_id is not None
-    if operator_chat_id is not None:
-        active_ticket_public_id = await operator_active_ticket_store.get_active_ticket(
-            operator_id=operator_chat_id
-        )
-        is_active_context = active_ticket_public_id == str(ticket.public_id)
-        delivery_error = await deliver_client_message_to_operator(
-            bot,
-            chat_id=operator_chat_id,
-            public_number=ticket.public_number,
-            body=message.text,
-            reply_markup=(
-                build_ticket_actions_markup(
-                    ticket_public_id=ticket.public_id,
-                    status=ticket_details.status,
+        if active_ticket is None:
+            categories = await helpdesk_service.list_client_ticket_categories()
+            if categories:
+                await start_client_intake(
+                    message=message,
+                    state=state,
+                    categories=categories,
                 )
-                if is_active_context
-                else build_ticket_switch_markup(ticket_public_id=ticket.public_id)
-            ),
-            active_context=is_active_context,
-            logger=logger,
-        )
-        if delivery_error is not None:
-            logger.warning(
-                "Failed to forward client message to operator "
-                "ticket=%s operator_chat_id=%s error=%s",
-                ticket.public_number,
-                ticket_details.assigned_operator_telegram_user_id,
-                delivery_error,
-            )
+                return
 
-    await message.answer(
-        build_ticket_message_added_text(
-            ticket.public_number,
-            operator_connected=operator_connected,
-        ),
-        reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
+    await process_client_ticket_message(
+        message=message,
+        bot=bot,
+        helpdesk_service_factory=helpdesk_service_factory,
+        operator_active_ticket_store=operator_active_ticket_store,
+        ticket_live_session_store=ticket_live_session_store,
+        ticket_stream_publisher=ticket_stream_publisher,
+        logger=logger,
     )
 
 

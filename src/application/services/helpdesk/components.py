@@ -4,7 +4,17 @@ from dataclasses import dataclass
 
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
-from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase
+from application.use_cases.tickets.categories import (
+    CreateTicketCategoryUseCase,
+    GetTicketCategoryUseCase,
+    ListTicketCategoriesUseCase,
+    SetTicketCategoryActiveUseCase,
+    UpdateTicketCategoryTitleUseCase,
+)
+from application.use_cases.tickets.creation import (
+    CreateTicketFromClientMessageUseCase,
+    GetActiveClientTicketUseCase,
+)
 from application.use_cases.tickets.macros import (
     ApplyMacroToTicketUseCase,
     CreateMacroUseCase,
@@ -53,6 +63,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketCategoryRepository,
     TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
@@ -63,6 +74,7 @@ from domain.contracts.repositories import (
 @dataclass(slots=True, frozen=True)
 class HelpdeskTicketUseCases:
     create_from_client_message: CreateTicketFromClientMessageUseCase
+    get_active_client_ticket: GetActiveClientTicketUseCase
     add_message: AddMessageToTicketUseCase
     assign_ticket: AssignTicketToOperatorUseCase
     get_next_queued: GetNextQueuedTicketUseCase
@@ -85,6 +97,11 @@ class HelpdeskOperatorUseCases:
 
 @dataclass(slots=True, frozen=True)
 class HelpdeskCatalogUseCases:
+    list_ticket_categories: ListTicketCategoriesUseCase
+    get_ticket_category: GetTicketCategoryUseCase
+    create_ticket_category: CreateTicketCategoryUseCase
+    update_ticket_category_title: UpdateTicketCategoryTitleUseCase
+    set_ticket_category_active: SetTicketCategoryActiveUseCase
     list_macros: ListMacrosUseCase
     get_macro: GetMacroUseCase
     create_macro: CreateMacroUseCase
@@ -125,6 +142,7 @@ def build_helpdesk_components(
     macro_repository: MacroRepository,
     sla_policy_repository: SLAPolicyRepository,
     tag_repository: TagRepository,
+    ticket_category_repository: TicketCategoryRepository,
     ticket_tag_repository: TicketTagRepository,
     super_admin_telegram_user_ids: frozenset[int],
 ) -> HelpdeskComponents:
@@ -138,6 +156,9 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,
                 ticket_event_repository=ticket_event_repository,
+            ),
+            get_active_client_ticket=GetActiveClientTicketUseCase(
+                ticket_repository=ticket_repository
             ),
             add_message=AddMessageToTicketUseCase(
                 ticket_repository=ticket_repository,
@@ -189,6 +210,21 @@ def build_helpdesk_components(
             ),
         ),
         catalog=HelpdeskCatalogUseCases(
+            list_ticket_categories=ListTicketCategoriesUseCase(
+                ticket_category_repository=ticket_category_repository
+            ),
+            get_ticket_category=GetTicketCategoryUseCase(
+                ticket_category_repository=ticket_category_repository
+            ),
+            create_ticket_category=CreateTicketCategoryUseCase(
+                ticket_category_repository=ticket_category_repository
+            ),
+            update_ticket_category_title=UpdateTicketCategoryTitleUseCase(
+                ticket_category_repository=ticket_category_repository
+            ),
+            set_ticket_category_active=SetTicketCategoryActiveUseCase(
+                ticket_category_repository=ticket_category_repository
+            ),
             list_macros=ListMacrosUseCase(macro_repository=macro_repository),
             get_macro=GetMacroUseCase(macro_repository=macro_repository),
             create_macro=CreateMacroUseCase(macro_repository=macro_repository),

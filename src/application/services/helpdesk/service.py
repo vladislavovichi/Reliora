@@ -19,6 +19,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketCategoryRepository,
     TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
@@ -43,6 +44,7 @@ class HelpdeskService(
     macro_repository: MacroRepository
     sla_policy_repository: SLAPolicyRepository
     tag_repository: TagRepository
+    ticket_category_repository: TicketCategoryRepository
     ticket_tag_repository: TicketTagRepository
     super_admin_telegram_user_ids: frozenset[int]
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
@@ -60,6 +62,7 @@ class HelpdeskService(
             macro_repository=self.macro_repository,
             sla_policy_repository=self.sla_policy_repository,
             tag_repository=self.tag_repository,
+            ticket_category_repository=self.ticket_category_repository,
             ticket_tag_repository=self.ticket_tag_repository,
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
         )

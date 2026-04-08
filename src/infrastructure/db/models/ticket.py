@@ -29,7 +29,7 @@ from infrastructure.db.base import Base
 from infrastructure.db.models.mixins import CreatedAtMixin, TimestampMixin, enum_values
 
 if TYPE_CHECKING:
-    from infrastructure.db.models.catalog import Tag
+    from infrastructure.db.models.catalog import Tag, TicketCategory
     from infrastructure.db.models.operator import Operator
 
 
@@ -64,6 +64,12 @@ class Ticket(TimestampMixin, Base):
         index=True,
     )
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    category_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("ticket_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     assigned_operator_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("operators.id", ondelete="SET NULL"),
@@ -79,6 +85,7 @@ class Ticket(TimestampMixin, Base):
         back_populates="assigned_tickets",
         foreign_keys=[assigned_operator_id],
     )
+    category: Mapped[TicketCategory | None] = relationship(back_populates="tickets")
     messages: Mapped[list[TicketMessage]] = relationship(
         back_populates="ticket",
         cascade="all, delete-orphan",

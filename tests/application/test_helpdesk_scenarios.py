@@ -16,6 +16,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketCategoryRepository,
     TicketEventRepository,
     TicketMessageRepository,
     TicketRepository,
@@ -39,6 +40,7 @@ class InMemoryTicketRecord:
     status: TicketStatus
     priority: TicketPriority
     subject: str
+    category_id: int | None
     assigned_operator_id: int | None
     created_at: datetime
     updated_at: datetime
@@ -50,6 +52,8 @@ class InMemoryTicketRecord:
     last_message_sender_type: TicketMessageSenderType | None = None
     message_history: tuple[TicketMessageDetails, ...] = ()
     tags: tuple[str, ...] = ()
+    category_code: str | None = None
+    category_title: str | None = None
 
 
 @dataclass(slots=True)
@@ -149,6 +153,7 @@ class InMemoryTicketRepository:
         *,
         client_chat_id: int,
         subject: str,
+        category_id: int | None = None,
         priority: TicketPriority = TicketPriority.NORMAL,
     ) -> InMemoryTicketRecord:
         now = datetime.now(UTC)
@@ -159,6 +164,7 @@ class InMemoryTicketRepository:
             status=TicketStatus.NEW,
             priority=priority,
             subject=subject,
+            category_id=category_id,
             assigned_operator_id=None,
             created_at=now,
             updated_at=now,
@@ -189,6 +195,9 @@ class InMemoryTicketRepository:
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
             closed_at=ticket.closed_at,
+            category_id=ticket.category_id,
+            category_code=ticket.category_code,
+            category_title=ticket.category_title,
             tags=ticket.tags,
             last_message_text=ticket.last_message_text,
             last_message_sender_type=ticket.last_message_sender_type,
@@ -480,6 +489,47 @@ class EmptyTagRepository:
         return []
 
 
+class EmptyTicketCategoryRepository:
+    async def list_all(self, *, include_inactive: bool = True) -> Sequence[SimpleNamespace]:
+        return []
+
+    async def get_by_id(self, *, category_id: int) -> SimpleNamespace | None:
+        return None
+
+    async def get_by_code(self, *, code: str) -> SimpleNamespace | None:
+        return None
+
+    async def create(
+        self,
+        *,
+        code: str,
+        title: str,
+        sort_order: int,
+        is_active: bool = True,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=1,
+            code=code,
+            title=title,
+            sort_order=sort_order,
+            is_active=is_active,
+        )
+
+    async def update_title(self, *, category_id: int, title: str) -> SimpleNamespace | None:
+        return None
+
+    async def set_active(
+        self,
+        *,
+        category_id: int,
+        is_active: bool,
+    ) -> SimpleNamespace | None:
+        return None
+
+    async def get_next_sort_order(self) -> int:
+        return 10
+
+
 class EmptyTicketTagRepository:
     async def list_for_ticket(self, *, ticket_id: int) -> Sequence[SimpleNamespace]:
         return []
@@ -522,6 +572,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
             macro_repository=cast(MacroRepository, EmptyMacroRepository()),
             sla_policy_repository=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),
             tag_repository=cast(TagRepository, EmptyTagRepository()),
+            ticket_category_repository=cast(
+                TicketCategoryRepository, EmptyTicketCategoryRepository()
+            ),
             ticket_tag_repository=cast(TicketTagRepository, EmptyTicketTagRepository()),
             super_admin_telegram_user_ids=frozenset({super_admin_telegram_user_id}),
         ),

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.entities.ticket import Ticket as TicketEntity
 from domain.entities.ticket import TicketDetails, TicketMessageDetails
 from domain.enums.tickets import TicketMessageSenderType, TicketStatus
-from infrastructure.db.models.catalog import Tag
+from infrastructure.db.models.catalog import Tag, TicketCategory
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import Ticket as TicketModel
 from infrastructure.db.models.ticket import TicketMessage, TicketTag
@@ -35,6 +35,7 @@ class SqlAlchemyTicketReadRepository:
         assigned_operator_name, assigned_operator_telegram_user_id = (
             await self._get_assigned_operator_details(ticket.assigned_operator_id)
         )
+        category_code, category_title = await self._get_category_details(ticket.category_id)
         last_message_text, last_message_sender_type = await self._get_last_message(ticket.id)
         tags = await self._list_ticket_tags(ticket.id)
         message_history = await self._list_ticket_messages(ticket.id)
@@ -53,6 +54,9 @@ class SqlAlchemyTicketReadRepository:
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
             closed_at=ticket.closed_at,
+            category_id=ticket.category_id,
+            category_code=category_code,
+            category_title=category_title,
             tags=tags,
             last_message_text=last_message_text,
             last_message_sender_type=last_message_sender_type,
@@ -161,6 +165,20 @@ class SqlAlchemyTicketReadRepository:
         if row is None:
             return None, None
         return cast(str, row[0]), cast(TicketMessageSenderType, row[1])
+
+    async def _get_category_details(self, category_id: int | None) -> tuple[str | None, str | None]:
+        if category_id is None:
+            return None, None
+
+        result = await self.session.execute(
+            select(TicketCategory.code, TicketCategory.title).where(
+                TicketCategory.id == category_id
+            )
+        )
+        row = result.first()
+        if row is None:
+            return None, None
+        return cast(str | None, row[0]), cast(str | None, row[1])
 
     async def _list_ticket_tags(self, ticket_id: int) -> tuple[str, ...]:
         statement = (

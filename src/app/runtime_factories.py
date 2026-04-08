@@ -20,6 +20,7 @@ from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
     SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
+    SqlAlchemyTicketCategoryRepository,
     SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
@@ -83,6 +84,7 @@ def build_helpdesk_service(
         macro_repository=SqlAlchemyMacroRepository(session),
         sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
         tag_repository=SqlAlchemyTagRepository(session),
+        ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         sla_deadline_scheduler=sla_deadline_scheduler,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,

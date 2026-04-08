@@ -19,6 +19,7 @@ class TicketRepository(Protocol):
         *,
         client_chat_id: int,
         subject: str,
+        category_id: int | None = None,
         priority: TicketPriority = TicketPriority.NORMAL,
     ) -> Ticket:
         """Create and return a new ticket."""
@@ -162,6 +163,54 @@ class MacroRecord(Protocol):
     id: int
     title: str
     body: str
+
+
+class TicketCategoryRecord(Protocol):
+    id: int
+    code: str
+    title: str
+    is_active: bool
+    sort_order: int
+
+
+class TicketCategoryRepository(Protocol):
+    async def list_all(self, *, include_inactive: bool = True) -> Sequence[TicketCategoryRecord]:
+        """Return configured ticket categories ordered for navigation and analytics."""
+
+    async def get_by_id(self, *, category_id: int) -> TicketCategoryRecord | None:
+        """Return a category by identifier."""
+
+    async def get_by_code(self, *, code: str) -> TicketCategoryRecord | None:
+        """Return a category by code."""
+
+    async def create(
+        self,
+        *,
+        code: str,
+        title: str,
+        sort_order: int,
+        is_active: bool = True,
+    ) -> TicketCategoryRecord:
+        """Create and return a category."""
+
+    async def update_title(
+        self,
+        *,
+        category_id: int,
+        title: str,
+    ) -> TicketCategoryRecord | None:
+        """Update a category title and return the stored record."""
+
+    async def set_active(
+        self,
+        *,
+        category_id: int,
+        is_active: bool,
+    ) -> TicketCategoryRecord | None:
+        """Toggle a category availability flag and return the stored record."""
+
+    async def get_next_sort_order(self) -> int:
+        """Return the next available sort order for a new category."""
 
 
 class MacroRepository(Protocol):

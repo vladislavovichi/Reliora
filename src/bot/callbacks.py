@@ -27,6 +27,11 @@ class ClientTicketCallback(CallbackData, prefix="client"):
     ticket_public_id: str
 
 
+class ClientIntakeCallback(CallbackData, prefix="client_intake"):
+    action: Literal["pick", "cancel"]
+    category_id: int
+
+
 class OperatorQueueCallback(CallbackData, prefix="operator_queue"):
     action: Literal["page", "noop"]
     scope: Literal["queue", "mine"]
@@ -76,4 +81,19 @@ class AdminMacroCallback(CallbackData, prefix="admin_macro"):
         "preview_cancel",
     ]
     macro_id: int
+    page: int
+
+
+class AdminCategoryCallback(CallbackData, prefix="admin_category"):
+    action: Literal[
+        "page",
+        "noop",
+        "view",
+        "create",
+        "back_list",
+        "edit_title",
+        "enable",
+        "disable",
+    ]
+    category_id: int
     page: int

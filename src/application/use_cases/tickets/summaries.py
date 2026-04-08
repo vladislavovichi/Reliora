@@ -35,6 +35,7 @@ class QueuedTicketSummary:
     subject: str
     priority: str
     status: TicketStatus
+    category_title: str | None = None
 
 
 def build_queued_ticket_summary(ticket: Ticket) -> QueuedTicketSummary:
@@ -54,6 +55,7 @@ class OperatorTicketSummary:
     subject: str
     priority: str
     status: TicketStatus
+    category_title: str | None = None
 
 
 def build_operator_ticket_summary(ticket: Ticket) -> OperatorTicketSummary:
@@ -97,10 +99,13 @@ class TicketDetailsSummary:
     assigned_operator_name: str | None
     assigned_operator_telegram_user_id: int | None
     created_at: datetime
-    tags: tuple[str, ...]
-    last_message_text: str | None
-    last_message_sender_type: TicketMessageSenderType | None
-    message_history: tuple[TicketMessageSummary, ...]
+    category_id: int | None = None
+    category_code: str | None = None
+    category_title: str | None = None
+    tags: tuple[str, ...] = ()
+    last_message_text: str | None = None
+    last_message_sender_type: TicketMessageSenderType | None = None
+    message_history: tuple[TicketMessageSummary, ...] = ()
 
 
 def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSummary:
@@ -115,6 +120,9 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         assigned_operator_name=ticket.assigned_operator_name,
         assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
         created_at=ticket.created_at,
+        category_id=ticket.category_id,
+        category_code=ticket.category_code,
+        category_title=ticket.category_title,
         tags=ticket.tags,
         last_message_text=ticket.last_message_text,
         last_message_sender_type=ticket.last_message_sender_type,
@@ -167,6 +175,15 @@ class TagSummary:
 
 
 @dataclass(slots=True)
+class TicketCategorySummary:
+    id: int
+    code: str
+    title: str
+    is_active: bool
+    sort_order: int
+
+
+@dataclass(slots=True)
 class MacroApplicationResult:
     ticket: TicketSummary
     client_chat_id: int
@@ -175,6 +192,10 @@ class MacroApplicationResult:
 
 class MacroManagementError(Exception):
     """Raised when a macro management action cannot be completed."""
+
+
+class CategoryManagementError(Exception):
+    """Raised when a category management action cannot be completed."""
 
 
 @dataclass(slots=True)

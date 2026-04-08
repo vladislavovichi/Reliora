@@ -10,6 +10,7 @@ from application.use_cases.tickets.summaries import (
     OperatorReplyResult,
     OperatorTicketSummary,
     QueuedTicketSummary,
+    TicketCategorySummary,
     TicketDetailsSummary,
     TicketStats,
     TicketSummary,
@@ -38,6 +39,31 @@ class HelpdeskTicketOperations:
         )
         await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
+
+    async def create_ticket_from_client_intake(
+        self,
+        *,
+        client_chat_id: int,
+        telegram_message_id: int,
+        category_id: int,
+        text: str,
+    ) -> TicketSummary:
+        result = await self._components.tickets.create_from_client_message(
+            client_chat_id=client_chat_id,
+            telegram_message_id=telegram_message_id,
+            text=text,
+            category_id=category_id,
+        )
+        await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+        return result
+
+    async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
+        return await self._components.tickets.get_active_client_ticket(
+            client_chat_id=client_chat_id
+        )
+
+    async def list_client_ticket_categories(self) -> Sequence[TicketCategorySummary]:
+        return await self._components.catalog.list_ticket_categories(include_inactive=False)
 
     async def add_message_to_ticket(
         self,

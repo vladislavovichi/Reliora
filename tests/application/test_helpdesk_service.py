@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.use_cases.tickets.summaries import (
+    CategoryManagementError,
     MacroManagementError,
     OperatorManagementError,
     SLAAutoReassignmentTarget,
@@ -70,15 +71,18 @@ class StubTicketRepository:
         *,
         client_chat_id: int,
         subject: str,
+        category_id: int | None = None,
         priority: object = None,
     ) -> SimpleNamespace:
         self.create_calls.append(
             {
                 "client_chat_id": client_chat_id,
                 "subject": subject,
+                "category_id": category_id,
                 "priority": priority,
             }
         )
+        self.created_ticket.category_id = category_id
         return self.created_ticket
 
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> SimpleNamespace | None:
@@ -106,6 +110,9 @@ class StubTicketRepository:
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
             closed_at=ticket.closed_at,
+            category_id=getattr(ticket, "category_id", None),
+            category_code=getattr(ticket, "category_code", None),
+            category_title=getattr(ticket, "category_title", None),
             tags=tuple(getattr(ticket, "tags", ())),
             last_message_text=getattr(ticket, "last_message_text", None),
             last_message_sender_type=getattr(ticket, "last_message_sender_type", None),
@@ -559,6 +566,88 @@ class StubTicketTagRepository:
         return True
 
 
+@dataclass
+class StubTicketCategoryRepository:
+    initial_categories: list[tuple[int, str, str, bool, int]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.records_by_id: dict[int, SimpleNamespace] = {}
+        self.records_by_code: dict[str, SimpleNamespace] = {}
+        self.next_id = 1
+        for category_id, code, title, is_active, sort_order in self.initial_categories:
+            record = SimpleNamespace(
+                id=category_id,
+                code=code,
+                title=title,
+                is_active=is_active,
+                sort_order=sort_order,
+            )
+            self.records_by_id[category_id] = record
+            self.records_by_code[code] = record
+            self.next_id = max(self.next_id, category_id + 1)
+
+    async def list_all(self, *, include_inactive: bool = True) -> list[SimpleNamespace]:
+        items = sorted(
+            self.records_by_id.values(),
+            key=lambda category: (category.sort_order, category.title, category.id),
+        )
+        if include_inactive:
+            return items
+        return [category for category in items if category.is_active]
+
+    async def get_by_id(self, *, category_id: int) -> SimpleNamespace | None:
+        return self.records_by_id.get(category_id)
+
+    async def get_by_code(self, *, code: str) -> SimpleNamespace | None:
+        return self.records_by_code.get(code)
+
+    async def create(
+        self,
+        *,
+        code: str,
+        title: str,
+        sort_order: int,
+        is_active: bool = True,
+    ) -> SimpleNamespace:
+        record = SimpleNamespace(
+            id=self.next_id,
+            code=code,
+            title=title,
+            is_active=is_active,
+            sort_order=sort_order,
+        )
+        self.next_id += 1
+        self.records_by_id[record.id] = record
+        self.records_by_code[record.code] = record
+        return record
+
+    async def update_title(self, *, category_id: int, title: str) -> SimpleNamespace | None:
+        record = self.records_by_id.get(category_id)
+        if record is None:
+            return None
+        record.title = title
+        return record
+
+    async def set_active(
+        self,
+        *,
+        category_id: int,
+        is_active: bool,
+    ) -> SimpleNamespace | None:
+        record = self.records_by_id.get(category_id)
+        if record is None:
+            return None
+        record.is_active = is_active
+        return record
+
+    async def get_next_sort_order(self) -> int:
+        current_max = max(
+            (category.sort_order for category in self.records_by_id.values()),
+            default=0,
+        )
+        return current_max + 10
+
+
 def build_ticket(
     *,
     ticket_id: int,
@@ -571,6 +660,9 @@ def build_ticket(
     last_message_sender_type: TicketMessageSenderType | None = None,
     message_history: tuple[TicketMessageDetails, ...] = (),
     tags: tuple[str, ...] = (),
+    category_id: int | None = None,
+    category_code: str | None = None,
+    category_title: str | None = None,
     priority: TicketPriority = TicketPriority.NORMAL,
     created_at: datetime | None = None,
     updated_at: datetime | None = None,
@@ -585,6 +677,7 @@ def build_ticket(
         status=status,
         priority=priority,
         subject="Need help",
+        category_id=category_id,
         assigned_operator_id=assigned_operator_id,
         created_at=created_at or now,
         updated_at=updated_at or now,
@@ -592,6 +685,8 @@ def build_ticket(
         closed_at=closed_at,
         assigned_operator_name=assigned_operator_name,
         assigned_operator_telegram_user_id=assigned_operator_telegram_user_id,
+        category_code=category_code,
+        category_title=category_title,
         last_message_text=last_message_text,
         last_message_sender_type=last_message_sender_type,
         message_history=message_history,
@@ -608,6 +703,7 @@ def build_service(
     macro_repository: Any | None = None,
     sla_policy_repository: Any | None = None,
     tag_repository: StubTagRepository | None = None,
+    ticket_category_repository: StubTicketCategoryRepository | None = None,
     ticket_tag_repository: StubTicketTagRepository | None = None,
     super_admin_telegram_user_ids: frozenset[int] | None = None,
 ) -> HelpdeskService:
@@ -631,6 +727,13 @@ def build_service(
             }
         ),
         tag_repository=active_tag_repository,
+        ticket_category_repository=ticket_category_repository
+        or StubTicketCategoryRepository(
+            initial_categories=[
+                (1, "access", "Доступ и вход", True, 10),
+                (2, "other", "Другая тема", True, 90),
+            ]
+        ),
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
         super_admin_telegram_user_ids=super_admin_telegram_user_ids or frozenset({42}),
@@ -700,6 +803,24 @@ async def test_follow_up_client_message_reuses_active_open_ticket() -> None:
     assert [event["event_type"] for event in event_repository.added_events] == [
         TicketEventType.CLIENT_MESSAGE_ADDED,
     ]
+
+
+async def test_create_ticket_from_client_intake_persists_selected_category() -> None:
+    public_id = uuid4()
+    created_ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.NEW)
+    ticket_repository = StubTicketRepository(created_ticket=created_ticket)
+    service = build_service(ticket_repository=ticket_repository)
+
+    result = await service.create_ticket_from_client_intake(
+        client_chat_id=555,
+        telegram_message_id=777,
+        category_id=2,
+        text="Нужна помощь с другим вопросом",
+    )
+
+    assert result.public_id == public_id
+    assert ticket_repository.create_calls[0]["category_id"] == 2
+    assert created_ticket.category_id == 2
 
 
 async def test_add_operator_message_logs_event_and_sets_first_response_timestamp() -> None:
@@ -832,6 +953,72 @@ async def test_promote_operator_marks_user_as_operator() -> None:
     assert result.changed is True
     assert result.operator.telegram_user_id == 3001
     assert 3001 in operator_repository.active_operator_ids
+
+
+async def test_list_client_ticket_categories_returns_only_active_items_in_order() -> None:
+    category_repository = StubTicketCategoryRepository(
+        initial_categories=[
+            (3, "other", "Другая тема", True, 90),
+            (1, "access", "Доступ и вход", True, 10),
+            (2, "billing", "Оплата", False, 20),
+        ]
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        ticket_category_repository=category_repository,
+    )
+
+    result = await service.list_client_ticket_categories()
+
+    assert [(category.code, category.title) for category in result] == [
+        ("access", "Доступ и вход"),
+        ("other", "Другая тема"),
+    ]
+
+
+async def test_ticket_category_management_supports_create_rename_and_toggle() -> None:
+    category_repository = StubTicketCategoryRepository(
+        initial_categories=[(1, "access", "Доступ и вход", True, 10)]
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        ticket_category_repository=category_repository,
+    )
+
+    created = await service.create_ticket_category(title="Техническая ошибка")
+    renamed = await service.update_ticket_category_title(
+        category_id=created.id,
+        title="Технический сбой",
+    )
+    disabled = await service.set_ticket_category_active(
+        category_id=created.id,
+        is_active=False,
+    )
+
+    assert created.code == "tehnicheskaya-oshibka"
+    assert renamed is not None
+    assert renamed.title == "Технический сбой"
+    assert disabled is not None
+    assert disabled.is_active is False
+
+
+async def test_ticket_category_creation_rejects_empty_title() -> None:
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        )
+    )
+
+    try:
+        await service.create_ticket_category(title="   ")
+    except CategoryManagementError as exc:
+        assert str(exc) == "Название темы не должно быть пустым."
+    else:
+        raise AssertionError("expected CategoryManagementError")
 
 
 async def test_revoke_operator_removes_operator_rights() -> None:
@@ -1108,6 +1295,9 @@ async def test_get_ticket_details_returns_operator_facing_summary_with_tags() ->
             ),
         ),
         tags=("billing", "vip"),
+        category_id=1,
+        category_code="access",
+        category_title="Доступ и вход",
     )
     service = build_service(ticket_repository=StubTicketRepository(created_ticket=ticket))
 
@@ -1118,6 +1308,7 @@ async def test_get_ticket_details_returns_operator_facing_summary_with_tags() ->
     assert result.public_number.startswith("HD-")
     assert result.assigned_operator_name == "Operator One"
     assert result.assigned_operator_telegram_user_id == 1001
+    assert result.category_title == "Доступ и вход"
     assert result.last_message_text == "Client says hello"
     assert result.last_message_sender_type == TicketMessageSenderType.CLIENT
     assert result.message_history[0].text == "Client says hello"

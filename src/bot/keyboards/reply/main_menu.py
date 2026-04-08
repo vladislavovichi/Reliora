@@ -4,6 +4,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
+    CATEGORIES_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
     MY_TICKETS_BUTTON_TEXT,
@@ -43,6 +44,7 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
                     KeyboardButton(text=MACROS_BUTTON_TEXT),
                 ]
             )
+            keyboard_rows.append([KeyboardButton(text=CATEGORIES_BUTTON_TEXT)])
 
         keyboard_rows.append(
             [

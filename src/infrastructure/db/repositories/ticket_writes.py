@@ -19,6 +19,7 @@ class SqlAlchemyTicketWriteRepository:
         *,
         client_chat_id: int,
         subject: str,
+        category_id: int | None = None,
         priority: TicketPriority = TicketPriority.NORMAL,
     ) -> TicketEntity:
         ticket = TicketModel(
@@ -26,6 +27,7 @@ class SqlAlchemyTicketWriteRepository:
             client_chat_id=client_chat_id,
             status=TicketStatus.NEW,
             subject=subject,
+            category_id=category_id,
             priority=priority,
         )
         self.session.add(ticket)

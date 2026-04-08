@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, Enum, Identity, String, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Enum, Identity, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from domain.enums.tickets import TicketPriority
@@ -10,7 +10,7 @@ from infrastructure.db.base import Base
 from infrastructure.db.models.mixins import CreatedAtMixin, enum_values
 
 if TYPE_CHECKING:
-    from infrastructure.db.models.ticket import TicketTag
+    from infrastructure.db.models.ticket import Ticket, TicketTag
 
 
 class Macro(CreatedAtMixin, Base):
@@ -53,3 +53,20 @@ class Tag(CreatedAtMixin, Base):
         back_populates="tag",
         cascade="all, delete-orphan",
     )
+
+
+class TicketCategory(Base):
+    __tablename__ = "ticket_categories"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=100, server_default="100")
+
+    tickets: Mapped[list[Ticket]] = relationship(back_populates="category")

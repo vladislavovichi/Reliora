@@ -11,6 +11,7 @@ from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
     MacroSummary,
     TagSummary,
+    TicketCategorySummary,
     TicketTagMutationResult,
     TicketTagsSummary,
 )
@@ -19,6 +20,73 @@ from application.use_cases.tickets.summaries import (
 class HelpdeskCatalogOperations:
     _components: HelpdeskComponents
     _require_permission_if_actor: Callable[..., Awaitable[None]]
+
+    async def list_ticket_categories(
+        self,
+        *,
+        actor_telegram_user_id: int | None = None,
+    ) -> Sequence[TicketCategorySummary]:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.list_ticket_categories(include_inactive=True)
+
+    async def get_ticket_category(
+        self,
+        *,
+        category_id: int,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketCategorySummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.get_ticket_category(category_id=category_id)
+
+    async def create_ticket_category(
+        self,
+        *,
+        title: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketCategorySummary:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.create_ticket_category(title=title)
+
+    async def update_ticket_category_title(
+        self,
+        *,
+        category_id: int,
+        title: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketCategorySummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.update_ticket_category_title(
+            category_id=category_id,
+            title=title,
+        )
+
+    async def set_ticket_category_active(
+        self,
+        *,
+        category_id: int,
+        is_active: bool,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketCategorySummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.set_ticket_category_active(
+            category_id=category_id,
+            is_active=is_active,
+        )
 
     async def list_macros(
         self,

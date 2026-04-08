@@ -13,13 +13,14 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag
+from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag, TicketCategory
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import Ticket, TicketEvent, TicketTag
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
     SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
+    SqlAlchemyTicketCategoryRepository,
     SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
@@ -93,6 +94,7 @@ async def test_create_adds_ticket_to_session() -> None:
     ticket = await repository.create(
         client_chat_id=100,
         subject="Need access",
+        category_id=7,
         priority=TicketPriority.NORMAL,
     )
 
@@ -100,6 +102,7 @@ async def test_create_adds_ticket_to_session() -> None:
     assert session.flush_count == 1
     assert ticket.client_chat_id == 100
     assert ticket.subject == "Need access"
+    assert ticket.category_id == 7
     assert ticket.status == TicketStatus.NEW
 
 
@@ -333,11 +336,13 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
         public_id=uuid4(),
         status=TicketStatus.ASSIGNED,
         assigned_operator_id=77,
+        category_id=9,
     )
     ticket.id = 1
     session = build_session(
         build_result(scalar=ticket),
         build_result(rows=[("Operator One", 1001)]),
+        build_result(rows=[("access", "Доступ и вход")]),
         build_result(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
         build_result(scalar_items=["billing", "vip"]),
         build_result(
@@ -369,6 +374,8 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
     assert result.public_id == ticket.public_id
     assert result.assigned_operator_name == "Operator One"
     assert result.assigned_operator_telegram_user_id == 1001
+    assert result.category_code == "access"
+    assert result.category_title == "Доступ и вход"
     assert result.last_message_text == "Latest client message"
     assert result.tags == ("billing", "vip")
     assert [message.text for message in result.message_history] == [
@@ -533,6 +540,43 @@ async def test_macro_repository_creates_updates_and_deletes_macros() -> None:
     assert existing_macro.body == "Updated body"
     assert deleted is existing_macro
     assert session.deleted == [existing_macro]
+
+
+async def test_ticket_category_repository_lists_creates_and_updates_categories() -> None:
+    existing_category = TicketCategory(
+        code="access",
+        title="Доступ и вход",
+        is_active=True,
+        sort_order=10,
+    )
+    existing_category.id = 1
+    session = build_session(
+        build_result(scalar_items=[existing_category]),
+        build_result(scalar=existing_category),
+        build_result(scalar=existing_category),
+        build_result(scalar=20),
+    )
+    repository = SqlAlchemyTicketCategoryRepository(session)
+
+    listed = await repository.list_all(include_inactive=False)
+    updated_title = await repository.update_title(category_id=1, title="Доступ")
+    updated_active = await repository.set_active(category_id=1, is_active=False)
+    next_sort_order = await repository.get_next_sort_order()
+
+    created = await repository.create(
+        code="other",
+        title="Другая тема",
+        sort_order=30,
+    )
+
+    assert listed == [existing_category]
+    assert updated_title is existing_category
+    assert existing_category.title == "Доступ"
+    assert updated_active is existing_category
+    assert existing_category.is_active is False
+    assert next_sort_order == 30
+    assert isinstance(session.added[0], TicketCategory)
+    assert created.code == "other"
 
 
 async def test_tag_repository_normalizes_and_lists_tags() -> None:

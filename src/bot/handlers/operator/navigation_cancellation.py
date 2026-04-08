@@ -5,20 +5,30 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.formatters.categories import format_admin_category_details
 from bot.formatters.macros import format_admin_macro_details
 from bot.formatters.operator_admin_views import format_operator_list_response
+from bot.handlers.admin.category_surfaces import build_admin_category_list_response
 from bot.handlers.admin.macro_surfaces import build_admin_macro_list_response
-from bot.handlers.admin.states import AdminMacroStates, AdminOperatorStates
+from bot.handlers.admin.states import (
+    AdminCategoryStates,
+    AdminMacroStates,
+    AdminOperatorStates,
+)
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
 from bot.handlers.operator.ticket_surfaces import send_ticket_details
 from bot.keyboards.inline.admin import build_operator_management_markup
+from bot.keyboards.inline.categories import build_admin_category_detail_markup
 from bot.keyboards.inline.macros import build_admin_macro_detail_markup
 from bot.texts.buttons import CANCEL_BUTTON_TEXT
 from bot.texts.operator import OPERATOR_ACTION_CANCELLED_TEXT, OPERATOR_ACTION_IDLE_TEXT
 from infrastructure.config.settings import Settings
-from infrastructure.redis.contracts import OperatorActiveTicketStore, TicketLiveSessionStore
+from infrastructure.redis.contracts import (
+    OperatorActiveTicketStore,
+    TicketLiveSessionStore,
+)
 
 MACRO_CREATE_STATE_NAMES = {
     AdminMacroStates.creating_title.state,
@@ -28,6 +38,12 @@ MACRO_CREATE_STATE_NAMES = {
 MACRO_EDIT_STATE_NAMES = {
     AdminMacroStates.editing_title.state,
     AdminMacroStates.editing_body.state,
+}
+CATEGORY_CREATE_STATE_NAMES = {
+    AdminCategoryStates.creating_title.state,
+}
+CATEGORY_EDIT_STATE_NAMES = {
+    AdminCategoryStates.editing_title.state,
 }
 OPERATOR_TICKET_STATE_NAMES = {
     OperatorTicketStates.replying.state,
@@ -82,6 +98,20 @@ async def handle_cancel(
         return
     if state_name in MACRO_EDIT_STATE_NAMES:
         await _restore_macro_details_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+    if state_name in CATEGORY_CREATE_STATE_NAMES:
+        await _restore_category_list_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+    if state_name in CATEGORY_EDIT_STATE_NAMES:
+        await _restore_category_details_after_cancel(
             message=message,
             state_data=state_data,
             helpdesk_service_factory=helpdesk_service_factory,
@@ -206,3 +236,60 @@ async def _restore_macro_details_after_cancel(
 
 def _parse_page(value: object) -> int:
     return value if isinstance(value, int) and value > 0 else 1
+
+
+async def _restore_category_list_after_cancel(
+    *,
+    message: Message,
+    state_data: dict[str, object],
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    if message.from_user is None:
+        return
+
+    page = _parse_page(state_data.get("page"))
+    async with helpdesk_service_factory() as helpdesk_service:
+        categories = await helpdesk_service.list_ticket_categories(
+            actor_telegram_user_id=message.from_user.id
+        )
+
+    text, markup = build_admin_category_list_response(categories=categories, page=page)
+    await message.answer(text, reply_markup=markup)
+
+
+async def _restore_category_details_after_cancel(
+    *,
+    message: Message,
+    state_data: dict[str, object],
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    if message.from_user is None:
+        return
+
+    category_id = state_data.get("category_id")
+    page = _parse_page(state_data.get("page"))
+    if not isinstance(category_id, int):
+        await _restore_category_list_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        category = await helpdesk_service.get_ticket_category(
+            category_id=category_id,
+            actor_telegram_user_id=message.from_user.id,
+        )
+        if category is None:
+            categories = await helpdesk_service.list_ticket_categories(
+                actor_telegram_user_id=message.from_user.id
+            )
+            text, markup = build_admin_category_list_response(categories=categories, page=page)
+            await message.answer(text, reply_markup=markup)
+            return
+
+    await message.answer(
+        format_admin_category_details(category),
+        reply_markup=build_admin_category_detail_markup(category=category, page=page),
+    )

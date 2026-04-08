@@ -38,6 +38,7 @@ class CreateTicketFromClientMessageUseCase:
         client_chat_id: int,
         telegram_message_id: int,
         text: str,
+        category_id: int | None = None,
     ) -> TicketSummary:
         active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
         if active_ticket is not None:
@@ -54,6 +55,7 @@ class CreateTicketFromClientMessageUseCase:
         ticket = await self.ticket_repository.create(
             client_chat_id=client_chat_id,
             subject=build_ticket_subject(text),
+            category_id=category_id,
         )
         if ticket.id is None:
             raise RuntimeError("Не удалось сгенерировать идентификатор заявки.")
@@ -65,6 +67,7 @@ class CreateTicketFromClientMessageUseCase:
                 "status": ticket.status.value,
                 "subject": ticket.subject,
                 "client_chat_id": ticket.client_chat_id,
+                "category_id": category_id,
             },
         )
 
@@ -103,3 +106,14 @@ class CreateTicketFromClientMessageUseCase:
             created=True,
             event_type=TicketEventType.QUEUED,
         )
+
+
+class GetActiveClientTicketUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(self, *, client_chat_id: int) -> TicketSummary | None:
+        ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
+        if ticket is None:
+            return None
+        return build_ticket_summary(ticket)

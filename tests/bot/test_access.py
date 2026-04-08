@@ -10,6 +10,7 @@ from bot.access.policies import (
     resolve_required_permission,
 )
 from bot.texts.buttons import (
+    CATEGORIES_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
     MY_TICKETS_BUTTON_TEXT,
@@ -62,6 +63,7 @@ def test_protected_message_permissions_cover_navigation_buttons() -> None:
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[QUEUE_BUTTON_TEXT] == Permission.ACCESS_OPERATOR
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[OPERATORS_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[MACROS_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
+    assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[CATEGORIES_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
 
 
 def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> None:
@@ -69,6 +71,7 @@ def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> N
     assert ("operator_queue:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_macro:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_tag:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
+    assert ("admin_category:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("admin_macro:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("admin_operator:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
 
@@ -84,6 +87,14 @@ def test_protected_state_permissions_cover_operator_fsm_states() -> None:
     )
     assert (
         PROTECTED_STATE_PERMISSIONS["AdminOperatorStates:adding_operator"]
+        == Permission.MANAGE_OPERATORS
+    )
+    assert (
+        PROTECTED_STATE_PERMISSIONS["AdminCategoryStates:creating_title"]
+        == Permission.MANAGE_OPERATORS
+    )
+    assert (
+        PROTECTED_STATE_PERMISSIONS["AdminCategoryStates:editing_title"]
         == Permission.MANAGE_OPERATORS
     )
     assert (
@@ -166,6 +177,12 @@ def test_resolve_required_permission_for_super_admin_macro_navigation_button() -
     assert result == Permission.MANAGE_OPERATORS
 
 
+def test_resolve_required_permission_for_super_admin_category_navigation_button() -> None:
+    result = resolve_required_permission(message_text=CATEGORIES_BUTTON_TEXT)
+
+    assert result == Permission.MANAGE_OPERATORS
+
+
 def test_resolve_required_permission_for_super_admin_callback() -> None:
     result = resolve_required_permission(
         callback_data="admin_operator:revoke:1001",
@@ -177,6 +194,14 @@ def test_resolve_required_permission_for_super_admin_callback() -> None:
 def test_resolve_required_permission_for_super_admin_macro_callback() -> None:
     result = resolve_required_permission(
         callback_data="admin_macro:view:7:1",
+    )
+
+    assert result == Permission.MANAGE_OPERATORS
+
+
+def test_resolve_required_permission_for_super_admin_category_callback() -> None:
+    result = resolve_required_permission(
+        callback_data="admin_category:view:7:1",
     )
 
     assert result == Permission.MANAGE_OPERATORS
