@@ -12,6 +12,8 @@ from application.use_cases.tickets.summaries import (
     QueuedTicketSummary,
     TicketCategorySummary,
     TicketDetailsSummary,
+    TicketFeedbackMutationResult,
+    TicketFeedbackSummary,
     TicketStats,
     TicketSummary,
 )
@@ -60,6 +62,39 @@ class HelpdeskTicketOperations:
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
         return await self._components.tickets.get_active_client_ticket(
             client_chat_id=client_chat_id
+        )
+
+    async def get_ticket_feedback(
+        self,
+        *,
+        ticket_public_id: UUID,
+    ) -> TicketFeedbackSummary | None:
+        return await self._components.tickets.get_feedback(ticket_public_id=ticket_public_id)
+
+    async def submit_ticket_feedback_rating(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        rating: int,
+    ) -> TicketFeedbackMutationResult:
+        return await self._components.tickets.submit_feedback_rating(
+            ticket_public_id=ticket_public_id,
+            client_chat_id=client_chat_id,
+            rating=rating,
+        )
+
+    async def add_ticket_feedback_comment(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        comment: str,
+    ) -> TicketFeedbackMutationResult:
+        return await self._components.tickets.add_feedback_comment(
+            ticket_public_id=ticket_public_id,
+            client_chat_id=client_chat_id,
+            comment=comment,
         )
 
     async def list_client_ticket_categories(self) -> Sequence[TicketCategorySummary]:

@@ -16,6 +16,7 @@ from bot.handlers.operator.active_context import (
 )
 from bot.handlers.operator.common import operator_ticket_action, respond_to_operator
 from bot.handlers.operator.ticket_surfaces import send_ticket_details
+from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
 from bot.texts.common import TICKET_NOT_FOUND_TEXT
 from bot.texts.operator import (
     build_close_delivery_failed_text,
@@ -170,6 +171,7 @@ async def handle_close_action(
             bot,
             chat_id=ticket_details.client_chat_id,
             public_number=ticket.public_number,
+            reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket.public_id),
             logger=logger,
         )
 

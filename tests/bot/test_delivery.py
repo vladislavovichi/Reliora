@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
@@ -14,6 +15,8 @@ from bot.delivery import (
     deliver_ticket_closed_to_operator,
     send_message_with_retry,
 )
+from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
+from bot.texts.feedback import build_ticket_closed_with_feedback_text
 
 
 async def test_send_message_with_retry_recovers_from_network_error(
@@ -148,19 +151,21 @@ async def test_deliver_client_message_to_operator_uses_active_ticket_text() -> N
 async def test_deliver_ticket_closed_to_client_uses_closure_notice() -> None:
     bot = Mock()
     bot.send_message = AsyncMock()
+    ticket_public_id = uuid4()
 
     result = await deliver_ticket_closed_to_client(
         bot,
         chat_id=42,
         public_number="HD-AAAA1111",
+        reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket_public_id),
         logger=logging.getLogger("test"),
     )
 
     assert result is None
     bot.send_message.assert_awaited_once_with(
         42,
-        "Заявка HD-AAAA1111 закрыта. Если вопрос останется, просто напишите в чат.",
-        reply_markup=None,
+        build_ticket_closed_with_feedback_text("HD-AAAA1111"),
+        reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket_public_id),
     )
 
 

@@ -23,6 +23,7 @@ from infrastructure.db.repositories.catalog import (
     SqlAlchemyTicketCategoryRepository,
     SqlAlchemyTicketTagRepository,
 )
+from infrastructure.db.repositories.feedback import SqlAlchemyTicketFeedbackRepository
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
 from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
@@ -78,6 +79,7 @@ def build_helpdesk_service(
 ) -> HelpdeskService:
     return HelpdeskService(
         ticket_repository=SqlAlchemyTicketRepository(session),
+        ticket_feedback_repository=SqlAlchemyTicketFeedbackRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),

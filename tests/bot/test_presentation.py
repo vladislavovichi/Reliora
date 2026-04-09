@@ -22,6 +22,10 @@ from bot.formatters.system import build_help_text, build_start_text, format_diag
 from bot.keyboards.inline.client_actions import (
     build_client_ticket_finish_confirmation_markup,
 )
+from bot.keyboards.inline.feedback import (
+    build_ticket_feedback_comment_markup,
+    build_ticket_feedback_rating_markup,
+)
 from bot.keyboards.inline.macros import (
     build_operator_macro_picker_markup,
     build_operator_macro_preview_markup,
@@ -38,11 +42,13 @@ from bot.texts.buttons import (
     BACK_TO_TICKET_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
     CATEGORIES_BUTTON_TEXT,
+    COMMENT_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
     MY_TICKETS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
+    SKIP_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
 )
@@ -242,6 +248,20 @@ def test_build_client_ticket_finish_confirmation_markup_fits_telegram_callback_l
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
     assert rows == (("Завершить", CANCEL_BUTTON_TEXT),)
+
+
+def test_build_ticket_feedback_rating_markup_stays_compact() -> None:
+    markup = build_ticket_feedback_rating_markup(ticket_public_id=uuid4())
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == (("1", "2", "3", "4", "5"),)
+
+
+def test_build_ticket_feedback_comment_markup_keeps_clean_skip_path() -> None:
+    markup = build_ticket_feedback_comment_markup(ticket_public_id=uuid4())
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == ((COMMENT_BUTTON_TEXT, SKIP_BUTTON_TEXT),)
 
 
 def test_build_ticket_tags_markup_uses_consistent_ticket_return_action() -> None:

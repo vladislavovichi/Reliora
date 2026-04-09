@@ -19,6 +19,7 @@ from bot.keyboards.inline.client_actions import (
     build_client_ticket_finish_confirmation_markup,
     build_client_ticket_markup,
 )
+from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
 from bot.keyboards.inline.operator_actions import build_ticket_switch_markup
 from bot.texts.client import (
     FINISH_TICKET_CANCELLED_TEXT,
@@ -29,6 +30,7 @@ from bot.texts.client import (
     build_ticket_closed_text,
 )
 from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
+from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
@@ -261,9 +263,12 @@ async def handle_finish_ticket_confirm(
                 delivery_error,
             )
 
-    if await _try_edit_client_ticket_markup(callback=callback, reply_markup=None):
-        if isinstance(callback.message, Message):
-            await callback.message.answer(build_ticket_closed_text(ticket_details.public_number))
+    await _try_edit_client_ticket_markup(callback=callback, reply_markup=None)
+    if isinstance(callback.message, Message):
+        await callback.message.answer(
+            build_ticket_closed_with_feedback_text(ticket_details.public_number),
+            reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket_public_id),
+        )
         await callback.answer()
         return
 

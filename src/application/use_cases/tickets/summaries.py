@@ -29,6 +29,32 @@ class TicketStats:
 
 
 @dataclass(slots=True)
+class TicketFeedbackSummary:
+    public_id: UUID
+    public_number: str
+    client_chat_id: int
+    rating: int
+    comment: str | None
+    submitted_at: datetime
+
+
+class TicketFeedbackMutationStatus(StrEnum):
+    CREATED = "created"
+    UPDATED = "updated"
+    ALREADY_RECORDED = "already_recorded"
+    MISSING = "missing"
+    NOT_FOUND = "not_found"
+    NOT_CLOSED = "not_closed"
+    NOT_ALLOWED = "not_allowed"
+
+
+@dataclass(slots=True)
+class TicketFeedbackMutationResult:
+    status: TicketFeedbackMutationStatus
+    feedback: TicketFeedbackSummary | None = None
+
+
+@dataclass(slots=True)
 class QueuedTicketSummary:
     public_id: UUID
     public_number: str

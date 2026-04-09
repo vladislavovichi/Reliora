@@ -17,11 +17,12 @@ from bot.handlers.user.client import (
     handle_finish_ticket_confirm,
     handle_finish_ticket_prompt,
 )
+from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
 from bot.texts.client import (
     FINISH_TICKET_STALE_TEXT,
     build_ticket_already_closed_text,
-    build_ticket_closed_text,
 )
+from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
 
@@ -152,7 +153,8 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
     bot.send_message.assert_awaited_once()
     message_edit_reply_markup_mock(callback).assert_awaited_once_with(reply_markup=None)
     message_answer_mock(callback).assert_awaited_once_with(
-        build_ticket_closed_text(ticket_details.public_number)
+        build_ticket_closed_with_feedback_text(ticket_details.public_number),
+        reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket_public_id),
     )
     callback_answer_mock(callback).assert_awaited_once_with()
     lock.release.assert_awaited_once_with()

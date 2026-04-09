@@ -18,6 +18,7 @@ from domain.contracts.repositories import (
     TagRepository,
     TicketCategoryRepository,
     TicketEventRepository,
+    TicketFeedbackRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
@@ -530,6 +531,30 @@ class EmptyTicketCategoryRepository:
         return 10
 
 
+class EmptyTicketFeedbackRepository:
+    async def get_by_ticket_id(self, *, ticket_id: int) -> SimpleNamespace | None:
+        return None
+
+    async def create(
+        self,
+        *,
+        ticket_id: int,
+        client_chat_id: int,
+        rating: int,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=1,
+            ticket_id=ticket_id,
+            client_chat_id=client_chat_id,
+            rating=rating,
+            comment=None,
+            submitted_at=datetime.now(UTC),
+        )
+
+    async def update_comment(self, *, ticket_id: int, comment: str) -> SimpleNamespace | None:
+        return None
+
+
 class EmptyTicketTagRepository:
     async def list_for_ticket(self, *, ticket_id: int) -> Sequence[SimpleNamespace]:
         return []
@@ -566,6 +591,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
     return HelpdeskScenario(
         helpdesk_service=HelpdeskService(
             ticket_repository=cast(TicketRepository, ticket_repository),
+            ticket_feedback_repository=cast(
+                TicketFeedbackRepository, EmptyTicketFeedbackRepository()
+            ),
             ticket_message_repository=cast(TicketMessageRepository, message_repository),
             ticket_event_repository=cast(TicketEventRepository, event_repository),
             operator_repository=cast(OperatorRepository, operator_repository),

@@ -27,6 +27,12 @@ class ClientTicketCallback(CallbackData, prefix="client"):
     ticket_public_id: str
 
 
+class ClientFeedbackCallback(CallbackData, prefix="client_feedback"):
+    action: Literal["rate", "comment", "skip"]
+    ticket_public_id: str
+    rating: int
+
+
 class ClientIntakeCallback(CallbackData, prefix="client_intake"):
     action: Literal["pick", "cancel"]
     category_id: int

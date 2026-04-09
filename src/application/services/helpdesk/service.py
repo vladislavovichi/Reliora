@@ -21,6 +21,7 @@ from domain.contracts.repositories import (
     TagRepository,
     TicketCategoryRepository,
     TicketEventRepository,
+    TicketFeedbackRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
@@ -38,6 +39,7 @@ class HelpdeskService(
     HelpdeskSLAOperations,
 ):
     ticket_repository: TicketRepository
+    ticket_feedback_repository: TicketFeedbackRepository
     ticket_message_repository: TicketMessageRepository
     ticket_event_repository: TicketEventRepository
     operator_repository: OperatorRepository
@@ -56,6 +58,7 @@ class HelpdeskService(
 
         self._components = build_helpdesk_components(
             ticket_repository=self.ticket_repository,
+            ticket_feedback_repository=self.ticket_feedback_repository,
             ticket_message_repository=self.ticket_message_repository,
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,

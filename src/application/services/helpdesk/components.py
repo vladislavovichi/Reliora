@@ -15,6 +15,11 @@ from application.use_cases.tickets.creation import (
     CreateTicketFromClientMessageUseCase,
     GetActiveClientTicketUseCase,
 )
+from application.use_cases.tickets.feedback import (
+    AddTicketFeedbackCommentUseCase,
+    GetTicketFeedbackUseCase,
+    SubmitTicketFeedbackRatingUseCase,
+)
 from application.use_cases.tickets.macros import (
     ApplyMacroToTicketUseCase,
     CreateMacroUseCase,
@@ -65,6 +70,7 @@ from domain.contracts.repositories import (
     TagRepository,
     TicketCategoryRepository,
     TicketEventRepository,
+    TicketFeedbackRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
@@ -75,6 +81,9 @@ from domain.contracts.repositories import (
 class HelpdeskTicketUseCases:
     create_from_client_message: CreateTicketFromClientMessageUseCase
     get_active_client_ticket: GetActiveClientTicketUseCase
+    get_feedback: GetTicketFeedbackUseCase
+    submit_feedback_rating: SubmitTicketFeedbackRatingUseCase
+    add_feedback_comment: AddTicketFeedbackCommentUseCase
     add_message: AddMessageToTicketUseCase
     assign_ticket: AssignTicketToOperatorUseCase
     get_next_queued: GetNextQueuedTicketUseCase
@@ -136,6 +145,7 @@ class HelpdeskComponents:
 def build_helpdesk_components(
     *,
     ticket_repository: TicketRepository,
+    ticket_feedback_repository: TicketFeedbackRepository,
     ticket_message_repository: TicketMessageRepository,
     ticket_event_repository: TicketEventRepository,
     operator_repository: OperatorRepository,
@@ -159,6 +169,18 @@ def build_helpdesk_components(
             ),
             get_active_client_ticket=GetActiveClientTicketUseCase(
                 ticket_repository=ticket_repository
+            ),
+            get_feedback=GetTicketFeedbackUseCase(
+                ticket_repository=ticket_repository,
+                ticket_feedback_repository=ticket_feedback_repository,
+            ),
+            submit_feedback_rating=SubmitTicketFeedbackRatingUseCase(
+                ticket_repository=ticket_repository,
+                ticket_feedback_repository=ticket_feedback_repository,
+            ),
+            add_feedback_comment=AddTicketFeedbackCommentUseCase(
+                ticket_repository=ticket_repository,
+                ticket_feedback_repository=ticket_feedback_repository,
             ),
             add_message=AddMessageToTicketUseCase(
                 ticket_repository=ticket_repository,

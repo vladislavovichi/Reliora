@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
+from domain.entities.feedback import TicketFeedback
 from domain.entities.ticket import Ticket, TicketDetails
 from domain.enums.tickets import (
     TicketEventType,
@@ -106,6 +107,28 @@ class TicketMessageRepository(Protocol):
         sender_type: TicketMessageSenderType,
     ) -> int:
         """Return a negative internal message id suitable for synthetic ticket messages."""
+
+
+class TicketFeedbackRepository(Protocol):
+    async def get_by_ticket_id(self, *, ticket_id: int) -> TicketFeedback | None:
+        """Return feedback for the ticket when it exists."""
+
+    async def create(
+        self,
+        *,
+        ticket_id: int,
+        client_chat_id: int,
+        rating: int,
+    ) -> TicketFeedback:
+        """Persist the first feedback rating for a ticket."""
+
+    async def update_comment(
+        self,
+        *,
+        ticket_id: int,
+        comment: str,
+    ) -> TicketFeedback | None:
+        """Persist a feedback comment for the ticket."""
 
 
 class OperatorRepository(Protocol):

@@ -349,6 +349,75 @@ def build_operator_repository_mock(operator_ids: dict[int, int]) -> Mock:
 
 
 @dataclass
+class StubTicketFeedbackRepository:
+    initial_feedback: list[SimpleNamespace] | None = None
+
+    def __post_init__(self) -> None:
+        self.get_calls: list[int] = []
+        self.create_calls: list[dict[str, object]] = []
+        self.update_comment_calls: list[dict[str, object]] = []
+        active_feedback = [] if self.initial_feedback is None else list(self.initial_feedback)
+        self.records_by_ticket_id = {
+            int(record.ticket_id): record
+            for record in active_feedback
+            if record.ticket_id is not None
+        }
+        self.next_id = max((int(record.id) for record in active_feedback), default=0) + 1
+
+    async def get_by_ticket_id(self, *, ticket_id: int) -> SimpleNamespace | None:
+        self.get_calls.append(ticket_id)
+        return self.records_by_ticket_id.get(ticket_id)
+
+    async def create(
+        self,
+        *,
+        ticket_id: int,
+        client_chat_id: int,
+        rating: int,
+    ) -> SimpleNamespace:
+        self.create_calls.append(
+            {
+                "ticket_id": ticket_id,
+                "client_chat_id": client_chat_id,
+                "rating": rating,
+            }
+        )
+        existing = self.records_by_ticket_id.get(ticket_id)
+        if existing is not None:
+            return existing
+
+        record = SimpleNamespace(
+            id=self.next_id,
+            ticket_id=ticket_id,
+            client_chat_id=client_chat_id,
+            rating=rating,
+            comment=None,
+            submitted_at=datetime.now(UTC),
+        )
+        self.next_id += 1
+        self.records_by_ticket_id[ticket_id] = record
+        return record
+
+    async def update_comment(
+        self,
+        *,
+        ticket_id: int,
+        comment: str,
+    ) -> SimpleNamespace | None:
+        self.update_comment_calls.append(
+            {
+                "ticket_id": ticket_id,
+                "comment": comment,
+            }
+        )
+        record = self.records_by_ticket_id.get(ticket_id)
+        if record is None:
+            return None
+        record.comment = comment
+        return record
+
+
+@dataclass
 class StubOperatorManagementRepository:
     active_operator_ids: set[int] = field(default_factory=set)
     display_names: dict[int, str] = field(default_factory=dict)
@@ -697,6 +766,7 @@ def build_ticket(
 def build_service(
     *,
     ticket_repository: StubTicketRepository,
+    ticket_feedback_repository: StubTicketFeedbackRepository | None = None,
     message_repository: Any | None = None,
     event_repository: Any | None = None,
     operator_repository: Any | None = None,
@@ -710,6 +780,7 @@ def build_service(
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
         ticket_repository=ticket_repository,
+        ticket_feedback_repository=ticket_feedback_repository or StubTicketFeedbackRepository(),
         ticket_message_repository=message_repository or build_message_repository_mock(),
         ticket_event_repository=event_repository or build_event_repository_mock(),
         operator_repository=operator_repository or build_operator_repository_mock({}),
@@ -1271,6 +1342,97 @@ async def test_close_ticket_rejects_already_closed_ticket() -> None:
         raise AssertionError("Expected InvalidTicketTransitionError for closed ticket")
 
     assert event_repository.added_events == []
+
+
+async def test_submit_ticket_feedback_rating_creates_feedback_for_closed_ticket() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.CLOSED)
+    feedback_repository = StubTicketFeedbackRepository()
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_feedback_repository=feedback_repository,
+    )
+
+    result = await service.submit_ticket_feedback_rating(
+        ticket_public_id=public_id,
+        client_chat_id=ticket.client_chat_id,
+        rating=5,
+    )
+
+    assert result.status.value == "created"
+    assert result.feedback is not None
+    assert result.feedback.rating == 5
+    assert result.feedback.public_id == public_id
+    assert feedback_repository.create_calls == [
+        {
+            "ticket_id": ticket.id,
+            "client_chat_id": ticket.client_chat_id,
+            "rating": 5,
+        }
+    ]
+
+
+async def test_submit_ticket_feedback_rating_returns_existing_feedback_without_duplicate() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.CLOSED)
+    existing_feedback = SimpleNamespace(
+        id=3,
+        ticket_id=ticket.id,
+        client_chat_id=ticket.client_chat_id,
+        rating=4,
+        comment=None,
+        submitted_at=datetime.now(UTC),
+    )
+    feedback_repository = StubTicketFeedbackRepository(initial_feedback=[existing_feedback])
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_feedback_repository=feedback_repository,
+    )
+
+    result = await service.submit_ticket_feedback_rating(
+        ticket_public_id=public_id,
+        client_chat_id=ticket.client_chat_id,
+        rating=5,
+    )
+
+    assert result.status.value == "already_recorded"
+    assert result.feedback is not None
+    assert result.feedback.rating == 4
+    assert feedback_repository.create_calls == []
+
+
+async def test_add_ticket_feedback_comment_updates_existing_feedback() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.CLOSED)
+    existing_feedback = SimpleNamespace(
+        id=3,
+        ticket_id=ticket.id,
+        client_chat_id=ticket.client_chat_id,
+        rating=5,
+        comment=None,
+        submitted_at=datetime.now(UTC),
+    )
+    feedback_repository = StubTicketFeedbackRepository(initial_feedback=[existing_feedback])
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_feedback_repository=feedback_repository,
+    )
+
+    result = await service.add_ticket_feedback_comment(
+        ticket_public_id=public_id,
+        client_chat_id=ticket.client_chat_id,
+        comment="Спасибо за помощь",
+    )
+
+    assert result.status.value == "updated"
+    assert result.feedback is not None
+    assert result.feedback.comment == "Спасибо за помощь"
+    assert feedback_repository.update_comment_calls == [
+        {
+            "ticket_id": ticket.id,
+            "comment": "Спасибо за помощь",
+        }
+    ]
 
 
 async def test_get_ticket_details_returns_operator_facing_summary_with_tags() -> None:

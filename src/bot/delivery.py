@@ -12,7 +12,8 @@ from aiogram.exceptions import (
 )
 from aiogram.types import InlineKeyboardMarkup
 
-from bot.texts.client import build_operator_reply_text, build_ticket_closed_text
+from bot.texts.client import build_operator_reply_text
+from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from bot.texts.operator import (
     build_active_client_message_text,
     build_client_finished_ticket_text,
@@ -116,13 +117,14 @@ async def deliver_ticket_closed_to_client(
     *,
     chat_id: int,
     public_number: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
     logger: logging.Logger,
 ) -> str | None:
     return await _deliver_text(
         bot,
         chat_id=chat_id,
-        text=build_ticket_closed_text(public_number),
-        reply_markup=None,
+        text=build_ticket_closed_with_feedback_text(public_number),
+        reply_markup=reply_markup,
         logger=logger,
         operation="ticket_closed",
     )

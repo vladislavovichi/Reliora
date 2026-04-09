@@ -30,6 +30,7 @@ from infrastructure.db.models.mixins import CreatedAtMixin, TimestampMixin, enum
 
 if TYPE_CHECKING:
     from infrastructure.db.models.catalog import Tag, TicketCategory
+    from infrastructure.db.models.feedback import TicketFeedback
     from infrastructure.db.models.operator import Operator
 
 
@@ -97,6 +98,11 @@ class Ticket(TimestampMixin, Base):
     ticket_tags: Mapped[list[TicketTag]] = relationship(
         back_populates="ticket",
         cascade="all, delete-orphan",
+    )
+    feedback: Mapped[TicketFeedback | None] = relationship(
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
 

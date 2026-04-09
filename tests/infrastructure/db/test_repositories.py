@@ -14,6 +14,7 @@ from domain.enums.tickets import (
     TicketStatus,
 )
 from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag, TicketCategory
+from infrastructure.db.models.feedback import TicketFeedback
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import Ticket, TicketEvent, TicketTag
 from infrastructure.db.repositories.catalog import (
@@ -23,6 +24,7 @@ from infrastructure.db.repositories.catalog import (
     SqlAlchemyTicketCategoryRepository,
     SqlAlchemyTicketTagRepository,
 )
+from infrastructure.db.repositories.feedback import SqlAlchemyTicketFeedbackRepository
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
 from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
@@ -197,6 +199,49 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
     assert cast(object, result) is ticket
     assert ticket.status == TicketStatus.CLOSED
     assert ticket.closed_at is not None
+    assert session.flush_count == 1
+
+
+async def test_create_ticket_feedback_adds_feedback_to_session() -> None:
+    session = build_session()
+    repository = SqlAlchemyTicketFeedbackRepository(session)
+
+    feedback = await repository.create(ticket_id=7, client_chat_id=1001, rating=5)
+
+    assert session.added == [cast(object, feedback)]
+    assert session.flush_count == 1
+    assert feedback.ticket_id == 7
+    assert feedback.client_chat_id == 1001
+    assert feedback.rating == 5
+
+
+async def test_get_ticket_feedback_by_ticket_id_returns_record() -> None:
+    feedback = TicketFeedback(
+        ticket_id=7,
+        client_chat_id=1001,
+        rating=4,
+    )
+    session = build_session(result=build_result(scalar=feedback))
+    repository = SqlAlchemyTicketFeedbackRepository(session)
+
+    result = await repository.get_by_ticket_id(ticket_id=7)
+
+    assert cast(object, result) is feedback
+
+
+async def test_update_ticket_feedback_comment_persists_comment() -> None:
+    feedback = TicketFeedback(
+        ticket_id=7,
+        client_chat_id=1001,
+        rating=4,
+    )
+    session = build_session(result=build_result(scalar=feedback))
+    repository = SqlAlchemyTicketFeedbackRepository(session)
+
+    result = await repository.update_comment(ticket_id=7, comment="Спасибо")
+
+    assert cast(object, result) is feedback
+    assert feedback.comment == "Спасибо"
     assert session.flush_count == 1
 
 
