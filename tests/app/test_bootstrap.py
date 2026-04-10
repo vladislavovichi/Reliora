@@ -17,6 +17,8 @@ def build_settings(*, bot_token: str) -> Settings:
             "app": {"dry_run": True},
             "bot": {"token": bot_token},
             "authorization": {"super_admin_telegram_user_ids": [42]},
+            "postgres_expose_port": None,
+            "redis_expose_port": None,
             "database": {
                 "host": "postgres",
                 "port": 5432,

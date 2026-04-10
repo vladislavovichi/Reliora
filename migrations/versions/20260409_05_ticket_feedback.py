@@ -42,12 +42,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("ticket_id", name=op.f("uq_ticket_feedback_ticket_id")),
     )
     op.create_index(
-        op.f("ix_ticket_feedback_ticket_id"),
-        "ticket_feedback",
-        ["ticket_id"],
-        unique=False,
-    )
-    op.create_index(
         op.f("ix_ticket_feedback_client_chat_id"),
         "ticket_feedback",
         ["client_chat_id"],
@@ -57,5 +51,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(op.f("ix_ticket_feedback_client_chat_id"), table_name="ticket_feedback")
-    op.drop_index(op.f("ix_ticket_feedback_ticket_id"), table_name="ticket_feedback")
     op.drop_table("ticket_feedback")

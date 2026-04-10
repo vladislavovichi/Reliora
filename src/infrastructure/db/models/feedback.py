@@ -24,7 +24,6 @@ class TicketFeedback(Base):
         ForeignKey("tickets.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True,
     )
     client_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     rating: Mapped[int] = mapped_column(nullable=False)

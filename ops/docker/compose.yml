@@ -6,6 +6,10 @@ services:
     command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
+      DATABASE__HOST: postgres
+      DATABASE__PORT: 5432
+      REDIS__HOST: redis
+      REDIS__PORT: 6379
     env_file:
       - ../../.env
     depends_on:
