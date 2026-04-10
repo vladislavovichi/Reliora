@@ -3,7 +3,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from application.use_cases.tickets.summaries import MacroSummary, OperatorSummary, TagSummary
+from application.use_cases.tickets.summaries import (
+    MacroSummary,
+    OperatorSummary,
+    TagSummary,
+    TicketAttachmentSummary,
+)
+from bot.formatters.ticket_messages import build_message_preview
 from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 from domain.tickets import format_status_for_humans
 
@@ -16,12 +22,14 @@ def format_tags(tags: Sequence[str]) -> str:
 
 def format_last_message(
     message_text: str | None,
+    attachment: TicketAttachmentSummary | None,
     sender_type: TicketMessageSenderType | None,
 ) -> str:
-    if not message_text:
+    preview = build_message_preview(text=message_text, attachment=attachment)
+    if not preview:
         return "Сообщений пока нет."
 
-    preview = shorten_text(" ".join(message_text.split()), 160)
+    preview = shorten_text(preview, 160)
     if sender_type is None:
         return preview
 

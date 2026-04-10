@@ -13,6 +13,7 @@ from domain.contracts.repositories import (
     TicketMessageRepository,
     TicketRepository,
 )
+from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 
 
@@ -37,7 +38,8 @@ class CreateTicketFromClientMessageUseCase:
         *,
         client_chat_id: int,
         telegram_message_id: int,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         category_id: int | None = None,
     ) -> TicketSummary:
         active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
@@ -47,6 +49,7 @@ class CreateTicketFromClientMessageUseCase:
                 telegram_message_id=telegram_message_id,
                 sender_type=TicketMessageSenderType.CLIENT,
                 text=text,
+                attachment=attachment,
             )
             if result is None:
                 raise RuntimeError("Не удалось добавить сообщение в активную заявку.")
@@ -54,7 +57,7 @@ class CreateTicketFromClientMessageUseCase:
 
         ticket = await self.ticket_repository.create(
             client_chat_id=client_chat_id,
-            subject=build_ticket_subject(text),
+            subject=build_ticket_subject(text or ""),
             category_id=category_id,
         )
         if ticket.id is None:
@@ -90,6 +93,7 @@ class CreateTicketFromClientMessageUseCase:
             telegram_message_id=telegram_message_id,
             sender_type=TicketMessageSenderType.CLIENT,
             text=text,
+            attachment=attachment,
         )
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
@@ -98,6 +102,7 @@ class CreateTicketFromClientMessageUseCase:
                 telegram_message_id=telegram_message_id,
                 sender_type=TicketMessageSenderType.CLIENT,
                 sender_operator_id=None,
+                attachment=attachment,
             ),
         )
 

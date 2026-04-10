@@ -58,3 +58,6 @@ redis_data/
 # Local tooling
 .codex
 .benchmarks/
+
+# Assets
+assets/

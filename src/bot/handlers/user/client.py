@@ -45,12 +45,18 @@ from infrastructure.redis.contracts import (
 
 router = Router(name="client")
 logger = logging.getLogger(__name__)
+SUPPORTED_TICKET_MEDIA_FILTER = F.photo | F.document | F.voice | F.video
 
 
 @router.message(
     StateFilter(None),
     MagicData(F.event_user_role == UserRole.USER),
     F.text & ~F.text.startswith("/"),
+)
+@router.message(
+    StateFilter(None),
+    MagicData(F.event_user_role == UserRole.USER),
+    SUPPORTED_TICKET_MEDIA_FILTER,
 )
 async def handle_client_text(
     message: Message,
@@ -63,9 +69,6 @@ async def handle_client_text(
     ticket_live_session_store: TicketLiveSessionStore,
     ticket_stream_publisher: TicketStreamPublisher,
 ) -> None:
-    if message.text is None:
-        return
-
     if not await global_rate_limiter.allow():
         await message.answer(SERVICE_UNAVAILABLE_TEXT)
         return

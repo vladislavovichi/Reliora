@@ -5,10 +5,17 @@ from html import escape
 
 from application.use_cases.tickets.exports import (
     TicketReport,
+    TicketReportAttachment,
     TicketReportEvent,
+    TicketReportInternalNote,
     TicketReportMessage,
 )
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketAttachmentKind,
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketStatus,
+)
 
 
 def render_ticket_report_html(report: TicketReport) -> bytes:
@@ -249,6 +256,10 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
       <h2>Переписка</h2>
       {_render_transcript(report.messages)}
     </section>
+    <section class="card">
+      <h2>Внутренние заметки</h2>
+      {_render_internal_notes(report.internal_notes)}
+    </section>
   </div>
 </body>
 </html>
@@ -297,7 +308,25 @@ def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
             f'<div class="message-role">{escape(_message_sender_label(message))}</div>'
             f'<div class="message-time">{escape(_format_timestamp(message.created_at))}</div>'
             "</div>"
-            f'<div class="message-body">{escape(message.text)}</div>'
+            f'<div class="message-body">{escape(_message_body(message))}</div>'
+            "</article>"
+        )
+    return f'<div class="transcript">{"".join(items)}</div>'
+
+
+def _render_internal_notes(notes: tuple[TicketReportInternalNote, ...]) -> str:
+    if not notes:
+        return '<div class="muted">Заметок пока нет.</div>'
+
+    items = []
+    for note in notes:
+        items.append(
+            '<article class="message">'
+            '<div class="message-head">'
+            f'<div class="message-role">{escape(_internal_note_author(note))}</div>'
+            f'<div class="message-time">{escape(_format_timestamp(note.created_at))}</div>'
+            "</div>"
+            f'<div class="message-body">{escape(note.text)}</div>'
             "</article>"
         )
     return f'<div class="transcript">{"".join(items)}</div>'
@@ -319,6 +348,34 @@ def _message_sender_label(message: TicketReportMessage) -> str:
     if message.sender_type == TicketMessageSenderType.SYSTEM:
         return "Система"
     return "Оператор"
+
+
+def _message_body(message: TicketReportMessage) -> str:
+    if message.attachment is None:
+        return message.text or ""
+
+    parts = [_attachment_label(message.attachment)]
+    if message.text:
+        parts.extend(("", message.text))
+    return "\n".join(parts)
+
+
+def _attachment_label(attachment: TicketReportAttachment) -> str:
+    if attachment.kind == TicketAttachmentKind.PHOTO:
+        return "Фото"
+    if attachment.kind == TicketAttachmentKind.VOICE:
+        return "Голосовое сообщение"
+    if attachment.kind == TicketAttachmentKind.VIDEO:
+        return "Видео"
+    if attachment.filename:
+        return f"Файл · {attachment.filename}"
+    return "Файл"
+
+
+def _internal_note_author(note: TicketReportInternalNote) -> str:
+    if note.author_operator_name:
+        return f"Заметка · {note.author_operator_name}"
+    return f"Заметка · оператор #{note.author_operator_id}"
 
 
 def _event_title(event_type: TicketEventType) -> str:

@@ -22,6 +22,13 @@ class TicketMessageSenderType(StrEnum):
     SYSTEM = "system"
 
 
+class TicketAttachmentKind(StrEnum):
+    PHOTO = "photo"
+    DOCUMENT = "document"
+    VOICE = "voice"
+    VIDEO = "video"
+
+
 class TicketEventType(StrEnum):
     CREATED = "created"
     QUEUED = "queued"

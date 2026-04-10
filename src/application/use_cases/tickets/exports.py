@@ -13,8 +13,18 @@ from domain.contracts.repositories import (
     TicketRepository,
 )
 from domain.entities.feedback import TicketFeedback
-from domain.entities.ticket import TicketDetails, TicketEventDetails
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
+from domain.entities.ticket import (
+    TicketAttachmentDetails,
+    TicketDetails,
+    TicketEventDetails,
+    TicketInternalNoteDetails,
+)
+from domain.enums.tickets import (
+    TicketAttachmentKind,
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketStatus,
+)
 
 
 class TicketReportFormat(StrEnum):
@@ -30,17 +40,36 @@ class TicketReportFeedback:
 
 
 @dataclass(slots=True, frozen=True)
+class TicketReportAttachment:
+    kind: TicketAttachmentKind
+    telegram_file_id: str
+    telegram_file_unique_id: str | None
+    filename: str | None
+    mime_type: str | None
+    storage_path: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class TicketReportMessage:
     sender_type: TicketMessageSenderType
     sender_operator_name: str | None
-    text: str
+    text: str | None
     created_at: datetime
+    attachment: TicketReportAttachment | None = None
 
 
 @dataclass(slots=True, frozen=True)
 class TicketReportEvent:
     event_type: TicketEventType
     payload_json: Mapping[str, object] | None
+    created_at: datetime
+
+
+@dataclass(slots=True, frozen=True)
+class TicketReportInternalNote:
+    author_operator_id: int
+    author_operator_name: str | None
+    text: str
     created_at: datetime
 
 
@@ -66,6 +95,7 @@ class TicketReport:
     feedback: TicketReportFeedback | None
     messages: tuple[TicketReportMessage, ...]
     events: tuple[TicketReportEvent, ...]
+    internal_notes: tuple[TicketReportInternalNote, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
@@ -172,9 +202,23 @@ def build_ticket_report(
                 sender_type=message.sender_type,
                 sender_operator_name=message.sender_operator_name,
                 text=message.text,
+                attachment=(
+                    build_ticket_report_attachment(message.attachment)
+                    if message.attachment is not None
+                    else None
+                ),
                 created_at=message.created_at,
             )
             for message in ticket.message_history
+        ),
+        internal_notes=tuple(
+            TicketReportInternalNote(
+                author_operator_id=note.author_operator_id,
+                author_operator_name=note.author_operator_name,
+                text=note.text,
+                created_at=note.created_at,
+            )
+            for note in ticket.internal_notes
         ),
         events=tuple(
             TicketReportEvent(
@@ -185,6 +229,19 @@ def build_ticket_report(
             for event in events
             if _is_relevant_event(event.event_type)
         ),
+    )
+
+
+def build_ticket_report_attachment(
+    attachment: TicketAttachmentDetails,
+) -> TicketReportAttachment:
+    return TicketReportAttachment(
+        kind=attachment.kind,
+        telegram_file_id=attachment.telegram_file_id,
+        telegram_file_unique_id=attachment.telegram_file_unique_id,
+        filename=attachment.filename,
+        mime_type=attachment.mime_type,
+        storage_path=attachment.storage_path,
     )
 
 

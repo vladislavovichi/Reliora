@@ -18,3 +18,4 @@ dist
 .env.*
 !.env.example
 ops/env
+assets/

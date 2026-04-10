@@ -6,6 +6,7 @@ from application.use_cases.tickets.summaries import (
     OperatorTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
+    TicketInternalNoteSummary,
     TicketMessageSummary,
 )
 from bot.formatters.operator_primitives import (
@@ -17,9 +18,11 @@ from bot.formatters.operator_primitives import (
     format_timestamp,
     shorten_text,
 )
+from bot.formatters.ticket_messages import format_history_body
 from domain.enums.tickets import TicketStatus
 
 HISTORY_CHUNK_LIMIT = 3500
+NOTES_CHUNK_LIMIT = 3500
 
 
 def format_queue_page(
@@ -73,7 +76,11 @@ def format_ticket_details(
     _append_section(
         lines,
         "Последнее сообщение",
-        format_last_message(ticket.last_message_text, ticket.last_message_sender_type),
+        format_last_message(
+            ticket.last_message_text,
+            ticket.last_message_attachment,
+            ticket.last_message_sender_type,
+        ),
     )
     return "\n".join(lines)
 
@@ -104,6 +111,8 @@ def format_ticket_more_actions(
         change_actions.append("Передать")
     lines.extend(["", "Изменить", " · ".join(change_actions)])
 
+    lines.extend(["", "Внутреннее", "Заметки"])
+
     lines.extend(["", "Отчёт", "Экспорт"])
 
     status_actions = ["Карточка"]
@@ -127,7 +136,25 @@ def format_ticket_export_actions(
             "Форматы",
             "CSV · HTML",
             "",
-            "Отчёт включает карточку заявки, таймстемпы и полную переписку.",
+            "Отчёт включает карточку заявки, таймстемпы, полную переписку и заметки.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def format_ticket_notes_text(ticket: TicketDetailsSummary) -> str:
+    lines = [format_active_ticket_context(ticket), "", "Заметки"]
+    if not ticket.internal_notes:
+        lines.extend(["", "Внутренних заметок пока нет."])
+        return "\n".join(lines)
+
+    latest_note = ticket.internal_notes[-1]
+    lines.extend(
+        [
+            "",
+            f"Всего: {len(ticket.internal_notes)}",
+            f"Последняя · {_format_note_author(latest_note)}",
+            format_timestamp(latest_note.created_at),
         ]
     )
     return "\n".join(lines)
@@ -171,7 +198,7 @@ def _format_ticket_history_entry_parts(
     continuation_prefix = f"{sender} · {timestamp} · продолжение\n"
     text_limit = max(500, HISTORY_CHUNK_LIMIT - len(prefix) - 32)
 
-    parts = _split_message_text(message.text, text_limit)
+    parts = _split_message_text(format_history_body(message), text_limit)
     if len(parts) == 1:
         return (f"{prefix}{parts[0]}",)
 
@@ -202,6 +229,29 @@ def _split_message_text(text: str, limit: int) -> tuple[str, ...]:
     if remaining:
         parts.append(remaining)
     return tuple(parts)
+
+
+def format_ticket_notes_chunks(ticket: TicketDetailsSummary) -> tuple[str, ...]:
+    if not ticket.internal_notes:
+        return ("Заметки\n\nВнутренних заметок пока нет.",)
+
+    chunks: list[str] = []
+    current_chunk = "Заметки"
+    continuation_header = "Заметки, продолжение"
+
+    for note in ticket.internal_notes:
+        entry = _format_ticket_note_entry(note)
+        separator = "\n\n" if current_chunk else ""
+        candidate = f"{current_chunk}{separator}{entry}" if current_chunk else entry
+        if len(candidate) <= NOTES_CHUNK_LIMIT:
+            current_chunk = candidate
+            continue
+
+        chunks.append(current_chunk)
+        current_chunk = f"{continuation_header}\n\n{entry}"
+
+    chunks.append(current_chunk)
+    return tuple(chunks)
 
 
 def _format_ticket_heading(ticket: TicketDetailsSummary) -> str:
@@ -264,3 +314,13 @@ def _format_ticket_index_page(
 
 def _format_ticket_list_meta(priority: str, status: TicketStatus) -> str:
     return f"{format_status(status).capitalize()} • {format_priority(priority)} приоритет"
+
+
+def _format_ticket_note_entry(note: TicketInternalNoteSummary) -> str:
+    return f"{_format_note_author(note)} · {format_timestamp(note.created_at)}\n{note.text.rstrip()}"
+
+
+def _format_note_author(note: TicketInternalNoteSummary) -> str:
+    if note.author_operator_name:
+        return note.author_operator_name
+    return f"оператор #{note.author_operator_id}"

@@ -9,8 +9,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
-from application.use_cases.tickets.summaries import TicketDetailsSummary
+from application.use_cases.tickets.summaries import (
+    TicketDetailsSummary,
+    build_ticket_attachment_summary,
+)
 from bot.callbacks import OperatorActionCallback
+from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.delivery import deliver_operator_reply_to_client
 from bot.handlers.operator.active_context import (
     activate_ticket_for_operator,
@@ -48,6 +52,7 @@ from infrastructure.redis.contracts import (
 
 router = Router(name="operator_workflow_reply")
 logger = logging.getLogger(__name__)
+SUPPORTED_TICKET_MEDIA_FILTER = F.photo | F.document | F.voice | F.video
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "reply"))
@@ -104,6 +109,7 @@ async def handle_reply_action(
 
 
 @router.message(StateFilter(OperatorTicketStates.replying), F.text)
+@router.message(StateFilter(OperatorTicketStates.replying), SUPPORTED_TICKET_MEDIA_FILTER)
 async def handle_legacy_reply_message(
     message: Message,
     state: FSMContext,
@@ -143,6 +149,11 @@ async def handle_legacy_reply_message(
     StateFilter(None),
     F.text & ~F.text.startswith("/"),
 )
+@router.message(
+    MagicData(F.event_user_role.in_({UserRole.OPERATOR, UserRole.SUPER_ADMIN})),
+    StateFilter(None),
+    SUPPORTED_TICKET_MEDIA_FILTER,
+)
 async def handle_operator_message(
     message: Message,
     bot: Bot,
@@ -177,7 +188,8 @@ async def _handle_operator_message(
     ticket_lock_manager: TicketLockManager,
     explicit_ticket_public_id: UUID | None = None,
 ) -> None:
-    if message.from_user is None or message.text is None:
+    content = await extract_ticket_content(message, bot=bot)
+    if message.from_user is None or content is None:
         await message.answer(OPERATOR_UNKNOWN_TEXT)
         return
     if not await global_rate_limiter.allow():
@@ -221,7 +233,8 @@ async def _handle_operator_message(
                     display_name=message.from_user.full_name,
                     username=message.from_user.username,
                     telegram_message_id=message.message_id,
-                    text=message.text,
+                    text=content.text,
+                    attachment=content.attachment,
                     actor_telegram_user_id=message.from_user.id,
                 )
             except InvalidTicketTransitionError as exc:
@@ -254,7 +267,12 @@ async def _handle_operator_message(
         bot,
         chat_id=reply_result.client_chat_id,
         public_number=reply_result.ticket.public_number,
-        body=message.text,
+        text=content.text,
+        attachment=(
+            build_ticket_attachment_summary(content.attachment)
+            if content.attachment is not None
+            else None
+        ),
         reply_markup=build_client_ticket_markup(ticket_public_id=reply_result.ticket.public_id),
         logger=logger,
     )

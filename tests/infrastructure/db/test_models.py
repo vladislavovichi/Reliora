@@ -18,6 +18,7 @@ def test_models_package_populates_base_metadata() -> None:
         "ticket_categories",
         "ticket_events",
         "ticket_feedback",
+        "ticket_internal_notes",
         "ticket_messages",
         "ticket_tags",
         "tickets",

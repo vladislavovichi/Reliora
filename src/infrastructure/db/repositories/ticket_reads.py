@@ -8,13 +8,18 @@ from uuid import UUID
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.entities.ticket import Ticket as TicketEntity
-from domain.entities.ticket import TicketDetails, TicketMessageDetails
-from domain.enums.tickets import TicketMessageSenderType, TicketStatus
+from domain.entities.ticket import (
+    Ticket as TicketEntity,
+    TicketAttachmentDetails,
+    TicketDetails,
+    TicketInternalNoteDetails,
+    TicketMessageDetails,
+)
+from domain.enums.tickets import TicketAttachmentKind, TicketMessageSenderType, TicketStatus
 from infrastructure.db.models.catalog import Tag, TicketCategory
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import Ticket as TicketModel
-from infrastructure.db.models.ticket import TicketMessage, TicketTag
+from infrastructure.db.models.ticket import TicketInternalNote, TicketMessage, TicketTag
 from infrastructure.db.repositories.base import apply_queue_ordering
 
 
@@ -37,9 +42,14 @@ class SqlAlchemyTicketReadRepository:
             assigned_operator_telegram_user_id,
         ) = await self._get_assigned_operator_details(ticket.assigned_operator_id)
         category_code, category_title = await self._get_category_details(ticket.category_id)
-        last_message_text, last_message_sender_type = await self._get_last_message(ticket.id)
+        (
+            last_message_text,
+            last_message_sender_type,
+            last_message_attachment,
+        ) = await self._get_last_message(ticket.id)
         tags = await self._list_ticket_tags(ticket.id)
         message_history = await self._list_ticket_messages(ticket.id)
+        internal_notes = await self._list_ticket_internal_notes(ticket.id)
 
         return TicketDetails(
             id=ticket.id,
@@ -61,7 +71,9 @@ class SqlAlchemyTicketReadRepository:
             tags=tags,
             last_message_text=last_message_text,
             last_message_sender_type=last_message_sender_type,
+            last_message_attachment=last_message_attachment,
             message_history=message_history,
+            internal_notes=internal_notes,
         )
 
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
@@ -154,9 +166,22 @@ class SqlAlchemyTicketReadRepository:
     async def _get_last_message(
         self,
         ticket_id: int,
-    ) -> tuple[str | None, TicketMessageSenderType | None]:
+    ) -> tuple[
+        str | None,
+        TicketMessageSenderType | None,
+        TicketAttachmentDetails | None,
+    ]:
         statement = (
-            select(TicketMessage.text, TicketMessage.sender_type)
+            select(
+                TicketMessage.text,
+                TicketMessage.sender_type,
+                TicketMessage.attachment_kind,
+                TicketMessage.attachment_file_id,
+                TicketMessage.attachment_file_unique_id,
+                TicketMessage.attachment_filename,
+                TicketMessage.attachment_mime_type,
+                TicketMessage.attachment_storage_path,
+            )
             .where(TicketMessage.ticket_id == ticket_id)
             .order_by(desc(TicketMessage.created_at), desc(TicketMessage.id))
             .limit(1)
@@ -164,8 +189,19 @@ class SqlAlchemyTicketReadRepository:
         result = await self.session.execute(statement)
         row = result.first()
         if row is None:
-            return None, None
-        return cast(str, row[0]), cast(TicketMessageSenderType, row[1])
+            return None, None, None
+        return (
+            cast(str | None, row[0]),
+            cast(TicketMessageSenderType, row[1]),
+            _build_attachment_details(
+                kind=cast(TicketAttachmentKind | None, _row_value(row, 2)),
+                file_id=cast(str | None, _row_value(row, 3)),
+                file_unique_id=cast(str | None, _row_value(row, 4)),
+                filename=cast(str | None, _row_value(row, 5)),
+                mime_type=cast(str | None, _row_value(row, 6)),
+                storage_path=cast(str | None, _row_value(row, 7)),
+            ),
+        )
 
     async def _get_category_details(self, category_id: int | None) -> tuple[str | None, str | None]:
         if category_id is None:
@@ -199,6 +235,12 @@ class SqlAlchemyTicketReadRepository:
                 TicketMessage.sender_operator_id,
                 Operator.display_name,
                 TicketMessage.text,
+                TicketMessage.attachment_kind,
+                TicketMessage.attachment_file_id,
+                TicketMessage.attachment_file_unique_id,
+                TicketMessage.attachment_filename,
+                TicketMessage.attachment_mime_type,
+                TicketMessage.attachment_storage_path,
                 TicketMessage.created_at,
             )
             .join(Operator, TicketMessage.sender_operator_id == Operator.id, isouter=True)
@@ -212,8 +254,69 @@ class SqlAlchemyTicketReadRepository:
                 sender_type=cast(TicketMessageSenderType, row[1]),
                 sender_operator_id=cast(int | None, row[2]),
                 sender_operator_name=cast(str | None, row[3]),
-                text=cast(str, row[4]),
-                created_at=cast(datetime, row[5]),
+                text=cast(str | None, row[4]),
+                attachment=_build_attachment_details(
+                    kind=cast(TicketAttachmentKind | None, _row_value(row, 5)),
+                    file_id=cast(str | None, _row_value(row, 6)),
+                    file_unique_id=cast(str | None, _row_value(row, 7)),
+                    filename=cast(str | None, _row_value(row, 8)),
+                    mime_type=cast(str | None, _row_value(row, 9)),
+                    storage_path=cast(str | None, _row_value(row, 10)),
+                ),
+                created_at=cast(datetime, _row_value(row, 11, _row_value(row, 10))),
             )
             for row in result.all()
         )
+
+    async def _list_ticket_internal_notes(self, ticket_id: int) -> tuple[TicketInternalNoteDetails, ...]:
+        statement = (
+            select(
+                TicketInternalNote.id,
+                TicketInternalNote.author_operator_id,
+                Operator.display_name,
+                TicketInternalNote.text,
+                TicketInternalNote.created_at,
+            )
+            .join(Operator, TicketInternalNote.author_operator_id == Operator.id)
+            .where(TicketInternalNote.ticket_id == ticket_id)
+            .order_by(TicketInternalNote.created_at.asc(), TicketInternalNote.id.asc())
+        )
+        result = await self.session.execute(statement)
+        return tuple(
+            TicketInternalNoteDetails(
+                id=cast(int, row[0]),
+                author_operator_id=cast(int, row[1]),
+                author_operator_name=cast(str | None, row[2]),
+                text=cast(str, row[3]),
+                created_at=cast(datetime, row[4]),
+            )
+            for row in result.all()
+        )
+
+
+def _build_attachment_details(
+    *,
+    kind: TicketAttachmentKind | None,
+    file_id: str | None,
+    file_unique_id: str | None,
+    filename: str | None,
+    mime_type: str | None,
+    storage_path: str | None,
+) -> TicketAttachmentDetails | None:
+    if kind is None or file_id is None:
+        return None
+    return TicketAttachmentDetails(
+        kind=kind,
+        telegram_file_id=file_id,
+        telegram_file_unique_id=file_unique_id,
+        filename=filename,
+        mime_type=mime_type,
+        storage_path=storage_path,
+    )
+
+
+def _row_value(row: object, index: int, default: object = None) -> object:
+    try:
+        return cast(object, row[index])  # type: ignore[index]
+    except (IndexError, TypeError):
+        return default

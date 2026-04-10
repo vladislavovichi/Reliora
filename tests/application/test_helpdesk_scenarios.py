@@ -19,11 +19,12 @@ from domain.contracts.repositories import (
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
+    TicketInternalNoteRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
 )
-from domain.entities.ticket import TicketDetails, TicketMessageDetails
+from domain.entities.ticket import TicketDetails, TicketInternalNoteDetails, TicketMessageDetails
 from domain.enums.roles import UserRole
 from domain.enums.tickets import (
     TicketEventType,
@@ -52,6 +53,7 @@ class InMemoryTicketRecord:
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
     message_history: tuple[TicketMessageDetails, ...] = ()
+    internal_notes: tuple[TicketInternalNoteDetails, ...] = ()
     tags: tuple[str, ...] = ()
     category_code: str | None = None
     category_title: str | None = None
@@ -203,6 +205,7 @@ class InMemoryTicketRepository:
             last_message_text=ticket.last_message_text,
             last_message_sender_type=ticket.last_message_sender_type,
             message_history=ticket.message_history,
+            internal_notes=ticket.internal_notes,
         )
 
     async def get_active_by_client_chat_id(
@@ -349,7 +352,7 @@ class InMemoryTicketRepository:
         *,
         ticket_id: int,
         telegram_message_id: int,
-        text: str,
+        text: str | None,
         sender_type: TicketMessageSenderType,
         sender_operator_id: int | None = None,
         sender_operator_name: str | None = None,
@@ -384,7 +387,8 @@ class InMemoryMessageRepository:
         ticket_id: int,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: object | None = None,
         sender_operator_id: int | None = None,
     ) -> None:
         self.added_messages.append(
@@ -393,6 +397,7 @@ class InMemoryMessageRepository:
                 "telegram_message_id": telegram_message_id,
                 "sender_type": sender_type,
                 "text": text,
+                "attachment": attachment,
                 "sender_operator_id": sender_operator_id,
             }
         )
@@ -417,6 +422,42 @@ class InMemoryMessageRepository:
         sender_type: TicketMessageSenderType,
     ) -> int:
         return -ticket_id
+
+
+@dataclass(slots=True)
+class InMemoryInternalNoteRepository:
+    ticket_repository: InMemoryTicketRepository
+    added_notes: list[dict[str, object]] = field(default_factory=list)
+
+    async def add(
+        self,
+        *,
+        ticket_id: int,
+        author_operator_id: int,
+        text: str,
+    ) -> TicketInternalNoteDetails:
+        note = TicketInternalNoteDetails(
+            id=len(self.added_notes) + 1,
+            author_operator_id=author_operator_id,
+            author_operator_name=self.ticket_repository.operator_display_names.get(
+                author_operator_id
+            ),
+            text=text,
+            created_at=datetime.now(UTC),
+        )
+        self.added_notes.append(
+            {
+                "ticket_id": ticket_id,
+                "author_operator_id": author_operator_id,
+                "text": text,
+            }
+        )
+        for ticket in self.ticket_repository.tickets.values():
+            if ticket.id == ticket_id:
+                ticket.internal_notes = (*ticket.internal_notes, note)
+                ticket.updated_at = note.created_at
+                break
+        return note
 
 
 @dataclass(slots=True)
@@ -585,6 +626,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
         operator_telegram_user_ids=operator_repository.telegram_user_ids_by_operator_id,
     )
     message_repository = InMemoryMessageRepository(ticket_repository=ticket_repository)
+    internal_note_repository = InMemoryInternalNoteRepository(
+        ticket_repository=ticket_repository
+    )
     event_repository = InMemoryEventRepository()
     super_admin_telegram_user_id = 42
 
@@ -595,6 +639,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
                 TicketFeedbackRepository, EmptyTicketFeedbackRepository()
             ),
             ticket_message_repository=cast(TicketMessageRepository, message_repository),
+            ticket_internal_note_repository=cast(
+                TicketInternalNoteRepository, internal_note_repository
+            ),
             ticket_event_repository=cast(TicketEventRepository, event_repository),
             operator_repository=cast(OperatorRepository, operator_repository),
             macro_repository=cast(MacroRepository, EmptyMacroRepository()),

@@ -32,6 +32,17 @@ FIELDNAMES = (
     "transcript_sender_role",
     "transcript_sender_name",
     "transcript_text",
+    "transcript_attachment_kind",
+    "transcript_attachment_file_id",
+    "transcript_attachment_file_unique_id",
+    "transcript_attachment_filename",
+    "transcript_attachment_mime_type",
+    "transcript_attachment_storage_path",
+    "internal_note_index",
+    "internal_note_timestamp",
+    "internal_note_author_id",
+    "internal_note_author_name",
+    "internal_note_text",
 )
 
 
@@ -49,11 +60,54 @@ def render_ticket_report_csv(report: TicketReport) -> bytes:
                     "transcript_timestamp": _format_timestamp(message.created_at),
                     "transcript_sender_role": message.sender_type.value,
                     "transcript_sender_name": message.sender_operator_name or "",
-                    "transcript_text": message.text,
+                    "transcript_text": message.text or "",
+                    "transcript_attachment_kind": (
+                        message.attachment.kind.value if message.attachment is not None else ""
+                    ),
+                    "transcript_attachment_file_id": (
+                        message.attachment.telegram_file_id
+                        if message.attachment is not None
+                        else ""
+                    ),
+                    "transcript_attachment_file_unique_id": (
+                        message.attachment.telegram_file_unique_id
+                        if message.attachment is not None
+                        and message.attachment.telegram_file_unique_id is not None
+                        else ""
+                    ),
+                    "transcript_attachment_filename": (
+                        message.attachment.filename
+                        if message.attachment is not None and message.attachment.filename is not None
+                        else ""
+                    ),
+                    "transcript_attachment_mime_type": (
+                        message.attachment.mime_type
+                        if message.attachment is not None
+                        and message.attachment.mime_type is not None
+                        else ""
+                    ),
+                    "transcript_attachment_storage_path": (
+                        message.attachment.storage_path
+                        if message.attachment is not None
+                        and message.attachment.storage_path is not None
+                        else ""
+                    ),
                 }
             )
-    else:
+    elif not report.internal_notes:
         writer.writerow(_build_base_row(report))
+
+    for index, note in enumerate(report.internal_notes, start=1):
+        writer.writerow(
+            {
+                **_build_base_row(report),
+                "internal_note_index": index,
+                "internal_note_timestamp": _format_timestamp(note.created_at),
+                "internal_note_author_id": note.author_operator_id,
+                "internal_note_author_name": note.author_operator_name or "",
+                "internal_note_text": note.text,
+            }
+        )
 
     return buffer.getvalue().encode("utf-8-sig")
 
@@ -91,6 +145,17 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "transcript_sender_role": "",
         "transcript_sender_name": "",
         "transcript_text": "",
+        "transcript_attachment_kind": "",
+        "transcript_attachment_file_id": "",
+        "transcript_attachment_file_unique_id": "",
+        "transcript_attachment_filename": "",
+        "transcript_attachment_mime_type": "",
+        "transcript_attachment_storage_path": "",
+        "internal_note_index": "",
+        "internal_note_timestamp": "",
+        "internal_note_author_id": "",
+        "internal_note_author_name": "",
+        "internal_note_text": "",
     }
 
 

@@ -6,6 +6,8 @@ from aiogram import Bot
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.use_cases.tickets.summaries import build_ticket_attachment_summary
+from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.delivery import deliver_client_message_to_operator
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.operator_actions import (
@@ -33,7 +35,8 @@ async def process_client_ticket_message(
     logger: logging.Logger,
     category_id: int | None = None,
 ) -> None:
-    if message.text is None:
+    content = await extract_ticket_content(message, bot=bot)
+    if content is None:
         return
 
     try:
@@ -42,14 +45,16 @@ async def process_client_ticket_message(
                 await helpdesk_service.create_ticket_from_client_message(
                     client_chat_id=message.chat.id,
                     telegram_message_id=message.message_id,
-                    text=message.text,
+                    text=content.text,
+                    attachment=content.attachment,
                 )
                 if category_id is None
                 else await helpdesk_service.create_ticket_from_client_intake(
                     client_chat_id=message.chat.id,
                     telegram_message_id=message.message_id,
                     category_id=category_id,
-                    text=message.text,
+                    text=content.text,
+                    attachment=content.attachment,
                 )
             )
             ticket_details = await helpdesk_service.get_ticket_details(
@@ -99,7 +104,12 @@ async def process_client_ticket_message(
             bot,
             chat_id=operator_chat_id,
             public_number=ticket.public_number,
-            body=message.text,
+            text=content.text,
+            attachment=(
+                build_ticket_attachment_summary(content.attachment)
+                if content.attachment is not None
+                else None
+            ),
             reply_markup=(
                 build_ticket_actions_markup(
                     ticket_public_id=ticket.public_id,

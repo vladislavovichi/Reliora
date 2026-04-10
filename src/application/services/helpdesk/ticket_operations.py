@@ -22,6 +22,7 @@ from application.use_cases.tickets.summaries import (
     TicketSummary,
 )
 from domain.enums.tickets import TicketMessageSenderType
+from domain.entities.ticket import TicketAttachmentDetails
 from infrastructure.redis.contracts import SLADeadlineScheduler
 
 
@@ -36,12 +37,14 @@ class HelpdeskTicketOperations:
         *,
         client_chat_id: int,
         telegram_message_id: int,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
     ) -> TicketSummary:
         result = await self._components.tickets.create_from_client_message(
             client_chat_id=client_chat_id,
             telegram_message_id=telegram_message_id,
             text=text,
+            attachment=attachment,
         )
         await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
@@ -52,12 +55,14 @@ class HelpdeskTicketOperations:
         client_chat_id: int,
         telegram_message_id: int,
         category_id: int,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
     ) -> TicketSummary:
         result = await self._components.tickets.create_from_client_message(
             client_chat_id=client_chat_id,
             telegram_message_id=telegram_message_id,
             text=text,
+            attachment=attachment,
             category_id=category_id,
         )
         await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
@@ -110,7 +115,8 @@ class HelpdeskTicketOperations:
         ticket_public_id: UUID,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
     ) -> TicketSummary | None:
         result = await self._components.tickets.add_message(
@@ -118,6 +124,7 @@ class HelpdeskTicketOperations:
             telegram_message_id=telegram_message_id,
             sender_type=sender_type,
             text=text,
+            attachment=attachment,
             sender_operator_id=sender_operator_id,
         )
         if result is not None:
@@ -269,7 +276,8 @@ class HelpdeskTicketOperations:
         display_name: str,
         username: str | None,
         telegram_message_id: int,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         actor_telegram_user_id: int | None = None,
     ) -> OperatorReplyResult | None:
         await self._require_permission_if_actor(
@@ -283,11 +291,37 @@ class HelpdeskTicketOperations:
             username=username,
             telegram_message_id=telegram_message_id,
             text=text,
+            attachment=attachment,
         )
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
             )
+        return result
+
+    async def add_internal_note_to_ticket(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None,
+        text: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketSummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        result = await self._components.tickets.add_internal_note(
+            ticket_public_id=ticket_public_id,
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+            text=text,
+        )
+        if result is not None:
+            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
     async def escalate_ticket(

@@ -85,6 +85,14 @@ def build_ticket_more_actions_markup(
     if change_row:
         builder.row(*change_row)
 
+    if status != TicketStatus.CLOSED:
+        builder.row(
+            _build_callback_button(
+                "Заметки",
+                OperatorActionCallback(action="notes", ticket_public_id=callback_value).pack(),
+            )
+        )
+
     builder.row(
         _build_callback_button(
             "Экспорт",
@@ -129,6 +137,24 @@ def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeybo
             "HTML",
             OperatorActionCallback(action="export_html", ticket_public_id=callback_value).pack(),
         ),
+    )
+    builder.row(
+        _build_callback_button(
+            BACK_BUTTON_TEXT,
+            OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
+def build_ticket_notes_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    callback_value = str(ticket_public_id)
+    builder.row(
+        _build_callback_button(
+            "Добавить",
+            OperatorActionCallback(action="note_add", ticket_public_id=callback_value).pack(),
+        )
     )
     builder.row(
         _build_callback_button(

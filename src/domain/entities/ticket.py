@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from domain.enums.tickets import (
+    TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
@@ -31,19 +32,39 @@ class Ticket(Protocol):
 
 
 @dataclass(slots=True)
+class TicketAttachmentDetails:
+    kind: TicketAttachmentKind
+    telegram_file_id: str
+    telegram_file_unique_id: str | None
+    filename: str | None
+    mime_type: str | None
+    storage_path: str | None = None
+
+
+@dataclass(slots=True)
 class TicketMessageDetails:
     telegram_message_id: int
     sender_type: TicketMessageSenderType
     sender_operator_id: int | None
     sender_operator_name: str | None
-    text: str
+    text: str | None
     created_at: datetime
+    attachment: TicketAttachmentDetails | None = None
 
 
 @dataclass(slots=True)
 class TicketEventDetails:
     event_type: TicketEventType
     payload_json: dict[str, object] | None
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class TicketInternalNoteDetails:
+    id: int
+    author_operator_id: int
+    author_operator_name: str | None
+    text: str
     created_at: datetime
 
 
@@ -68,4 +89,6 @@ class TicketDetails:
     tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
+    last_message_attachment: TicketAttachmentDetails | None = None
     message_history: tuple[TicketMessageDetails, ...] = ()
+    internal_notes: tuple[TicketInternalNoteDetails, ...] = ()

@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from domain.enums.tickets import (
+    TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
@@ -91,6 +92,10 @@ class Ticket(TimestampMixin, Base):
         back_populates="ticket",
         cascade="all, delete-orphan",
     )
+    internal_notes: Mapped[list[TicketInternalNote]] = relationship(
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+    )
     events: Mapped[list[TicketEvent]] = relationship(
         back_populates="ticket",
         cascade="all, delete-orphan",
@@ -109,7 +114,11 @@ class Ticket(TimestampMixin, Base):
 class TicketMessage(CreatedAtMixin, Base):
     __tablename__ = "ticket_messages"
     __table_args__ = (
-        CheckConstraint("length(text) > 0", name="ticket_message_text_not_empty"),
+        CheckConstraint(
+            "(text IS NOT NULL AND length(btrim(text)) > 0) "
+            "OR attachment_kind IS NOT NULL",
+            name="ticket_message_content_not_empty",
+        ),
         UniqueConstraint(
             "ticket_id",
             "telegram_message_id",
@@ -140,10 +149,46 @@ class TicketMessage(CreatedAtMixin, Base):
         nullable=True,
         index=True,
     )
-    text: Mapped[str] = mapped_column(Text, nullable=False)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachment_kind: Mapped[TicketAttachmentKind | None] = mapped_column(
+        Enum(
+            TicketAttachmentKind,
+            name="ticket_attachment_kind",
+            values_callable=enum_values,
+        ),
+        nullable=True,
+        index=True,
+    )
+    attachment_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_file_unique_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_storage_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     ticket: Mapped[Ticket] = relationship(back_populates="messages")
     sender_operator: Mapped[Operator | None] = relationship(back_populates="sent_messages")
+
+
+class TicketInternalNote(CreatedAtMixin, Base):
+    __tablename__ = "ticket_internal_notes"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("tickets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    author_operator_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("operators.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    ticket: Mapped[Ticket] = relationship(back_populates="internal_notes")
+    author_operator: Mapped[Operator] = relationship()
 
 
 class TicketEvent(CreatedAtMixin, Base):

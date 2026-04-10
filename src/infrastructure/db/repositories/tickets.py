@@ -7,9 +7,13 @@ from typing import cast
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from domain.entities.ticket import TicketEventDetails
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType
-from infrastructure.db.models.ticket import TicketEvent, TicketMessage
+from domain.entities.ticket import (
+    TicketAttachmentDetails,
+    TicketEventDetails,
+    TicketInternalNoteDetails,
+)
+from domain.enums.tickets import TicketAttachmentKind, TicketEventType, TicketMessageSenderType
+from infrastructure.db.models.ticket import TicketEvent, TicketInternalNote, TicketMessage
 from infrastructure.db.repositories.ticket_metrics import SqlAlchemyTicketMetricsRepository
 from infrastructure.db.repositories.ticket_reads import SqlAlchemyTicketReadRepository
 from infrastructure.db.repositories.ticket_writes import SqlAlchemyTicketWriteRepository
@@ -34,7 +38,8 @@ class SqlAlchemyTicketMessageRepository:
         ticket_id: int,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
     ) -> None:
         ticket_message = TicketMessage(
@@ -43,6 +48,14 @@ class SqlAlchemyTicketMessageRepository:
             sender_type=sender_type,
             sender_operator_id=sender_operator_id,
             text=text,
+            attachment_kind=attachment.kind if attachment is not None else None,
+            attachment_file_id=attachment.telegram_file_id if attachment is not None else None,
+            attachment_file_unique_id=(
+                attachment.telegram_file_unique_id if attachment is not None else None
+            ),
+            attachment_filename=attachment.filename if attachment is not None else None,
+            attachment_mime_type=attachment.mime_type if attachment is not None else None,
+            attachment_storage_path=attachment.storage_path if attachment is not None else None,
         )
         self.session.add(ticket_message)
         await self.session.flush()
@@ -62,6 +75,34 @@ class SqlAlchemyTicketMessageRepository:
         if current_min is None or current_min >= 0:
             return -1
         return int(current_min) - 1
+
+
+class SqlAlchemyTicketInternalNoteRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def add(
+        self,
+        *,
+        ticket_id: int,
+        author_operator_id: int,
+        text: str,
+    ) -> TicketInternalNoteDetails:
+        note = TicketInternalNote(
+            ticket_id=ticket_id,
+            author_operator_id=author_operator_id,
+            text=text,
+        )
+        self.session.add(note)
+        await self.session.flush()
+
+        return TicketInternalNoteDetails(
+            id=note.id,
+            author_operator_id=note.author_operator_id,
+            author_operator_name=None,
+            text=note.text,
+            created_at=note.created_at,
+        )
 
 
 class SqlAlchemyTicketEventRepository:

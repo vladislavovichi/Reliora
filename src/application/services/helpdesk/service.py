@@ -22,6 +22,7 @@ from domain.contracts.repositories import (
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
+    TicketInternalNoteRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
@@ -41,6 +42,7 @@ class HelpdeskService(
     ticket_repository: TicketRepository
     ticket_feedback_repository: TicketFeedbackRepository
     ticket_message_repository: TicketMessageRepository
+    ticket_internal_note_repository: TicketInternalNoteRepository
     ticket_event_repository: TicketEventRepository
     operator_repository: OperatorRepository
     macro_repository: MacroRepository
@@ -60,6 +62,7 @@ class HelpdeskService(
             ticket_repository=self.ticket_repository,
             ticket_feedback_repository=self.ticket_feedback_repository,
             ticket_message_repository=self.ticket_message_repository,
+            ticket_internal_note_repository=self.ticket_internal_note_repository,
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
             macro_repository=self.macro_repository,

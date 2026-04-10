@@ -242,7 +242,13 @@ def test_build_ticket_more_actions_markup_groups_secondary_actions() -> None:
     )
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("Метки", "Передать"), ("Экспорт",), ("Эскалация", "Карточка"), ("Назад",))
+    assert rows == (
+        ("Метки", "Передать"),
+        ("Заметки",),
+        ("Экспорт",),
+        ("Эскалация", "Карточка"),
+        ("Назад",),
+    )
 
 
 def test_build_ticket_export_actions_markup_offers_two_formats() -> None:

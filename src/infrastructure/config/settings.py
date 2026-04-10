@@ -116,6 +116,19 @@ class LoggingConfig(BaseModel):
     structured: bool = True
 
 
+class AssetsConfig(BaseModel):
+    path: Path = Path("assets")
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def validate_path(cls, value: object) -> Path:
+        if isinstance(value, Path):
+            return value
+        if isinstance(value, str) and value.strip():
+            return Path(value.strip())
+        return Path("assets")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -133,6 +146,7 @@ class Settings(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    assets: AssetsConfig = Field(default_factory=AssetsConfig)
 
     @model_validator(mode="after")
     def apply_runtime_service_targets(self) -> Settings:

@@ -7,9 +7,19 @@ from uuid import UUID
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
 from domain.contracts.repositories import OperatorRecord
-from domain.entities.ticket import Ticket, TicketMessageDetails
+from domain.entities.ticket import (
+    Ticket,
+    TicketAttachmentDetails,
+    TicketInternalNoteDetails,
+    TicketMessageDetails,
+)
 from domain.entities.ticket import TicketDetails as DomainTicketDetails
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketAttachmentKind,
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketStatus,
+)
 
 
 @dataclass(slots=True)
@@ -95,12 +105,36 @@ def build_operator_ticket_summary(ticket: Ticket) -> OperatorTicketSummary:
 
 
 @dataclass(slots=True)
+class TicketAttachmentSummary:
+    kind: TicketAttachmentKind
+    telegram_file_id: str
+    telegram_file_unique_id: str | None
+    filename: str | None
+    mime_type: str | None
+    storage_path: str | None = None
+
+
+def build_ticket_attachment_summary(
+    attachment: TicketAttachmentDetails,
+) -> TicketAttachmentSummary:
+    return TicketAttachmentSummary(
+        kind=attachment.kind,
+        telegram_file_id=attachment.telegram_file_id,
+        telegram_file_unique_id=attachment.telegram_file_unique_id,
+        filename=attachment.filename,
+        mime_type=attachment.mime_type,
+        storage_path=attachment.storage_path,
+    )
+
+
+@dataclass(slots=True)
 class TicketMessageSummary:
     sender_type: TicketMessageSenderType
     sender_operator_id: int | None
     sender_operator_name: str | None
-    text: str
+    text: str | None
     created_at: datetime
+    attachment: TicketAttachmentSummary | None = None
 
 
 def build_ticket_message_summary(message: TicketMessageDetails) -> TicketMessageSummary:
@@ -109,7 +143,33 @@ def build_ticket_message_summary(message: TicketMessageDetails) -> TicketMessage
         sender_operator_id=message.sender_operator_id,
         sender_operator_name=message.sender_operator_name,
         text=message.text,
+        attachment=(
+            build_ticket_attachment_summary(message.attachment)
+            if message.attachment is not None
+            else None
+        ),
         created_at=message.created_at,
+    )
+
+
+@dataclass(slots=True)
+class TicketInternalNoteSummary:
+    id: int
+    author_operator_id: int
+    author_operator_name: str | None
+    text: str
+    created_at: datetime
+
+
+def build_ticket_internal_note_summary(
+    note: TicketInternalNoteDetails,
+) -> TicketInternalNoteSummary:
+    return TicketInternalNoteSummary(
+        id=note.id,
+        author_operator_id=note.author_operator_id,
+        author_operator_name=note.author_operator_name,
+        text=note.text,
+        created_at=note.created_at,
     )
 
 
@@ -131,7 +191,9 @@ class TicketDetailsSummary:
     tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
+    last_message_attachment: TicketAttachmentSummary | None = None
     message_history: tuple[TicketMessageSummary, ...] = ()
+    internal_notes: tuple[TicketInternalNoteSummary, ...] = ()
 
 
 def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSummary:
@@ -152,8 +214,16 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         tags=ticket.tags,
         last_message_text=ticket.last_message_text,
         last_message_sender_type=ticket.last_message_sender_type,
+        last_message_attachment=(
+            build_ticket_attachment_summary(ticket.last_message_attachment)
+            if ticket.last_message_attachment is not None
+            else None
+        ),
         message_history=tuple(
             build_ticket_message_summary(message) for message in ticket.message_history
+        ),
+        internal_notes=tuple(
+            build_ticket_internal_note_summary(note) for note in ticket.internal_notes
         ),
     )
 

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
 from application.use_cases.tickets.summaries import TicketSummary
-from domain.entities.ticket import Ticket
+from domain.entities.ticket import Ticket, TicketAttachmentDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 
 
@@ -61,6 +61,7 @@ def build_message_payload(
     telegram_message_id: int,
     sender_type: TicketMessageSenderType,
     sender_operator_id: int | None,
+    attachment: TicketAttachmentDetails | None = None,
     extra_payload: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -69,6 +70,8 @@ def build_message_payload(
     }
     if sender_operator_id is not None:
         payload["sender_operator_id"] = sender_operator_id
+    if attachment is not None:
+        payload.update(build_attachment_payload(attachment))
     if extra_payload is not None:
         payload.update(extra_payload)
     return payload
@@ -82,3 +85,19 @@ def build_event_type_for_message(
     if sender_type == TicketMessageSenderType.OPERATOR:
         return TicketEventType.OPERATOR_MESSAGE_ADDED
     return None
+
+
+def build_attachment_payload(attachment: TicketAttachmentDetails) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "attachment_kind": attachment.kind.value,
+        "attachment_file_id": attachment.telegram_file_id,
+    }
+    if attachment.telegram_file_unique_id is not None:
+        payload["attachment_file_unique_id"] = attachment.telegram_file_unique_id
+    if attachment.filename is not None:
+        payload["attachment_filename"] = attachment.filename
+    if attachment.mime_type is not None:
+        payload["attachment_mime_type"] = attachment.mime_type
+    if attachment.storage_path is not None:
+        payload["attachment_storage_path"] = attachment.storage_path
+    return payload

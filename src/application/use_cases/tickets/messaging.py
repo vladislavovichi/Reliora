@@ -13,9 +13,11 @@ from application.use_cases.tickets.summaries import OperatorReplyResult, TicketS
 from domain.contracts.repositories import (
     OperatorRepository,
     TicketEventRepository,
+    TicketInternalNoteRepository,
     TicketMessageRepository,
     TicketRepository,
 )
+from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketMessageSenderType
 from domain.tickets import InvalidTicketTransitionError, ensure_operator_replyable
 
@@ -37,7 +39,8 @@ class AddMessageToTicketUseCase:
         ticket_public_id: UUID,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
         extra_event_payload: Mapping[str, object] | None = None,
     ) -> TicketSummary | None:
@@ -46,6 +49,9 @@ class AddMessageToTicketUseCase:
             return None
 
         from domain.tickets import ensure_message_addable
+
+        if text is None and attachment is None:
+            raise ValueError("Нужно передать текст сообщения или вложение.")
 
         ensure_message_addable(ticket.status)
         current_time = utcnow()
@@ -58,6 +64,7 @@ class AddMessageToTicketUseCase:
             telegram_message_id=telegram_message_id,
             sender_type=sender_type,
             text=text,
+            attachment=attachment,
             sender_operator_id=sender_operator_id,
         )
 
@@ -70,6 +77,7 @@ class AddMessageToTicketUseCase:
                     telegram_message_id=telegram_message_id,
                     sender_type=sender_type,
                     sender_operator_id=sender_operator_id,
+                    attachment=attachment,
                     extra_payload=extra_event_payload,
                 ),
             )
@@ -101,7 +109,8 @@ class ReplyToTicketAsOperatorUseCase:
         display_name: str,
         username: str | None,
         telegram_message_id: int,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
     ) -> OperatorReplyResult | None:
         ticket_details = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
         if ticket_details is None:
@@ -125,6 +134,7 @@ class ReplyToTicketAsOperatorUseCase:
             telegram_message_id=telegram_message_id,
             sender_type=TicketMessageSenderType.OPERATOR,
             text=text,
+            attachment=attachment,
             sender_operator_id=operator_id,
         )
         if ticket is None:
@@ -134,3 +144,45 @@ class ReplyToTicketAsOperatorUseCase:
             ticket=ticket,
             client_chat_id=ticket_details.client_chat_id,
         )
+
+
+class AddInternalNoteToTicketUseCase:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        ticket_internal_note_repository: TicketInternalNoteRepository,
+        operator_repository: OperatorRepository,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.ticket_internal_note_repository = ticket_internal_note_repository
+        self.operator_repository = operator_repository
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None,
+        text: str,
+    ) -> TicketSummary | None:
+        normalized_text = text.strip()
+        if not normalized_text:
+            raise ValueError("Текст заметки не может быть пустым.")
+
+        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None or ticket.id is None:
+            return None
+
+        operator_id = await self.operator_repository.get_or_create(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+        ticket.updated_at = utcnow()
+        await self.ticket_internal_note_repository.add(
+            ticket_id=ticket.id,
+            author_operator_id=operator_id,
+            text=normalized_text,
+        )
+        return build_ticket_summary(ticket)

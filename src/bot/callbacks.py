@@ -18,6 +18,8 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
         "tags",
         "more",
         "card",
+        "notes",
+        "note_add",
         "export",
         "export_csv",
         "export_html",

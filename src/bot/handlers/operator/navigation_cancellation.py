@@ -48,6 +48,7 @@ CATEGORY_EDIT_STATE_NAMES = {
 OPERATOR_TICKET_STATE_NAMES = {
     OperatorTicketStates.replying.state,
     OperatorTicketStates.reassigning.state,
+    OperatorTicketStates.writing_note.state,
 }
 
 router = Router(name="operator_navigation_cancellation")

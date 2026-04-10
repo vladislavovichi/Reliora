@@ -7,8 +7,11 @@ from bot.formatters.operator_ticket_views import (
     format_active_ticket_context,
     format_ticket_details,
     format_ticket_history_chunks,
+    format_ticket_notes_chunks,
+    format_ticket_notes_text,
 )
 from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
+from bot.keyboards.inline.operator_actions import build_ticket_notes_markup
 
 
 def format_ticket_main_surface(
@@ -74,3 +77,16 @@ async def edit_ticket_main_message(
             status=ticket_details.status,
         ),
     )
+
+
+async def send_ticket_notes(
+    *,
+    message: Message,
+    ticket_details: TicketDetailsSummary,
+) -> None:
+    await message.answer(
+        format_ticket_notes_text(ticket_details),
+        reply_markup=build_ticket_notes_markup(ticket_public_id=ticket_details.public_id),
+    )
+    for chunk in format_ticket_notes_chunks(ticket_details):
+        await message.answer(chunk)

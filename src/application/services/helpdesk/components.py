@@ -33,6 +33,7 @@ from application.use_cases.tickets.macros import (
 )
 from application.use_cases.tickets.messaging import (
     AddMessageToTicketUseCase,
+    AddInternalNoteToTicketUseCase,
     ReplyToTicketAsOperatorUseCase,
 )
 from application.use_cases.tickets.operators import (
@@ -74,6 +75,7 @@ from domain.contracts.repositories import (
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
+    TicketInternalNoteRepository,
     TicketMessageRepository,
     TicketRepository,
     TicketTagRepository,
@@ -90,6 +92,7 @@ class HelpdeskTicketUseCases:
     submit_feedback_rating: SubmitTicketFeedbackRatingUseCase
     add_feedback_comment: AddTicketFeedbackCommentUseCase
     add_message: AddMessageToTicketUseCase
+    add_internal_note: AddInternalNoteToTicketUseCase
     assign_ticket: AssignTicketToOperatorUseCase
     get_next_queued: GetNextQueuedTicketUseCase
     list_queued: ListQueuedTicketsUseCase
@@ -153,6 +156,7 @@ def build_helpdesk_components(
     ticket_repository: TicketRepository,
     ticket_feedback_repository: TicketFeedbackRepository,
     ticket_message_repository: TicketMessageRepository,
+    ticket_internal_note_repository: TicketInternalNoteRepository,
     ticket_event_repository: TicketEventRepository,
     operator_repository: OperatorRepository,
     macro_repository: MacroRepository,
@@ -192,6 +196,11 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,
                 ticket_event_repository=ticket_event_repository,
+            ),
+            add_internal_note=AddInternalNoteToTicketUseCase(
+                ticket_repository=ticket_repository,
+                ticket_internal_note_repository=ticket_internal_note_repository,
+                operator_repository=operator_repository,
             ),
             assign_ticket=AssignTicketToOperatorUseCase(
                 ticket_repository=ticket_repository,

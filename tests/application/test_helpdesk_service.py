@@ -385,7 +385,8 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
         ticket_id: int,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: object | None = None,
         sender_operator_id: int | None = None,
     ) -> None:
         repository.added_messages.append(
@@ -394,6 +395,7 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
                 "telegram_message_id": telegram_message_id,
                 "sender_type": sender_type,
                 "text": text,
+                "attachment": attachment,
                 "sender_operator_id": sender_operator_id,
             }
         )
@@ -415,6 +417,37 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
     repository.allocate_internal_telegram_message_id = AsyncMock(
         side_effect=allocate_internal_telegram_message_id
     )
+    return repository
+
+
+def build_internal_note_repository_mock() -> Mock:
+    repository = Mock()
+    repository.added_notes = []
+
+    async def add(
+        *,
+        ticket_id: int,
+        author_operator_id: int,
+        text: str,
+    ) -> SimpleNamespace:
+        note = SimpleNamespace(
+            id=len(repository.added_notes) + 1,
+            ticket_id=ticket_id,
+            author_operator_id=author_operator_id,
+            author_operator_name=None,
+            text=text,
+            created_at=datetime.now(UTC),
+        )
+        repository.added_notes.append(
+            {
+                "ticket_id": ticket_id,
+                "author_operator_id": author_operator_id,
+                "text": text,
+            }
+        )
+        return note
+
+    repository.add = AsyncMock(side_effect=add)
     return repository
 
 
@@ -899,6 +932,7 @@ def build_service(
     ticket_repository: StubTicketRepository,
     ticket_feedback_repository: StubTicketFeedbackRepository | None = None,
     message_repository: Any | None = None,
+    internal_note_repository: Any | None = None,
     event_repository: Any | None = None,
     operator_repository: Any | None = None,
     macro_repository: Any | None = None,
@@ -913,6 +947,9 @@ def build_service(
         ticket_repository=ticket_repository,
         ticket_feedback_repository=ticket_feedback_repository or StubTicketFeedbackRepository(),
         ticket_message_repository=message_repository or build_message_repository_mock(),
+        ticket_internal_note_repository=(
+            internal_note_repository or build_internal_note_repository_mock()
+        ),
         ticket_event_repository=event_repository or build_event_repository_mock(),
         operator_repository=operator_repository or build_operator_repository_mock({}),
         macro_repository=macro_repository or build_macro_repository_mock(),

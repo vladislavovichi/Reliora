@@ -6,7 +6,13 @@ from typing import Protocol
 from uuid import UUID
 
 from domain.entities.feedback import TicketFeedback
-from domain.entities.ticket import Ticket, TicketDetails, TicketEventDetails
+from domain.entities.ticket import (
+    Ticket,
+    TicketAttachmentDetails,
+    TicketDetails,
+    TicketEventDetails,
+    TicketInternalNoteDetails,
+)
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -178,7 +184,8 @@ class TicketMessageRepository(Protocol):
         ticket_id: int,
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
-        text: str,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
     ) -> None:
         """Persist a ticket message."""
@@ -190,6 +197,17 @@ class TicketMessageRepository(Protocol):
         sender_type: TicketMessageSenderType,
     ) -> int:
         """Return a negative internal message id suitable for synthetic ticket messages."""
+
+
+class TicketInternalNoteRepository(Protocol):
+    async def add(
+        self,
+        *,
+        ticket_id: int,
+        author_operator_id: int,
+        text: str,
+    ) -> TicketInternalNoteDetails:
+        """Persist an internal note attached to the ticket."""
 
 
 class TicketFeedbackRepository(Protocol):

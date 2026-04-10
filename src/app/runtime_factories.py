@@ -27,6 +27,7 @@ from infrastructure.db.repositories.feedback import SqlAlchemyTicketFeedbackRepo
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
 from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
+    SqlAlchemyTicketInternalNoteRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
 )
@@ -81,6 +82,7 @@ def build_helpdesk_service(
         ticket_repository=SqlAlchemyTicketRepository(session),
         ticket_feedback_repository=SqlAlchemyTicketFeedbackRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
+        ticket_internal_note_repository=SqlAlchemyTicketInternalNoteRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
         macro_repository=SqlAlchemyMacroRepository(session),

@@ -35,6 +35,7 @@ from infrastructure.redis.contracts import (
 
 router = Router(name="client_intake")
 logger = logging.getLogger(__name__)
+SUPPORTED_TICKET_MEDIA_FILTER = F.photo | F.document | F.voice | F.video
 
 
 async def start_client_intake(
@@ -105,6 +106,11 @@ async def handle_client_intake_cancel(
     MagicData(F.event_user_role == UserRole.USER),
     F.text & ~F.text.startswith("/"),
 )
+@router.message(
+    StateFilter(UserIntakeStates.writing_message),
+    MagicData(F.event_user_role == UserRole.USER),
+    SUPPORTED_TICKET_MEDIA_FILTER,
+)
 async def handle_client_intake_message(
     message: Message,
     state: FSMContext,
@@ -116,8 +122,6 @@ async def handle_client_intake_message(
     ticket_live_session_store: TicketLiveSessionStore,
     ticket_stream_publisher: TicketStreamPublisher,
 ) -> None:
-    if message.text is None:
-        return
     if not await global_rate_limiter.allow():
         await message.answer(SERVICE_UNAVAILABLE_TEXT)
         return
