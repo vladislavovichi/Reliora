@@ -14,8 +14,8 @@ from application.use_cases.tickets.summaries import (
     build_ticket_attachment_summary,
 )
 from bot.callbacks import OperatorActionCallback
-from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.delivery import deliver_operator_reply_to_client
+from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.handlers.operator.active_context import (
     activate_ticket_for_operator,
     clear_active_ticket_for_operator,

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
-from infrastructure.assets.storage import LocalTicketAssetStorage
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketAttachmentKind
+from infrastructure.assets.storage import LocalTicketAssetStorage
 
 
 async def test_local_ticket_asset_storage_downloads_file_into_assets(tmp_path: Path) -> None:

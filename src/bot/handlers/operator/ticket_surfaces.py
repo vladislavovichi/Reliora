@@ -10,8 +10,10 @@ from bot.formatters.operator_ticket_views import (
     format_ticket_notes_chunks,
     format_ticket_notes_text,
 )
-from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
-from bot.keyboards.inline.operator_actions import build_ticket_notes_markup
+from bot.keyboards.inline.operator_actions import (
+    build_ticket_actions_markup,
+    build_ticket_notes_markup,
+)
 
 
 def format_ticket_main_surface(

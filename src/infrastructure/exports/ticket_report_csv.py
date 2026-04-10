@@ -77,7 +77,10 @@ def render_ticket_report_csv(report: TicketReport) -> bytes:
                     ),
                     "transcript_attachment_filename": (
                         message.attachment.filename
-                        if message.attachment is not None and message.attachment.filename is not None
+                        if (
+                            message.attachment is not None
+                            and message.attachment.filename is not None
+                        )
                         else ""
                     ),
                     "transcript_attachment_mime_type": (

@@ -17,7 +17,6 @@ from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketDetails,
     TicketEventDetails,
-    TicketInternalNoteDetails,
 )
 from domain.enums.tickets import (
     TicketAttachmentKind,

@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.entities.ticket import (
     Ticket as TicketEntity,
+)
+from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketDetails,
     TicketInternalNoteDetails,
@@ -18,8 +20,14 @@ from domain.entities.ticket import (
 from domain.enums.tickets import TicketAttachmentKind, TicketMessageSenderType, TicketStatus
 from infrastructure.db.models.catalog import Tag, TicketCategory
 from infrastructure.db.models.operator import Operator
-from infrastructure.db.models.ticket import Ticket as TicketModel
-from infrastructure.db.models.ticket import TicketInternalNote, TicketMessage, TicketTag
+from infrastructure.db.models.ticket import (
+    Ticket as TicketModel,
+)
+from infrastructure.db.models.ticket import (
+    TicketInternalNote,
+    TicketMessage,
+    TicketTag,
+)
 from infrastructure.db.repositories.base import apply_queue_ordering
 
 
@@ -268,7 +276,10 @@ class SqlAlchemyTicketReadRepository:
             for row in result.all()
         )
 
-    async def _list_ticket_internal_notes(self, ticket_id: int) -> tuple[TicketInternalNoteDetails, ...]:
+    async def _list_ticket_internal_notes(
+        self,
+        ticket_id: int,
+    ) -> tuple[TicketInternalNoteDetails, ...]:
         statement = (
             select(
                 TicketInternalNote.id,

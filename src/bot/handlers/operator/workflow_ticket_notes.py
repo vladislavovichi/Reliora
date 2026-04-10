@@ -9,17 +9,24 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
-from bot.formatters.operator_ticket_views import format_ticket_notes_chunks, format_ticket_notes_text
+from bot.formatters.operator_ticket_views import (
+    format_ticket_notes_chunks,
+    format_ticket_notes_text,
+)
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
 from bot.keyboards.inline.operator_actions import build_ticket_notes_markup
-from bot.texts.common import INVALID_TICKET_ID_TEXT, SERVICE_UNAVAILABLE_TEXT, TICKET_NOT_FOUND_TEXT
+from bot.texts.common import (
+    INVALID_TICKET_ID_TEXT,
+    SERVICE_UNAVAILABLE_TEXT,
+    TICKET_NOT_FOUND_TEXT,
+)
 from bot.texts.operator import (
     NOTE_CONTEXT_LOST_TEXT,
-    NOTE_PROMPT_TEXT,
     NOTE_MODE_COMMAND_BLOCK_TEXT,
+    NOTE_PROMPT_TEXT,
     build_note_saved_text,
     build_notes_opened_text,
 )

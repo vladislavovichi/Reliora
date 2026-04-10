@@ -32,8 +32,8 @@ from application.use_cases.tickets.macros import (
     UpdateMacroTitleUseCase,
 )
 from application.use_cases.tickets.messaging import (
-    AddMessageToTicketUseCase,
     AddInternalNoteToTicketUseCase,
+    AddMessageToTicketUseCase,
     ReplyToTicketAsOperatorUseCase,
 )
 from application.use_cases.tickets.operators import (

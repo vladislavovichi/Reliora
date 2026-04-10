@@ -7,8 +7,8 @@ from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import build_ticket_attachment_summary
-from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.delivery import deliver_client_message_to_operator
+from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.operator_actions import (
     build_ticket_actions_markup,

@@ -21,8 +21,8 @@ from application.use_cases.tickets.summaries import (
     TicketStats,
     TicketSummary,
 )
-from domain.enums.tickets import TicketMessageSenderType
 from domain.entities.ticket import TicketAttachmentDetails
+from domain.enums.tickets import TicketMessageSenderType
 from infrastructure.redis.contracts import SLADeadlineScheduler
 
 

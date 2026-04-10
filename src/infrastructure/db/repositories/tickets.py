@@ -12,7 +12,7 @@ from domain.entities.ticket import (
     TicketEventDetails,
     TicketInternalNoteDetails,
 )
-from domain.enums.tickets import TicketAttachmentKind, TicketEventType, TicketMessageSenderType
+from domain.enums.tickets import TicketEventType, TicketMessageSenderType
 from infrastructure.db.models.ticket import TicketEvent, TicketInternalNote, TicketMessage
 from infrastructure.db.repositories.ticket_metrics import SqlAlchemyTicketMetricsRepository
 from infrastructure.db.repositories.ticket_reads import SqlAlchemyTicketReadRepository
