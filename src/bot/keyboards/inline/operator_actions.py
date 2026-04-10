@@ -85,6 +85,13 @@ def build_ticket_more_actions_markup(
     if change_row:
         builder.row(*change_row)
 
+    builder.row(
+        _build_callback_button(
+            "Экспорт",
+            OperatorActionCallback(action="export", ticket_public_id=callback_value).pack(),
+        )
+    )
+
     status_row: list[InlineKeyboardButton] = []
     if status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:
         status_row.append(
@@ -105,6 +112,28 @@ def build_ticket_more_actions_markup(
         _build_callback_button(
             BACK_BUTTON_TEXT,
             OperatorActionCallback(action="back", ticket_public_id=callback_value).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
+def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    callback_value = str(ticket_public_id)
+    builder.row(
+        _build_callback_button(
+            "CSV",
+            OperatorActionCallback(action="export_csv", ticket_public_id=callback_value).pack(),
+        ),
+        _build_callback_button(
+            "HTML",
+            OperatorActionCallback(action="export_html", ticket_public_id=callback_value).pack(),
+        ),
+    )
+    builder.row(
+        _build_callback_button(
+            BACK_BUTTON_TEXT,
+            OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
         )
     )
     return builder.as_markup()

@@ -104,10 +104,32 @@ def format_ticket_more_actions(
         change_actions.append("Передать")
     lines.extend(["", "Изменить", " · ".join(change_actions)])
 
+    lines.extend(["", "Отчёт", "Экспорт"])
+
     status_actions = ["Карточка"]
     if ticket.status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:
         status_actions.insert(0, "Эскалация")
     lines.extend(["", "Статус и детали", " · ".join(status_actions)])
+    return "\n".join(lines)
+
+
+def format_ticket_export_actions(
+    ticket: TicketDetailsSummary,
+    *,
+    is_active: bool = False,
+) -> str:
+    lines = [format_active_ticket_context(ticket) if is_active else format_ticket_details(ticket)]
+    lines.extend(
+        [
+            "",
+            "Экспорт",
+            "",
+            "Форматы",
+            "CSV · HTML",
+            "",
+            "Отчёт включает карточку заявки, таймстемпы и полную переписку.",
+        ]
+    )
     return "\n".join(lines)
 
 

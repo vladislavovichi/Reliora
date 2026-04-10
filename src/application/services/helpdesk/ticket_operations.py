@@ -6,6 +6,10 @@ from uuid import UUID
 
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
+from application.use_cases.tickets.exports import (
+    TicketReportExport,
+    TicketReportFormat,
+)
 from application.use_cases.tickets.summaries import (
     OperatorReplyResult,
     OperatorTicketSummary,
@@ -240,6 +244,22 @@ class HelpdeskTicketOperations:
             actor_telegram_user_id=actor_telegram_user_id,
         )
         return await self._components.tickets.get_details(ticket_public_id=ticket_public_id)
+
+    async def export_ticket_report(
+        self,
+        *,
+        ticket_public_id: UUID,
+        format: TicketReportFormat,
+        actor_telegram_user_id: int | None = None,
+    ) -> TicketReportExport | None:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.tickets.export_report(
+            ticket_public_id=ticket_public_id,
+            format=format,
+        )
 
     async def reply_to_ticket_as_operator(
         self,

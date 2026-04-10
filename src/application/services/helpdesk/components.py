@@ -15,6 +15,7 @@ from application.use_cases.tickets.creation import (
     CreateTicketFromClientMessageUseCase,
     GetActiveClientTicketUseCase,
 )
+from application.use_cases.tickets.exports import ExportTicketReportUseCase
 from application.use_cases.tickets.feedback import (
     AddTicketFeedbackCommentUseCase,
     GetTicketFeedbackUseCase,
@@ -75,6 +76,8 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
+from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
+from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
 @dataclass(slots=True, frozen=True)
@@ -91,6 +94,7 @@ class HelpdeskTicketUseCases:
     list_operator_tickets: ListOperatorTicketsUseCase
     assign_next_queued: AssignNextQueuedTicketUseCase
     get_details: GetTicketDetailsUseCase
+    export_report: ExportTicketReportUseCase
     reply_as_operator: ReplyToTicketAsOperatorUseCase
     close_ticket: CloseTicketUseCase
     escalate_ticket: EscalateTicketUseCase
@@ -201,6 +205,13 @@ def build_helpdesk_components(
                 operator_repository=operator_repository,
             ),
             get_details=GetTicketDetailsUseCase(ticket_repository=ticket_repository),
+            export_report=ExportTicketReportUseCase(
+                ticket_repository=ticket_repository,
+                ticket_feedback_repository=ticket_feedback_repository,
+                ticket_event_repository=ticket_event_repository,
+                csv_renderer=render_ticket_report_csv,
+                html_renderer=render_ticket_report_html,
+            ),
             reply_as_operator=ReplyToTicketAsOperatorUseCase(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,

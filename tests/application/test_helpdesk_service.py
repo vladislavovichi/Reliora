@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
+from application.use_cases.tickets.exports import TicketReportFormat
 from application.use_cases.tickets.summaries import (
     CategoryManagementError,
     MacroManagementError,
@@ -296,9 +297,10 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
     return repository
 
 
-def build_event_repository_mock() -> Mock:
+def build_event_repository_mock(initial_events: list[SimpleNamespace] | None = None) -> Mock:
     repository = Mock()
     repository.added_events = []
+    repository.listed_events = [] if initial_events is None else list(initial_events)
 
     async def add(
         *,
@@ -320,8 +322,16 @@ def build_event_repository_mock() -> Mock:
             for event in repository.added_events
         )
 
+    async def list_for_ticket(*, ticket_id: int) -> list[SimpleNamespace]:
+        return [
+            event
+            for event in repository.listed_events
+            if getattr(event, "ticket_id", None) in {None, ticket_id}
+        ]
+
     repository.add = AsyncMock(side_effect=add)
     repository.exists = AsyncMock(side_effect=exists)
+    repository.list_for_ticket = AsyncMock(side_effect=list_for_ticket)
     return repository
 
 
@@ -1475,6 +1485,144 @@ async def test_get_ticket_details_returns_operator_facing_summary_with_tags() ->
     assert result.last_message_sender_type == TicketMessageSenderType.CLIENT
     assert result.message_history[0].text == "Client says hello"
     assert result.tags == ("billing", "vip")
+
+
+async def test_export_ticket_report_returns_csv_with_metadata_feedback_and_history() -> None:
+    public_id = uuid4()
+    created_at = datetime(2026, 4, 8, 9, 0, tzinfo=UTC)
+    first_response_at = created_at + timedelta(minutes=12)
+    updated_at = created_at + timedelta(minutes=40)
+    closed_at = created_at + timedelta(hours=2)
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.CLOSED,
+        assigned_operator_id=7,
+        assigned_operator_name="Operator One",
+        assigned_operator_telegram_user_id=1001,
+        message_history=(
+            TicketMessageDetails(
+                telegram_message_id=11,
+                sender_type=TicketMessageSenderType.CLIENT,
+                sender_operator_id=None,
+                sender_operator_name=None,
+                text="Не могу войти в кабинет",
+                created_at=created_at,
+            ),
+            TicketMessageDetails(
+                telegram_message_id=12,
+                sender_type=TicketMessageSenderType.OPERATOR,
+                sender_operator_id=7,
+                sender_operator_name="Operator One",
+                text="Доступ уже восстановлен",
+                created_at=first_response_at,
+            ),
+        ),
+        tags=("vip",),
+        category_code="access",
+        category_title="Доступ и вход",
+        created_at=created_at,
+        updated_at=updated_at,
+        first_response_at=first_response_at,
+        closed_at=closed_at,
+    )
+    feedback_repository = StubTicketFeedbackRepository(
+        initial_feedback=[
+            SimpleNamespace(
+                id=1,
+                ticket_id=1,
+                client_chat_id=ticket.client_chat_id,
+                rating=5,
+                comment="Спасибо",
+                submitted_at=closed_at + timedelta(minutes=5),
+            )
+        ]
+    )
+    event_repository = build_event_repository_mock(
+        initial_events=[
+            SimpleNamespace(
+                ticket_id=1,
+                event_type=TicketEventType.CREATED,
+                payload_json={"status": "new"},
+                created_at=created_at,
+            ),
+            SimpleNamespace(
+                ticket_id=1,
+                event_type=TicketEventType.CLOSED,
+                payload_json={"from_status": "assigned", "to_status": "closed"},
+                created_at=closed_at,
+            ),
+        ]
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_feedback_repository=feedback_repository,
+        event_repository=event_repository,
+        operator_repository=StubOperatorManagementRepository(active_operator_ids={1001}),
+    )
+
+    result = await service.export_ticket_report(
+        ticket_public_id=public_id,
+        format=TicketReportFormat.CSV,
+        actor_telegram_user_id=1001,
+    )
+
+    assert result is not None
+    assert result.filename.endswith(".csv")
+    content = result.content.decode("utf-8-sig")
+    assert "ticket_public_number" in content
+    assert "ticket_status" in content
+    assert "Не могу войти в кабинет" in content
+    assert "Доступ уже восстановлен" in content
+    assert "Спасибо" in content
+    assert "closed" in content
+
+
+async def test_export_ticket_report_returns_html_with_sections() -> None:
+    public_id = uuid4()
+    created_at = datetime(2026, 4, 8, 9, 0, tzinfo=UTC)
+    ticket = build_ticket(
+        ticket_id=1,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        assigned_operator_id=7,
+        assigned_operator_name="Operator One",
+        assigned_operator_telegram_user_id=1001,
+        message_history=(
+            TicketMessageDetails(
+                telegram_message_id=11,
+                sender_type=TicketMessageSenderType.CLIENT,
+                sender_operator_id=None,
+                sender_operator_name=None,
+                text="Нужна помощь с доступом",
+                created_at=created_at,
+            ),
+        ),
+        tags=("vip", "billing"),
+        category_code="access",
+        category_title="Доступ и вход",
+        created_at=created_at,
+        updated_at=created_at + timedelta(minutes=25),
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        operator_repository=StubOperatorManagementRepository(active_operator_ids={1001}),
+    )
+
+    result = await service.export_ticket_report(
+        ticket_public_id=public_id,
+        format=TicketReportFormat.HTML,
+        actor_telegram_user_id=1001,
+    )
+
+    assert result is not None
+    assert result.filename.endswith(".html")
+    content = result.content.decode("utf-8")
+    assert "<html" in content
+    assert "Карточка" in content
+    assert "Переписка" in content
+    assert "Нужна помощь с доступом" in content
+    assert "HD-" in content
 
 
 async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_chat() -> None:

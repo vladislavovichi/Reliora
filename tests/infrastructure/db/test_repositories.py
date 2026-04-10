@@ -429,6 +429,34 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
     ]
 
 
+async def test_list_ticket_events_returns_ordered_event_details() -> None:
+    session = build_session(
+        result=build_result(
+            rows=[
+                (
+                    TicketEventType.CREATED,
+                    {"status": "new"},
+                    datetime(2026, 4, 7, 9, 0, tzinfo=UTC),
+                ),
+                (
+                    TicketEventType.CLOSED,
+                    {"from_status": "assigned", "to_status": "closed"},
+                    datetime(2026, 4, 7, 10, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+    )
+    repository = SqlAlchemyTicketEventRepository(session)
+
+    result = await repository.list_for_ticket(ticket_id=7)
+
+    assert [event.event_type for event in result] == [
+        TicketEventType.CREATED,
+        TicketEventType.CLOSED,
+    ]
+    assert result[1].payload_json == {"from_status": "assigned", "to_status": "closed"}
+
+
 async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:
     first_ticket = Ticket(
         client_chat_id=100,

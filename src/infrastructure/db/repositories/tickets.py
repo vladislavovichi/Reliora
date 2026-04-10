@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from domain.entities.ticket import TicketEventDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType
 from infrastructure.db.models.ticket import TicketEvent, TicketMessage
 from infrastructure.db.repositories.ticket_metrics import SqlAlchemyTicketMetricsRepository
@@ -89,3 +91,19 @@ class SqlAlchemyTicketEventRepository:
         )
         result = await self.session.execute(statement)
         return cast(object | None, result.scalar_one_or_none()) is not None
+
+    async def list_for_ticket(self, *, ticket_id: int) -> tuple[TicketEventDetails, ...]:
+        statement = (
+            select(TicketEvent.event_type, TicketEvent.payload_json, TicketEvent.created_at)
+            .where(TicketEvent.ticket_id == ticket_id)
+            .order_by(TicketEvent.created_at.asc(), TicketEvent.id.asc())
+        )
+        result = await self.session.execute(statement)
+        return tuple(
+            TicketEventDetails(
+                event_type=cast(TicketEventType, row[0]),
+                payload_json=cast(dict[str, object] | None, row[1]),
+                created_at=cast(datetime, row[2]),
+            )
+            for row in result.all()
+        )

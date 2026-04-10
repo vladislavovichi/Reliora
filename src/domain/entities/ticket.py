@@ -5,7 +5,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from domain.enums.tickets import TicketMessageSenderType, TicketPriority, TicketStatus
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketPriority,
+    TicketStatus,
+)
 
 
 class Ticket(Protocol):
@@ -32,6 +37,13 @@ class TicketMessageDetails:
     sender_operator_id: int | None
     sender_operator_name: str | None
     text: str
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class TicketEventDetails:
+    event_type: TicketEventType
+    payload_json: dict[str, object] | None
     created_at: datetime
 
 

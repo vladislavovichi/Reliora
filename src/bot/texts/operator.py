@@ -40,6 +40,8 @@ OPERATOR_ADD_INVALID_TEXT = (
 )
 OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT = "Сначала завершите текущий шаг или нажмите «Отмена»."
 TAGS_UPDATED_TEXT = "Метки обновлены."
+EXPORT_FAILED_TEXT = "Не удалось подготовить отчёт. Попробуйте ещё раз."
+EXPORT_DELIVERY_FAILED_TEXT = "Не удалось отправить файл отчёта. Попробуйте ещё раз."
 
 
 def build_tag_added_text(ticket_public_number: str, tag: str, tags: str) -> str:
@@ -89,6 +91,10 @@ def build_more_actions_opened_text(public_number: str) -> str:
     return f"Ещё по заявке {public_number}."
 
 
+def build_export_opened_text(public_number: str) -> str:
+    return f"Экспорт по заявке {public_number}."
+
+
 def build_take_answer_text(public_number: str, *, reassigned: bool) -> str:
     if reassigned:
         return f"Заявка {public_number} передана другому оператору."
@@ -116,6 +122,10 @@ def build_escalate_text(public_number: str) -> str:
 
 def build_reply_sent_text(public_number: str) -> str:
     return f"Ответ по заявке {public_number} отправлен."
+
+
+def build_export_ready_text(public_number: str, *, format_name: str) -> str:
+    return f"Отчёт {format_name} по заявке {public_number} готов."
 
 
 def build_reply_delivery_failed_text(public_number: str, error_text: str) -> str:

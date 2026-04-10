@@ -18,6 +18,9 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
         "tags",
         "more",
         "card",
+        "export",
+        "export_csv",
+        "export_html",
     ]
     ticket_public_id: str
 

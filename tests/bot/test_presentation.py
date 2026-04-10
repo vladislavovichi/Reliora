@@ -15,6 +15,7 @@ from bot.formatters.operator_ticket_views import (
     format_active_ticket_context,
     format_queue_page,
     format_ticket_details,
+    format_ticket_export_actions,
     format_ticket_history_chunks,
     format_ticket_more_actions,
 )
@@ -33,6 +34,7 @@ from bot.keyboards.inline.macros import (
 from bot.keyboards.inline.operator_actions import (
     build_queue_markup,
     build_ticket_actions_markup,
+    build_ticket_export_actions_markup,
     build_ticket_more_actions_markup,
 )
 from bot.keyboards.inline.tags import build_ticket_tags_markup
@@ -240,7 +242,14 @@ def test_build_ticket_more_actions_markup_groups_secondary_actions() -> None:
     )
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("Метки", "Передать"), ("Эскалация", "Карточка"), ("Назад",))
+    assert rows == (("Метки", "Передать"), ("Экспорт",), ("Эскалация", "Карточка"), ("Назад",))
+
+
+def test_build_ticket_export_actions_markup_offers_two_formats() -> None:
+    markup = build_ticket_export_actions_markup(ticket_public_id=uuid4())
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == (("CSV", "HTML"), ("Назад",))
 
 
 def test_build_client_ticket_finish_confirmation_markup_fits_telegram_callback_limit() -> None:
@@ -348,7 +357,34 @@ def test_format_ticket_more_actions_reads_like_structured_secondary_surface() ->
     assert result.startswith("Текущий диалог")
     assert "\nЕщё" in result
     assert "\nИзменить\nМетки · Передать" in result
+    assert "\nОтчёт\nЭкспорт" in result
     assert "\nСтатус и детали\nЭскалация · Карточка" in result
+
+
+def test_format_ticket_export_actions_reads_like_report_surface() -> None:
+    ticket = TicketDetailsSummary(
+        public_id=uuid4(),
+        public_number="HD-AAAA1111",
+        client_chat_id=1001,
+        status=TicketStatus.ASSIGNED,
+        priority="high",
+        subject="Не могу войти в личный кабинет",
+        assigned_operator_id=7,
+        assigned_operator_name="Иван Петров",
+        assigned_operator_telegram_user_id=1001,
+        created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        tags=("vip",),
+        last_message_text="Уже проверяем доступ.",
+        last_message_sender_type=TicketMessageSenderType.OPERATOR,
+        message_history=(),
+    )
+
+    result = format_ticket_export_actions(ticket, is_active=True)
+
+    assert result.startswith("Текущий диалог")
+    assert "\nЭкспорт" in result
+    assert "\nФорматы\nCSV · HTML" in result
+    assert "полную переписку" in result
 
 
 def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None:

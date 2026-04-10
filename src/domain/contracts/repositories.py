@@ -5,7 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from domain.entities.feedback import TicketFeedback
-from domain.entities.ticket import Ticket, TicketDetails
+from domain.entities.ticket import Ticket, TicketDetails, TicketEventDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -298,6 +298,9 @@ class TicketEventRepository(Protocol):
 
     async def exists(self, *, ticket_id: int, event_type: TicketEventType) -> bool:
         """Return whether the ticket already has an event of the given type."""
+
+    async def list_for_ticket(self, *, ticket_id: int) -> Sequence[TicketEventDetails]:
+        """Return workflow events for the ticket ordered by creation time."""
 
 
 class SLAPolicyRecord(Protocol):

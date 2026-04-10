@@ -10,9 +10,11 @@ from pytest import MonkeyPatch
 
 from bot.delivery import (
     deliver_client_message_to_operator,
+    deliver_document_to_chat,
     deliver_operator_reply_to_client,
     deliver_ticket_closed_to_client,
     deliver_ticket_closed_to_operator,
+    send_document_with_retry,
     send_message_with_retry,
 )
 from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
@@ -82,6 +84,29 @@ async def test_send_message_with_retry_raises_after_last_attempt(
 
     assert bot.send_message.await_count == 3
     assert sleep.await_count == 2
+
+
+async def test_send_document_with_retry_recovers_from_network_error(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    bot = Mock()
+    bot.send_document = AsyncMock(
+        side_effect=[TelegramNetworkError(Mock(), "temporary network issue"), None]
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr("bot.delivery.asyncio.sleep", sleep)
+
+    await send_document_with_retry(
+        bot,
+        chat_id=42,
+        document=Mock(),
+        caption="Отчёт",
+        logger=logging.getLogger("test"),
+        operation="ticket_report_csv",
+    )
+
+    assert bot.send_document.await_count == 2
+    sleep.assert_awaited_once()
 
 
 async def test_deliver_operator_reply_to_client_uses_client_facing_text() -> None:
@@ -186,3 +211,23 @@ async def test_deliver_ticket_closed_to_operator_uses_operator_notice() -> None:
         "Клиент завершил обращение HD-AAAA1111.",
         reply_markup=None,
     )
+
+
+async def test_deliver_document_to_chat_sends_buffered_file() -> None:
+    bot = Mock()
+    bot.send_document = AsyncMock()
+
+    result = await deliver_document_to_chat(
+        bot,
+        chat_id=1001,
+        content=b"col1,col2\n1,2\n",
+        filename="ticket-report.csv",
+        caption="Отчёт по заявке HD-AAAA1111",
+        logger=logging.getLogger("test"),
+        operation="ticket_report_csv",
+    )
+
+    assert result is None
+    _, kwargs = bot.send_document.await_args
+    assert kwargs["caption"] == "Отчёт по заявке HD-AAAA1111"
+    assert kwargs["document"].filename == "ticket-report.csv"
