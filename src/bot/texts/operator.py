@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from application.services.stats import AnalyticsWindow, get_analytics_window_label
+
 QUEUE_EMPTY_TEXT = "Очередь пока пуста."
 QUEUE_HEADER_TEXT = "Очередь"
 NO_QUEUE_TICKETS_TEXT = "Сейчас новых заявок нет."
@@ -126,6 +128,20 @@ def build_reply_sent_text(public_number: str) -> str:
 
 def build_export_ready_text(public_number: str, *, format_name: str) -> str:
     return f"Отчёт {format_name} по заявке {public_number} готов."
+
+
+def build_analytics_opened_text(*, section: str, window: AnalyticsWindow) -> str:
+    section_labels = {
+        "overview": "Открыта общая аналитика.",
+        "operators": "Открыта аналитика по операторам.",
+        "topics": "Открыта аналитика по темам.",
+        "quality": "Открыта аналитика качества.",
+        "sla": "Открыта аналитика SLA.",
+    }
+    return (
+        f"{section_labels.get(section, 'Открыта аналитика.')} "
+        f"Период: {get_analytics_window_label(window)}."
+    )
 
 
 def build_reply_delivery_failed_text(public_number: str, error_text: str) -> str:

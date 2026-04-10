@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
+from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.exports import TicketReportFormat
 from application.use_cases.tickets.summaries import (
     CategoryManagementError,
@@ -41,6 +42,18 @@ class StubTicketRepository:
     active_operator_ticket_loads: list[SimpleNamespace] | None = None
     average_first_response_time_seconds: float | None = None
     average_resolution_time_seconds: float | None = None
+    created_tickets_count: int = 0
+    closed_tickets_count: int = 0
+    feedback_submissions_count: int = 0
+    average_feedback_rating: float | None = None
+    feedback_rating_distribution: list[SimpleNamespace] | None = None
+    operator_closure_stats: list[SimpleNamespace] | None = None
+    created_ticket_category_counts: list[SimpleNamespace] | None = None
+    open_ticket_category_counts: list[SimpleNamespace] | None = None
+    closed_ticket_category_counts: list[SimpleNamespace] | None = None
+    category_feedback_stats: list[SimpleNamespace] | None = None
+    sla_breach_counts: dict[str, int] | None = None
+    sla_breach_category_counts: list[SimpleNamespace] | None = None
 
     def __post_init__(self) -> None:
         self.create_calls: list[dict[str, object]] = []
@@ -55,6 +68,18 @@ class StubTicketRepository:
         self.count_active_tickets_per_operator_calls = 0
         self.average_first_response_calls = 0
         self.average_resolution_calls = 0
+        self.created_tickets_calls: list[datetime | None] = []
+        self.closed_tickets_calls: list[datetime | None] = []
+        self.feedback_submission_calls: list[datetime | None] = []
+        self.average_feedback_calls: list[datetime | None] = []
+        self.feedback_distribution_calls: list[datetime | None] = []
+        self.operator_closure_stats_calls: list[datetime | None] = []
+        self.created_category_calls: list[datetime | None] = []
+        self.open_category_calls = 0
+        self.closed_category_calls: list[datetime | None] = []
+        self.category_feedback_calls: list[datetime | None] = []
+        self.sla_breach_calls: list[datetime | None] = []
+        self.sla_breach_category_calls: list[datetime | None] = []
         self.tickets: dict[UUID, SimpleNamespace] = {
             self.created_ticket.public_id: self.created_ticket,
         }
@@ -64,6 +89,22 @@ class StubTicketRepository:
             self.queued_tickets = []
         if self.active_operator_ticket_loads is None:
             self.active_operator_ticket_loads = []
+        if self.feedback_rating_distribution is None:
+            self.feedback_rating_distribution = []
+        if self.operator_closure_stats is None:
+            self.operator_closure_stats = []
+        if self.created_ticket_category_counts is None:
+            self.created_ticket_category_counts = []
+        if self.open_ticket_category_counts is None:
+            self.open_ticket_category_counts = []
+        if self.closed_ticket_category_counts is None:
+            self.closed_ticket_category_counts = []
+        if self.category_feedback_stats is None:
+            self.category_feedback_stats = []
+        if self.sla_breach_counts is None:
+            self.sla_breach_counts = {}
+        if self.sla_breach_category_counts is None:
+            self.sla_breach_category_counts = []
         for ticket in self.queued_tickets:
             self.tickets[ticket.public_id] = ticket
 
@@ -245,13 +286,93 @@ class StubTicketRepository:
         self.count_active_tickets_per_operator_calls += 1
         return list(self.active_operator_ticket_loads or [])
 
-    async def get_average_first_response_time_seconds(self) -> float | None:
+    async def get_average_first_response_time_seconds(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> float | None:
         self.average_first_response_calls += 1
         return self.average_first_response_time_seconds
 
-    async def get_average_resolution_time_seconds(self) -> float | None:
+    async def get_average_resolution_time_seconds(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> float | None:
         self.average_resolution_calls += 1
         return self.average_resolution_time_seconds
+
+    async def count_created_tickets(self, *, since: datetime | None = None) -> int:
+        self.created_tickets_calls.append(since)
+        return self.created_tickets_count
+
+    async def count_closed_tickets(self, *, since: datetime | None = None) -> int:
+        self.closed_tickets_calls.append(since)
+        return self.closed_tickets_count
+
+    async def count_feedback_submissions(self, *, since: datetime | None = None) -> int:
+        self.feedback_submission_calls.append(since)
+        return self.feedback_submissions_count
+
+    async def get_average_feedback_rating(self, *, since: datetime | None = None) -> float | None:
+        self.average_feedback_calls.append(since)
+        return self.average_feedback_rating
+
+    async def get_feedback_rating_distribution(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.feedback_distribution_calls.append(since)
+        return list(self.feedback_rating_distribution or [])
+
+    async def list_closed_ticket_stats_by_operator(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.operator_closure_stats_calls.append(since)
+        return list(self.operator_closure_stats or [])
+
+    async def list_created_ticket_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.created_category_calls.append(since)
+        return list(self.created_ticket_category_counts or [])
+
+    async def list_open_ticket_counts_by_category(self) -> list[SimpleNamespace]:
+        self.open_category_calls += 1
+        return list(self.open_ticket_category_counts or [])
+
+    async def list_closed_ticket_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.closed_category_calls.append(since)
+        return list(self.closed_ticket_category_counts or [])
+
+    async def list_feedback_stats_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.category_feedback_calls.append(since)
+        return list(self.category_feedback_stats or [])
+
+    async def count_sla_breaches(self, *, since: datetime | None = None) -> dict[str, int]:
+        self.sla_breach_calls.append(since)
+        return dict(self.sla_breach_counts or {})
+
+    async def list_sla_breach_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> list[SimpleNamespace]:
+        self.sla_breach_category_calls.append(since)
+        return list(self.sla_breach_category_counts or [])
 
 
 def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock:
@@ -1245,6 +1366,100 @@ async def test_get_operational_stats_returns_aggregated_metrics() -> None:
     assert ticket_repository.count_active_tickets_per_operator_calls == 1
     assert ticket_repository.average_first_response_calls == 1
     assert ticket_repository.average_resolution_calls == 1
+
+
+async def test_get_analytics_snapshot_returns_richer_operational_view() -> None:
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW),
+        by_status={
+            TicketStatus.QUEUED: 2,
+            TicketStatus.ASSIGNED: 3,
+            TicketStatus.ESCALATED: 1,
+            TicketStatus.CLOSED: 4,
+        },
+        active_operator_ticket_loads=[
+            SimpleNamespace(operator_id=7, display_name="Operator One", ticket_count=3),
+            SimpleNamespace(operator_id=9, display_name="Operator Two", ticket_count=1),
+        ],
+        average_first_response_time_seconds=125.6,
+        average_resolution_time_seconds=7260.4,
+        created_tickets_count=9,
+        closed_tickets_count=5,
+        feedback_submissions_count=4,
+        average_feedback_rating=4.7,
+        feedback_rating_distribution=[
+            SimpleNamespace(rating=5, count=3),
+            SimpleNamespace(rating=4, count=1),
+        ],
+        operator_closure_stats=[
+            SimpleNamespace(
+                operator_id=7,
+                display_name="Operator One",
+                closed_ticket_count=4,
+                average_first_response_time_seconds=120.0,
+                average_resolution_time_seconds=5400.0,
+                average_satisfaction=4.8,
+                feedback_count=3,
+            ),
+            SimpleNamespace(
+                operator_id=9,
+                display_name="Operator Two",
+                closed_ticket_count=1,
+                average_first_response_time_seconds=240.0,
+                average_resolution_time_seconds=9000.0,
+                average_satisfaction=4.0,
+                feedback_count=1,
+            ),
+        ],
+        created_ticket_category_counts=[
+            SimpleNamespace(category_id=1, category_title="Доступ и вход", ticket_count=5),
+            SimpleNamespace(category_id=2, category_title="Платежи", ticket_count=3),
+        ],
+        open_ticket_category_counts=[
+            SimpleNamespace(category_id=1, category_title="Доступ и вход", ticket_count=2),
+            SimpleNamespace(category_id=2, category_title="Платежи", ticket_count=1),
+        ],
+        closed_ticket_category_counts=[
+            SimpleNamespace(category_id=1, category_title="Доступ и вход", ticket_count=3),
+            SimpleNamespace(category_id=2, category_title="Платежи", ticket_count=2),
+        ],
+        category_feedback_stats=[
+            SimpleNamespace(
+                category_id=1,
+                category_title="Доступ и вход",
+                average_satisfaction=4.5,
+                feedback_count=2,
+            ),
+            SimpleNamespace(
+                category_id=2,
+                category_title="Платежи",
+                average_satisfaction=5.0,
+                feedback_count=2,
+            ),
+        ],
+        sla_breach_counts={
+            "sla_breached_first_response": 2,
+            "sla_breached_resolution": 1,
+        },
+        sla_breach_category_counts=[
+            SimpleNamespace(category_id=1, category_title="Доступ и вход", breach_count=2),
+        ],
+    )
+    service = build_service(ticket_repository=ticket_repository)
+
+    snapshot = await service.get_analytics_snapshot(window=AnalyticsWindow.DAYS_7)
+
+    assert snapshot.total_open_tickets == 6
+    assert snapshot.period_created_tickets_count == 9
+    assert snapshot.period_closed_tickets_count == 5
+    assert snapshot.feedback_count == 4
+    assert snapshot.feedback_coverage_percent == 80
+    assert snapshot.satisfaction_average == 4.7
+    assert snapshot.best_operators_by_closures[0].display_name == "Operator One"
+    assert snapshot.best_operators_by_satisfaction[0].display_name == "Operator One"
+    assert snapshot.top_categories[0].category_title == "Доступ и вход"
+    assert snapshot.first_response_breach_count == 2
+    assert snapshot.resolution_breach_count == 1
 
 
 async def test_service_supports_main_ticket_lifecycle_and_stats() -> None:

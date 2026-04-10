@@ -45,3 +45,42 @@ class OperatorTicketLoadRow:
     operator_id: int
     display_name: str
     ticket_count: int
+
+
+@dataclass(slots=True, frozen=True)
+class OperatorClosureStatsRow:
+    operator_id: int
+    display_name: str
+    closed_ticket_count: int
+    average_first_response_time_seconds: float | None
+    average_resolution_time_seconds: float | None
+    average_satisfaction: float | None
+    feedback_count: int
+
+
+@dataclass(slots=True, frozen=True)
+class CategoryTicketCountRow:
+    category_id: int | None
+    category_title: str | None
+    ticket_count: int
+
+
+@dataclass(slots=True, frozen=True)
+class CategoryFeedbackStatsRow:
+    category_id: int | None
+    category_title: str | None
+    average_satisfaction: float | None
+    feedback_count: int
+
+
+@dataclass(slots=True, frozen=True)
+class RatingDistributionRow:
+    rating: int
+    count: int
+
+
+@dataclass(slots=True, frozen=True)
+class SLABreachCountRow:
+    category_id: int | None
+    category_title: str | None
+    breach_count: int

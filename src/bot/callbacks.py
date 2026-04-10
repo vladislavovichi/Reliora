@@ -60,6 +60,11 @@ class OperatorTagCallback(CallbackData, prefix="operator_tag"):
     tag_id: int
 
 
+class OperatorStatsCallback(CallbackData, prefix="operator_stats"):
+    section: Literal["overview", "operators", "topics", "quality", "sla"]
+    window: Literal["today", "7d", "30d", "all"]
+
+
 class AdminOperatorCallback(CallbackData, prefix="admin_operator"):
     action: Literal[
         "refresh",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -88,6 +89,88 @@ class TicketRepository(Protocol):
         """Return the average resolution time in seconds using ticket timestamps."""
 
 
+class TicketAnalyticsRepository(Protocol):
+    async def count_by_status(self) -> Mapping[TicketStatus, int]:
+        """Return current ticket counts grouped by status."""
+
+    async def count_active_tickets_per_operator(self) -> Sequence[OperatorTicketLoadRecord]:
+        """Return current non-closed ticket counts grouped by assigned operator."""
+
+    async def count_created_tickets(self, *, since: datetime | None = None) -> int:
+        """Return how many tickets were created in the period."""
+
+    async def count_closed_tickets(self, *, since: datetime | None = None) -> int:
+        """Return how many tickets were closed in the period."""
+
+    async def get_average_first_response_time_seconds(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> float | None:
+        """Return the average first response time in seconds for the period."""
+
+    async def get_average_resolution_time_seconds(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> float | None:
+        """Return the average resolution time in seconds for the period."""
+
+    async def count_feedback_submissions(self, *, since: datetime | None = None) -> int:
+        """Return how many feedback ratings were submitted in the period."""
+
+    async def get_average_feedback_rating(self, *, since: datetime | None = None) -> float | None:
+        """Return the average feedback score in the period."""
+
+    async def get_feedback_rating_distribution(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[RatingDistributionRecord]:
+        """Return the feedback distribution in the period."""
+
+    async def list_closed_ticket_stats_by_operator(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[OperatorClosureStatsRecord]:
+        """Return operator performance metrics for tickets closed in the period."""
+
+    async def list_created_ticket_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[CategoryTicketCountRecord]:
+        """Return ticket creation counts grouped by category for the period."""
+
+    async def list_open_ticket_counts_by_category(self) -> Sequence[CategoryTicketCountRecord]:
+        """Return current open ticket counts grouped by category."""
+
+    async def list_closed_ticket_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[CategoryTicketCountRecord]:
+        """Return ticket closure counts grouped by category for the period."""
+
+    async def list_feedback_stats_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[CategoryFeedbackStatsRecord]:
+        """Return category feedback aggregates for the period."""
+
+    async def count_sla_breaches(self, *, since: datetime | None = None) -> Mapping[str, int]:
+        """Return SLA breach counts grouped by breach type for the period."""
+
+    async def list_sla_breach_counts_by_category(
+        self,
+        *,
+        since: datetime | None = None,
+    ) -> Sequence[SLABreachCountRecord]:
+        """Return SLA breach counts grouped by category for the period."""
+
+
 class TicketMessageRepository(Protocol):
     async def add(
         self,
@@ -172,6 +255,92 @@ class OperatorTicketLoadRecord(Protocol):
     @property
     def ticket_count(self) -> int:
         """Current active ticket count."""
+
+
+class OperatorClosureStatsRecord(Protocol):
+    @property
+    def operator_id(self) -> int:
+        """Operator identifier."""
+
+    @property
+    def display_name(self) -> str:
+        """Operator display name."""
+
+    @property
+    def closed_ticket_count(self) -> int:
+        """Closed tickets count for the period."""
+
+    @property
+    def average_first_response_time_seconds(self) -> float | None:
+        """Average first response time in seconds for the period."""
+
+    @property
+    def average_resolution_time_seconds(self) -> float | None:
+        """Average resolution time in seconds for the period."""
+
+    @property
+    def average_satisfaction(self) -> float | None:
+        """Average satisfaction score for the period."""
+
+    @property
+    def feedback_count(self) -> int:
+        """Feedback records count for the period."""
+
+
+class CategoryTicketCountRecord(Protocol):
+    @property
+    def category_id(self) -> int | None:
+        """Category identifier when present."""
+
+    @property
+    def category_title(self) -> str | None:
+        """Category title when present."""
+
+    @property
+    def ticket_count(self) -> int:
+        """Ticket count for the selection."""
+
+
+class CategoryFeedbackStatsRecord(Protocol):
+    @property
+    def category_id(self) -> int | None:
+        """Category identifier when present."""
+
+    @property
+    def category_title(self) -> str | None:
+        """Category title when present."""
+
+    @property
+    def average_satisfaction(self) -> float | None:
+        """Average feedback score for the category."""
+
+    @property
+    def feedback_count(self) -> int:
+        """Feedback count for the category."""
+
+
+class RatingDistributionRecord(Protocol):
+    @property
+    def rating(self) -> int:
+        """Feedback rating value."""
+
+    @property
+    def count(self) -> int:
+        """How many times the rating appears."""
+
+
+class SLABreachCountRecord(Protocol):
+    @property
+    def category_id(self) -> int | None:
+        """Category identifier when present."""
+
+    @property
+    def category_title(self) -> str | None:
+        """Category title when present."""
+
+    @property
+    def breach_count(self) -> int:
+        """Number of SLA breaches for the category."""
 
 
 class OperatorRecord(Protocol):

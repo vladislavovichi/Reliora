@@ -301,6 +301,76 @@ async def test_get_average_resolution_time_seconds_returns_float() -> None:
     assert result == 3600.0
 
 
+async def test_count_created_tickets_returns_integer() -> None:
+    session = build_session(result=build_result(scalar=8))
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.count_created_tickets()
+
+    assert result == 8
+
+
+async def test_count_feedback_submissions_returns_integer() -> None:
+    session = build_session(result=build_result(scalar=3))
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.count_feedback_submissions()
+
+    assert result == 3
+
+
+async def test_get_feedback_rating_distribution_returns_ordered_rows() -> None:
+    session = build_session(
+        result=build_result(
+            rows=[
+                (5, 4),
+                (4, 2),
+            ]
+        )
+    )
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.get_feedback_rating_distribution()
+
+    assert [(item.rating, item.count) for item in result] == [(5, 4), (4, 2)]
+
+
+async def test_list_closed_ticket_stats_by_operator_returns_aggregates() -> None:
+    session = build_session(
+        result=build_result(
+            rows=[
+                (7, "Operator One", 4, 120.0, 5400.0, 4.8, 3),
+            ]
+        )
+    )
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.list_closed_ticket_stats_by_operator()
+
+    assert result[0].operator_id == 7
+    assert result[0].closed_ticket_count == 4
+    assert result[0].average_satisfaction == 4.8
+
+
+async def test_count_sla_breaches_returns_mapping_by_event_type() -> None:
+    session = build_session(
+        result=build_result(
+            rows=[
+                (TicketEventType.SLA_BREACHED_FIRST_RESPONSE, 2),
+                (TicketEventType.SLA_BREACHED_RESOLUTION, 1),
+            ]
+        )
+    )
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.count_sla_breaches()
+
+    assert result == {
+        "sla_breached_first_response": 2,
+        "sla_breached_resolution": 1,
+    }
+
+
 async def test_operator_exists_active_by_telegram_user_id_returns_true() -> None:
     session = build_session(result=build_result(scalar=7))
     repository = SqlAlchemyOperatorRepository(session)

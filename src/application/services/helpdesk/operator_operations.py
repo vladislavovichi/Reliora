@@ -4,7 +4,11 @@ from collections.abc import Awaitable, Callable, Sequence
 
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
-from application.services.stats import HelpdeskOperationalStats
+from application.services.stats import (
+    AnalyticsWindow,
+    HelpdeskAnalyticsSnapshot,
+    HelpdeskOperationalStats,
+)
 from application.use_cases.tickets.summaries import OperatorRoleMutationResult, OperatorSummary
 
 
@@ -65,3 +69,15 @@ class HelpdeskOperatorOperations:
             actor_telegram_user_id=actor_telegram_user_id,
         )
         return await self._components.stats.get_operational_stats()
+
+    async def get_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        actor_telegram_user_id: int | None = None,
+    ) -> HelpdeskAnalyticsSnapshot:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.stats.get_analytics_snapshot(window=window)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
@@ -69,6 +70,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketAnalyticsRepository,
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
@@ -312,5 +314,7 @@ def build_helpdesk_components(
                 sla_policy_repository=sla_policy_repository,
             ),
         ),
-        stats=HelpdeskStatsService(ticket_repository=ticket_repository),
+        stats=HelpdeskStatsService(
+            analytics_repository=cast(TicketAnalyticsRepository, ticket_repository)
+        ),
     )
