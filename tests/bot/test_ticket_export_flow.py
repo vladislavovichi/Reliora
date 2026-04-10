@@ -10,13 +10,13 @@ from uuid import uuid4
 
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.tickets.exports import (
     TicketReport,
     TicketReportExport,
     TicketReportFormat,
 )
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.operator.workflow_ticket_exports import (
     handle_export_action,
     handle_export_file_action,
@@ -25,10 +25,10 @@ from bot.texts.operator import build_export_opened_text, build_export_ready_text
 from domain.enums.tickets import TicketStatus
 
 
-def _build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
+def _build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskService]:
-        yield cast(HelpdeskService, service)
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -86,7 +86,7 @@ async def test_export_action_opens_export_surface() -> None:
     await handle_export_action(
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
         operator_active_ticket_store=operator_active_ticket_store,
@@ -144,7 +144,7 @@ async def test_export_file_action_sends_document_to_operator_chat() -> None:
             action="export_csv",
         ),
         bot=bot,
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )

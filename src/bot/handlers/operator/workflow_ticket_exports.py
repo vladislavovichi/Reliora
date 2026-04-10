@@ -5,8 +5,8 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.exports import TicketReportFormat
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback
 from bot.delivery import deliver_document_to_chat
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 async def handle_export_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -56,8 +56,8 @@ async def handle_export_action(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -89,7 +89,7 @@ async def handle_export_file_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -107,8 +107,8 @@ async def handle_export_file_action(
     )
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            ticket_export = await helpdesk_service.export_ticket_report(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            ticket_export = await helpdesk_backend.export_ticket_report(
                 ticket_public_id=ticket_public_id,
                 format=export_format,
                 actor=build_request_actor(callback.from_user),

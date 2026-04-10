@@ -36,7 +36,10 @@ def format_queue_page(
         tickets=tickets,
         current_page=current_page,
         total_pages=total_pages,
-        footer="Откройте заявку, чтобы посмотреть историю и действия.",
+        footer=(
+            "Откройте заявку, чтобы посмотреть историю и действия. "
+            "Аналитика доступна из «Статистика»."
+        ),
     )
 
 
@@ -51,7 +54,7 @@ def format_operator_ticket_page(
         tickets=tickets,
         current_page=current_page,
         total_pages=total_pages,
-        footer="Откройте заявку, чтобы продолжить диалог.",
+        footer="Откройте заявку, чтобы продолжить диалог. Экспорт находится в «Ещё».",
     )
 
 
@@ -113,7 +116,7 @@ def format_ticket_more_actions(
 
     lines.extend(["", "Внутреннее", "Заметки"])
 
-    lines.extend(["", "Отчёт", "Экспорт"])
+    lines.extend(["", "Отчёт", "Экспорт · CSV · HTML"])
 
     status_actions = ["Карточка"]
     if ticket.status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:

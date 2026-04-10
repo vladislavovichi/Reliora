@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.user.client import (
     handle_finish_ticket_confirm,
     handle_finish_ticket_prompt,
@@ -27,10 +27,10 @@ from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
 
 
-def build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
+def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskService]:
-        yield cast(HelpdeskService, service)
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -99,7 +99,7 @@ async def test_finish_ticket_prompt_uses_domain_stale_text_for_missing_ticket() 
     await handle_finish_ticket_prompt(
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=ticket_public_id),
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
@@ -136,7 +136,7 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         bot=bot,
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_active_ticket_store=operator_active_ticket_store,
         ticket_live_session_store=ticket_live_session_store,
@@ -188,7 +188,7 @@ async def test_finish_ticket_confirm_returns_closed_message_after_race() -> None
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         bot=bot,
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_active_ticket_store=operator_active_ticket_store,
         ticket_live_session_store=ticket_live_session_store,
@@ -219,7 +219,7 @@ async def test_finish_ticket_prompt_uses_domain_stale_text_when_markup_is_outdat
     await handle_finish_ticket_prompt(
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 

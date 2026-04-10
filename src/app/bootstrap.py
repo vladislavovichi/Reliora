@@ -11,6 +11,8 @@ from app.runtime import AppRuntime, RedisWorkflowRuntime
 from app.runtime_factories import (
     build_authorization_service_factory,
     build_diagnostics_service,
+    build_helpdesk_backend_client_factory,
+    build_helpdesk_backend_server,
     build_helpdesk_service_factory,
     build_redis_workflow_runtime,
 )
@@ -104,6 +106,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     fsm_storage: BaseStorage | None = None
     redis_workflow: RedisWorkflowRuntime | None = None
     helpdesk_service_factory = None
+    helpdesk_backend_client_factory = None
     diagnostics_service = None
     bot: Bot | None = None
     dispatcher: Dispatcher | None = None
@@ -125,6 +128,12 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
         )
+        helpdesk_backend_server = build_helpdesk_backend_server(
+            helpdesk_service_factory=helpdesk_service_factory
+        )
+        helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(
+            helpdesk_backend_server
+        )
 
         if settings.bot.token.strip():
             logger.info("Initializing Telegram bot runtime.")
@@ -134,6 +143,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
                 settings=settings,
                 authorization_service_factory=authorization_service_factory,
                 helpdesk_service_factory=helpdesk_service_factory,
+                helpdesk_backend_client_factory=helpdesk_backend_client_factory,
                 global_rate_limiter=redis_workflow.global_rate_limiter,
                 chat_rate_limiter=redis_workflow.chat_rate_limiter,
                 operator_presence=redis_workflow.operator_presence,
@@ -170,6 +180,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             redis_workflow=redis_workflow,
             authorization_service_factory=authorization_service_factory,
             helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
             diagnostics_service=diagnostics_service,
             dispatcher=dispatcher,
             bot=bot,

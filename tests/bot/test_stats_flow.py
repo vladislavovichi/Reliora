@@ -11,7 +11,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Chat, Message, User
 
 from application.contracts.actors import RequestActor
-from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import (
     AnalyticsCategorySnapshot,
     AnalyticsOperatorSnapshot,
@@ -20,14 +19,15 @@ from application.services.stats import (
     HelpdeskAnalyticsSnapshot,
     OperatorTicketLoad,
 )
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.operator.stats import handle_stats, handle_stats_navigation
 from bot.texts.operator import build_analytics_opened_text
 
 
-def _build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
+def _build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskService]:
-        yield cast(HelpdeskService, service)
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -69,7 +69,7 @@ async def test_handle_stats_sends_overview_surface() -> None:
     await handle_stats(
         message=message,
         state=state,
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )
@@ -91,7 +91,7 @@ async def test_handle_stats_navigation_updates_surface() -> None:
     await handle_stats_navigation(
         callback=callback,
         callback_data=SimpleNamespace(section="operators", window="7d"),
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )

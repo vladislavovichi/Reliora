@@ -8,9 +8,10 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.callbacks import ClientTicketCallback
 from bot.delivery import deliver_ticket_closed_to_operator
+from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.handlers.operator.active_context import delete_live_session_for_ticket
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.user.intake import start_client_intake
@@ -62,7 +63,7 @@ async def handle_client_text(
     message: Message,
     state: FSMContext,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     chat_rate_limiter: ChatRateLimiter,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -77,28 +78,34 @@ async def handle_client_text(
         await message.answer(CHAT_RATE_LIMIT_TEXT)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        active_ticket = await helpdesk_service.get_client_active_ticket(
+    content = await extract_ticket_content(message, bot=bot)
+    if content is None:
+        return
+
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        active_ticket = await helpdesk_backend.get_client_active_ticket(
             client_chat_id=message.chat.id
         )
         if active_ticket is None:
-            categories = await helpdesk_service.list_client_ticket_categories()
+            categories = await helpdesk_backend.list_client_ticket_categories()
             if categories:
                 await start_client_intake(
                     message=message,
                     state=state,
                     categories=categories,
+                    content=content,
                 )
                 return
 
     await process_client_ticket_message(
         message=message,
         bot=bot,
-        helpdesk_service_factory=helpdesk_service_factory,
+        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         operator_active_ticket_store=operator_active_ticket_store,
         ticket_live_session_store=ticket_live_session_store,
         ticket_stream_publisher=ticket_stream_publisher,
         logger=logger,
+        content=content,
     )
 
 
@@ -109,7 +116,7 @@ async def handle_client_text(
 async def handle_finish_ticket_prompt(
     callback: CallbackQuery,
     callback_data: ClientTicketCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
@@ -120,8 +127,8 @@ async def handle_finish_ticket_prompt(
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id
         )
 
@@ -178,7 +185,7 @@ async def handle_finish_ticket_confirm(
     callback: CallbackQuery,
     callback_data: ClientTicketCallback,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_active_ticket_store: OperatorActiveTicketStore,
     ticket_live_session_store: TicketLiveSessionStore,
@@ -200,8 +207,8 @@ async def handle_finish_ticket_confirm(
     closed_ticket = None
     ticket_details = None
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            ticket_details = await helpdesk_service.get_ticket_details(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            ticket_details = await helpdesk_backend.get_ticket_details(
                 ticket_public_id=ticket_public_id
             )
             if ticket_details is None:
@@ -215,11 +222,11 @@ async def handle_finish_ticket_confirm(
                 return
 
             try:
-                closed_ticket = await helpdesk_service.close_ticket(
+                closed_ticket = await helpdesk_backend.close_ticket(
                     ticket_public_id=ticket_public_id
                 )
             except InvalidTicketTransitionError:
-                refreshed_ticket_details = await helpdesk_service.get_ticket_details(
+                refreshed_ticket_details = await helpdesk_backend.get_ticket_details(
                     ticket_public_id=ticket_public_id
                 )
                 if (

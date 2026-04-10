@@ -1,0 +1,299 @@
+syntax = "proto3";
+
+package helpdesk.backend.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message RequestActor {
+  int64 telegram_user_id = 1;
+}
+
+message OperatorIdentity {
+  int64 telegram_user_id = 1;
+  string display_name = 2;
+  string username = 3;
+}
+
+message TicketAttachment {
+  string kind = 1;
+  string telegram_file_id = 2;
+  string telegram_file_unique_id = 3;
+  string filename = 4;
+  string mime_type = 5;
+  string storage_path = 6;
+}
+
+message ClientTicketMessageCommand {
+  int64 client_chat_id = 1;
+  int64 telegram_message_id = 2;
+  string text = 3;
+  TicketAttachment attachment = 4;
+  int32 category_id = 5;
+}
+
+message OperatorTicketReplyCommand {
+  string ticket_public_id = 1;
+  OperatorIdentity operator = 2;
+  int64 telegram_message_id = 3;
+  string text = 4;
+  TicketAttachment attachment = 5;
+}
+
+message TicketAssignmentCommand {
+  string ticket_public_id = 1;
+  OperatorIdentity operator = 2;
+}
+
+message AssignNextQueuedTicketCommand {
+  OperatorIdentity operator = 1;
+  bool prioritize_priority = 2;
+}
+
+message ApplyMacroToTicketCommand {
+  string ticket_public_id = 1;
+  int32 macro_id = 2;
+  OperatorIdentity operator = 3;
+}
+
+message TicketSummary {
+  string public_id = 1;
+  string public_number = 2;
+  string status = 3;
+  bool created = 4;
+  string event_type = 5;
+}
+
+message TicketCategorySummary {
+  int32 id = 1;
+  string code = 2;
+  string title = 3;
+  bool is_active = 4;
+  int32 sort_order = 5;
+}
+
+message QueuedTicketSummary {
+  string public_id = 1;
+  string public_number = 2;
+  string subject = 3;
+  string priority = 4;
+  string status = 5;
+  string category_title = 6;
+}
+
+message OperatorTicketSummary {
+  string public_id = 1;
+  string public_number = 2;
+  string subject = 3;
+  string priority = 4;
+  string status = 5;
+  string category_title = 6;
+}
+
+message TicketMessageSummary {
+  string sender_type = 1;
+  int32 sender_operator_id = 2;
+  string sender_operator_name = 3;
+  string text = 4;
+  google.protobuf.Timestamp created_at = 5;
+  TicketAttachment attachment = 6;
+}
+
+message TicketInternalNoteSummary {
+  int32 id = 1;
+  int32 author_operator_id = 2;
+  string author_operator_name = 3;
+  string text = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message TicketDetailsSummary {
+  string public_id = 1;
+  string public_number = 2;
+  int64 client_chat_id = 3;
+  string status = 4;
+  string priority = 5;
+  string subject = 6;
+  int32 assigned_operator_id = 7;
+  string assigned_operator_name = 8;
+  int64 assigned_operator_telegram_user_id = 9;
+  google.protobuf.Timestamp created_at = 10;
+  int32 category_id = 11;
+  string category_code = 12;
+  string category_title = 13;
+  repeated string tags = 14;
+  string last_message_text = 15;
+  string last_message_sender_type = 16;
+  TicketAttachment last_message_attachment = 17;
+  repeated TicketMessageSummary message_history = 18;
+  repeated TicketInternalNoteSummary internal_notes = 19;
+}
+
+message MacroSummary {
+  int32 id = 1;
+  string title = 2;
+  string body = 3;
+}
+
+message MacroApplicationResult {
+  TicketSummary ticket = 1;
+  int64 client_chat_id = 2;
+  MacroSummary macro = 3;
+}
+
+message TicketReportExport {
+  string format = 1;
+  string filename = 2;
+  string content_type = 3;
+  bytes content = 4;
+  string report_public_number = 5;
+}
+
+message AnalyticsCategorySnapshot {
+  int32 category_id = 1;
+  string category_title = 2;
+  int32 created_ticket_count = 3;
+  int32 open_ticket_count = 4;
+  int32 closed_ticket_count = 5;
+  double average_satisfaction = 6;
+  int32 feedback_count = 7;
+  int32 sla_breach_count = 8;
+}
+
+message AnalyticsOperatorSnapshot {
+  int32 operator_id = 1;
+  string display_name = 2;
+  int32 active_ticket_count = 3;
+  int32 closed_ticket_count = 4;
+  int32 average_first_response_time_seconds = 5;
+  int32 average_resolution_time_seconds = 6;
+  double average_satisfaction = 7;
+  int32 feedback_count = 8;
+}
+
+message OperatorTicketLoad {
+  int32 operator_id = 1;
+  string display_name = 2;
+  int32 ticket_count = 3;
+}
+
+message AnalyticsRatingBucket {
+  int32 rating = 1;
+  int32 count = 2;
+}
+
+message HelpdeskAnalyticsSnapshot {
+  string window = 1;
+  int32 total_open_tickets = 2;
+  int32 queued_tickets_count = 3;
+  int32 assigned_tickets_count = 4;
+  int32 escalated_tickets_count = 5;
+  int32 closed_tickets_count = 6;
+  repeated OperatorTicketLoad tickets_per_operator = 7;
+  int32 period_created_tickets_count = 8;
+  int32 period_closed_tickets_count = 9;
+  int32 average_first_response_time_seconds = 10;
+  int32 average_resolution_time_seconds = 11;
+  double satisfaction_average = 12;
+  int32 feedback_count = 13;
+  int32 feedback_coverage_percent = 14;
+  repeated AnalyticsRatingBucket rating_distribution = 15;
+  repeated AnalyticsOperatorSnapshot operator_snapshots = 16;
+  repeated AnalyticsCategorySnapshot category_snapshots = 17;
+  repeated AnalyticsOperatorSnapshot best_operators_by_closures = 18;
+  repeated AnalyticsOperatorSnapshot best_operators_by_satisfaction = 19;
+  repeated AnalyticsCategorySnapshot top_categories = 20;
+  int32 first_response_breach_count = 21;
+  int32 resolution_breach_count = 22;
+  repeated AnalyticsCategorySnapshot sla_categories = 23;
+}
+
+message Empty {}
+
+message GetClientActiveTicketRequest {
+  int64 client_chat_id = 1;
+}
+
+message CreateTicketFromClientMessageRequest {
+  ClientTicketMessageCommand command = 1;
+}
+
+message CreateTicketFromClientIntakeRequest {
+  ClientTicketMessageCommand command = 1;
+}
+
+message GetTicketDetailsRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
+message ListQueuedTicketsRequest {
+  RequestActor actor = 1;
+}
+
+message ListOperatorTicketsRequest {
+  int64 operator_telegram_user_id = 1;
+  RequestActor actor = 2;
+}
+
+message AssignNextQueuedTicketRequest {
+  AssignNextQueuedTicketCommand command = 1;
+  RequestActor actor = 2;
+}
+
+message AssignTicketToOperatorRequest {
+  TicketAssignmentCommand command = 1;
+  RequestActor actor = 2;
+}
+
+message CloseTicketRequest {
+  string ticket_public_id = 1;
+}
+
+message CloseTicketAsOperatorRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
+message ReplyToTicketAsOperatorRequest {
+  OperatorTicketReplyCommand command = 1;
+  RequestActor actor = 2;
+}
+
+message ListMacrosRequest {
+  RequestActor actor = 1;
+}
+
+message ApplyMacroToTicketRequest {
+  ApplyMacroToTicketCommand command = 1;
+  RequestActor actor = 2;
+}
+
+message ExportTicketReportRequest {
+  string ticket_public_id = 1;
+  string format = 2;
+  RequestActor actor = 3;
+}
+
+message GetAnalyticsSnapshotRequest {
+  string window = 1;
+  RequestActor actor = 2;
+}
+
+service HelpdeskBackendService {
+  rpc GetClientActiveTicket(GetClientActiveTicketRequest) returns (TicketSummary);
+  rpc ListClientTicketCategories(Empty) returns (stream TicketCategorySummary);
+  rpc CreateTicketFromClientMessage(CreateTicketFromClientMessageRequest) returns (TicketSummary);
+  rpc CreateTicketFromClientIntake(CreateTicketFromClientIntakeRequest) returns (TicketSummary);
+  rpc GetTicketDetails(GetTicketDetailsRequest) returns (TicketDetailsSummary);
+  rpc ListQueuedTickets(ListQueuedTicketsRequest) returns (stream QueuedTicketSummary);
+  rpc ListOperatorTickets(ListOperatorTicketsRequest) returns (stream OperatorTicketSummary);
+  rpc AssignNextQueuedTicket(AssignNextQueuedTicketRequest) returns (TicketSummary);
+  rpc AssignTicketToOperator(AssignTicketToOperatorRequest) returns (TicketSummary);
+  rpc CloseTicket(CloseTicketRequest) returns (TicketSummary);
+  rpc CloseTicketAsOperator(CloseTicketAsOperatorRequest) returns (TicketSummary);
+  rpc ReplyToTicketAsOperator(ReplyToTicketAsOperatorRequest) returns (OperatorReplyResult);
+  rpc ListMacros(ListMacrosRequest) returns (stream MacroSummary);
+  rpc ApplyMacroToTicket(ApplyMacroToTicketRequest) returns (MacroApplicationResult);
+  rpc ExportTicketReport(ExportTicketReportRequest) returns (TicketReportExport);
+  rpc GetAnalyticsSnapshot(GetAnalyticsSnapshotRequest) returns (HelpdeskAnalyticsSnapshot);
+}

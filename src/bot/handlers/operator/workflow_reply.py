@@ -8,11 +8,11 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     build_ticket_attachment_summary,
 )
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_operator_identity,
     build_operator_reply_command,
@@ -30,6 +30,7 @@ from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.ticket_surfaces import send_ticket_details
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
+from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
@@ -43,6 +44,7 @@ from bot.texts.operator import (
     REPLY_CONTEXT_LOST_TEXT,
     build_active_ticket_opened_text,
     build_reply_delivery_failed_text,
+    build_reply_sent_text,
 )
 from domain.enums.roles import UserRole
 from domain.tickets import InvalidTicketTransitionError
@@ -64,7 +66,7 @@ async def handle_reply_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -80,8 +82,8 @@ async def handle_reply_action(
 
     await operator_presence.touch(operator_id=callback.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -125,7 +127,7 @@ async def handle_reply_action(
 async def handle_operator_message(
     message: Message,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -135,7 +137,7 @@ async def handle_operator_message(
     await _handle_operator_message(
         message=message,
         bot=bot,
-        helpdesk_service_factory=helpdesk_service_factory,
+        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
         operator_active_ticket_store=operator_active_ticket_store,
@@ -148,7 +150,7 @@ async def _handle_operator_message(
     *,
     message: Message,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -168,7 +170,7 @@ async def _handle_operator_message(
 
     ticket_details = await _resolve_target_ticket(
         message=message,
-        helpdesk_service_factory=helpdesk_service_factory,
+        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         operator_active_ticket_store=operator_active_ticket_store,
         explicit_ticket_public_id=explicit_ticket_public_id,
     )
@@ -193,13 +195,13 @@ async def _handle_operator_message(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             try:
                 operator = build_operator_identity(message.from_user)
                 if operator is None:
                     await message.answer(OPERATOR_UNKNOWN_TEXT)
                     return
-                reply_result = await helpdesk_service.reply_to_ticket_as_operator(
+                reply_result = await helpdesk_backend.reply_to_ticket_as_operator(
                     build_operator_reply_command(
                         ticket_public_id=ticket_details.public_id,
                         operator=operator,
@@ -248,23 +250,34 @@ async def _handle_operator_message(
         logger=logger,
     )
     if delivery_error is None:
+        await message.answer(
+            build_reply_sent_text(reply_result.ticket.public_number),
+            reply_markup=build_ticket_actions_markup(
+                ticket_public_id=reply_result.ticket.public_id,
+                status=reply_result.ticket.status,
+            ),
+        )
         return
 
     await message.answer(
-        build_reply_delivery_failed_text(reply_result.ticket.public_number, delivery_error)
+        build_reply_delivery_failed_text(reply_result.ticket.public_number, delivery_error),
+        reply_markup=build_ticket_actions_markup(
+            ticket_public_id=reply_result.ticket.public_id,
+            status=reply_result.ticket.status,
+        ),
     )
 
 
 async def _resolve_target_ticket(
     *,
     message: Message,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     operator_active_ticket_store: OperatorActiveTicketStore,
     explicit_ticket_public_id: UUID | None,
 ) -> TicketDetailsSummary | None:
     if explicit_ticket_public_id is not None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            return await helpdesk_service.get_ticket_details(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            return await helpdesk_backend.get_ticket_details(
                 ticket_public_id=explicit_ticket_public_id,
                 actor=build_request_actor(message.from_user),
             )
@@ -274,6 +287,6 @@ async def _resolve_target_ticket(
 
     return await resolve_active_ticket_for_operator(
         active_ticket_store=operator_active_ticket_store,
-        helpdesk_service_factory=helpdesk_service_factory,
+        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         operator_telegram_user_id=message.from_user.id,
     )

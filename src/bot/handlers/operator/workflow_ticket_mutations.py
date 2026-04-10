@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_operator_identity,
     build_request_actor,
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 async def handle_take_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -68,13 +69,13 @@ async def handle_take_action(
         if ticket_public_id is None:
             return
 
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             try:
                 operator = build_operator_identity(callback.from_user)
                 if operator is None:
                     await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
                     return
-                ticket = await helpdesk_service.assign_ticket_to_operator(
+                ticket = await helpdesk_backend.assign_ticket_to_operator(
                     build_ticket_assignment_command(
                         ticket_public_id=ticket_public_id,
                         operator=operator,
@@ -82,7 +83,7 @@ async def handle_take_action(
                     actor=build_request_actor(callback.from_user),
                 )
                 if ticket is not None:
-                    ticket_details = await helpdesk_service.get_ticket_details(
+                    ticket_details = await helpdesk_backend.get_ticket_details(
                         ticket_public_id=ticket.public_id,
                         actor=build_request_actor(callback.from_user),
                     )
@@ -122,7 +123,7 @@ async def handle_close_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -143,14 +144,14 @@ async def handle_close_action(
         if ticket_public_id is None:
             return
 
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             try:
-                ticket = await helpdesk_service.close_ticket_as_operator(
+                ticket = await helpdesk_backend.close_ticket_as_operator(
                     ticket_public_id=ticket_public_id,
                     actor=build_request_actor(callback.from_user),
                 )
                 if ticket is not None:
-                    ticket_details = await helpdesk_service.get_ticket_details(
+                    ticket_details = await helpdesk_backend.get_ticket_details(
                         ticket_public_id=ticket_public_id,
                         actor=build_request_actor(callback.from_user),
                     )

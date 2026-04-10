@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor_from_id
 from domain.enums.tickets import TicketStatus
 from infrastructure.redis.contracts import OperatorActiveTicketStore, TicketLiveSessionStore
@@ -70,7 +70,7 @@ async def clear_active_ticket_for_operator(
 async def resolve_active_ticket_for_operator(
     *,
     active_ticket_store: OperatorActiveTicketStore,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     operator_telegram_user_id: int,
 ) -> TicketDetailsSummary | None:
     ticket_public_id = await active_ticket_store.get_active_ticket(
@@ -87,8 +87,8 @@ async def resolve_active_ticket_for_operator(
         )
         return None
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=parsed_ticket_public_id,
             actor=build_request_actor_from_id(operator_telegram_user_id),
         )

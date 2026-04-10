@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-INTAKE_CATEGORY_PROMPT_TEXT = (
-    "Сначала выберите тему обращения. После этого я попрошу коротко описать ситуацию."
-)
+INTAKE_CATEGORY_PROMPT_TEXT = "Выберите тему обращения. Дальше продолжим без лишних шагов."
 INTAKE_CATEGORY_STALE_TEXT = "Этот выбор уже неактуален. Если нужно, просто начните заново."
 INTAKE_CANCELLED_TEXT = "Новое обращение отменено. Когда будете готовы, просто напишите в чат."
 
@@ -30,5 +28,27 @@ def build_intake_message_prompt_text(category_title: str) -> str:
             category_title,
             "",
             "Опишите ситуацию одним сообщением.",
+        ]
+    )
+
+
+def build_intake_category_selected_text(category_title: str) -> str:
+    return "\n".join(
+        [
+            "Тема",
+            category_title,
+            "",
+            "Сохранил. Формирую обращение.",
+        ]
+    )
+
+
+def build_intake_attachment_prompt_text(category_title: str) -> str:
+    return "\n".join(
+        [
+            "Тема",
+            category_title,
+            "",
+            "Вложение уже сохранено. Добавьте короткое описание одним сообщением.",
         ]
     )

@@ -15,6 +15,9 @@ from application.services.authorization import (
 )
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
+from backend.grpc.client import provide_local_helpdesk_grpc_client
+from backend.grpc.contracts import HelpdeskBackendClientFactory
+from backend.grpc.server import LocalHelpdeskGrpcServer
 from infrastructure.config.settings import Settings
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
@@ -109,6 +112,24 @@ def build_helpdesk_service_factory(
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
+
+    return provide
+
+
+def build_helpdesk_backend_server(
+    *,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> LocalHelpdeskGrpcServer:
+    return LocalHelpdeskGrpcServer(helpdesk_service_factory=helpdesk_service_factory)
+
+
+def build_helpdesk_backend_client_factory(
+    server: LocalHelpdeskGrpcServer,
+) -> HelpdeskBackendClientFactory:
+    @asynccontextmanager
+    async def provide() -> AsyncIterator:
+        async with provide_local_helpdesk_grpc_client(server) as client:
+            yield client
 
     return provide
 

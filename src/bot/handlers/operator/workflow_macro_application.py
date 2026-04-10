@@ -5,7 +5,7 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_apply_macro_command,
     build_operator_identity,
@@ -47,7 +47,7 @@ async def handle_apply_macro(
     callback: CallbackQuery,
     callback_data: OperatorMacroCallback,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -73,13 +73,13 @@ async def handle_apply_macro(
     ticket_details = None
     error_message: str | None = None
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             try:
                 operator = build_operator_identity(callback.from_user)
                 if operator is None:
                     await respond_to_operator(callback, APPLY_MACRO_FAILED_TEXT)
                     return
-                macro_result = await helpdesk_service.apply_macro_to_ticket(
+                macro_result = await helpdesk_backend.apply_macro_to_ticket(
                     build_apply_macro_command(
                         ticket_public_id=ticket_public_id,
                         macro_id=callback_data.macro_id,
@@ -91,7 +91,7 @@ async def handle_apply_macro(
                 error_message = str(exc)
 
             if macro_result is not None:
-                ticket_details = await helpdesk_service.get_ticket_details(
+                ticket_details = await helpdesk_backend.get_ticket_details(
                     ticket_public_id=ticket_public_id,
                     actor=build_request_actor(callback.from_user),
                 )

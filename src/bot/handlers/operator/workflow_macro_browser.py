@@ -5,8 +5,8 @@ from collections.abc import Sequence
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import MacroSummary, TicketDetailsSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from bot.formatters.macros import (
@@ -52,7 +52,7 @@ router = Router(name="operator_workflow_macro_browser")
 async def handle_open_macros(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -67,12 +67,12 @@ async def handle_open_macros(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -106,7 +106,7 @@ async def handle_open_macros(
 async def handle_macro_page(
     callback: CallbackQuery,
     callback_data: OperatorMacroCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -121,12 +121,12 @@ async def handle_macro_page(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -168,7 +168,7 @@ async def handle_macro_page_noop(
 async def handle_macro_preview(
     callback: CallbackQuery,
     callback_data: OperatorMacroCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -183,12 +183,12 @@ async def handle_macro_preview(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -243,7 +243,7 @@ async def handle_macro_preview(
 async def handle_macro_preview_back(
     callback: CallbackQuery,
     callback_data: OperatorMacroCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -258,12 +258,12 @@ async def handle_macro_preview_back(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -297,7 +297,7 @@ async def handle_macro_preview_back(
 async def handle_macro_ticket_back(
     callback: CallbackQuery,
     callback_data: OperatorMacroCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -312,8 +312,8 @@ async def handle_macro_ticket_back(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )

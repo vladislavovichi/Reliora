@@ -4,8 +4,8 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.services.stats import AnalyticsWindow
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor, build_request_actor_from_id
 from bot.callbacks import OperatorStatsCallback
 from bot.formatters.operator_stats import (
@@ -25,7 +25,7 @@ DEFAULT_ANALYTICS_WINDOW = AnalyticsWindow.DAYS_7
 async def handle_stats(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -38,8 +38,8 @@ async def handle_stats(
         await operator_presence.touch(operator_id=operator_telegram_user_id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        snapshot = await helpdesk_service.get_analytics_snapshot(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        snapshot = await helpdesk_backend.get_analytics_snapshot(
             window=DEFAULT_ANALYTICS_WINDOW,
             actor=build_request_actor_from_id(operator_telegram_user_id),
         )
@@ -57,7 +57,7 @@ async def handle_stats(
 async def handle_stats_navigation(
     callback: CallbackQuery,
     callback_data: OperatorStatsCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -69,8 +69,8 @@ async def handle_stats_navigation(
     await operator_presence.touch(operator_id=operator_telegram_user_id)
     window = AnalyticsWindow(callback_data.window)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        snapshot = await helpdesk_service.get_analytics_snapshot(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        snapshot = await helpdesk_backend.get_analytics_snapshot(
             window=window,
             actor=build_request_actor(callback.from_user),
         )

@@ -14,6 +14,7 @@ from application.contracts.tickets import (
     TicketAssignmentCommand,
 )
 from bot.handlers.common.ticket_attachments import IncomingTicketContent
+from domain.entities.ticket import TicketAttachmentDetails
 
 
 def build_request_actor(user: User | None) -> RequestActor | None:
@@ -57,11 +58,28 @@ def build_client_ticket_message_command(
     content: IncomingTicketContent,
     category_id: int | None = None,
 ) -> ClientTicketMessageCommand:
-    return ClientTicketMessageCommand(
+    return build_client_ticket_message_command_from_values(
         client_chat_id=message.chat.id,
         telegram_message_id=message.message_id,
         text=content.text,
         attachment=content.attachment,
+        category_id=category_id,
+    )
+
+
+def build_client_ticket_message_command_from_values(
+    *,
+    client_chat_id: int,
+    telegram_message_id: int,
+    text: str | None,
+    attachment: TicketAttachmentDetails | None,
+    category_id: int | None = None,
+) -> ClientTicketMessageCommand:
+    return ClientTicketMessageCommand(
+        client_chat_id=client_chat_id,
+        telegram_message_id=telegram_message_id,
+        text=text,
+        attachment=attachment,
         category_id=category_id,
     )
 

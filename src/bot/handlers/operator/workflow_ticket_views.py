@@ -3,8 +3,8 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback
 from bot.formatters.operator_ticket_views import format_ticket_details, format_ticket_more_actions
@@ -40,7 +40,7 @@ router = Router(name="operator_workflow_ticket_views")
 async def handle_view_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -55,8 +55,8 @@ async def handle_view_action(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -88,7 +88,7 @@ async def handle_view_action(
 async def handle_card_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -103,8 +103,8 @@ async def handle_card_action(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -138,7 +138,7 @@ async def handle_card_action(
 async def handle_more_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -153,8 +153,8 @@ async def handle_more_action(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -188,7 +188,7 @@ async def handle_more_action(
 async def handle_back_from_more_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -203,8 +203,8 @@ async def handle_back_from_more_action(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )

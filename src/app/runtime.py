@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from application.services.authorization import AuthorizationServiceFactory
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import (
     ChatRateLimiter,
@@ -49,6 +50,7 @@ class AppRuntime:
     redis_workflow: RedisWorkflowRuntime
     authorization_service_factory: AuthorizationServiceFactory
     helpdesk_service_factory: HelpdeskServiceFactory
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory
     diagnostics_service: DiagnosticsService
     dispatcher: Dispatcher | None = None
     bot: Bot | None = None

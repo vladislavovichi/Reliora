@@ -8,8 +8,8 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorTicketSummary, QueuedTicketSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_assign_next_ticket_command,
     build_operator_identity,
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 async def handle_queue(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -64,8 +64,8 @@ async def handle_queue(
         await operator_presence.touch(operator_id=message.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        queued_tickets = await helpdesk_service.list_queued_tickets(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        queued_tickets = await helpdesk_backend.list_queued_tickets(
             actor=build_request_actor(message.from_user),
         )
 
@@ -81,7 +81,7 @@ async def handle_queue(
 async def handle_my_tickets(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -94,8 +94,8 @@ async def handle_my_tickets(
 
     await operator_presence.touch(operator_id=message.from_user.id)
     await state.clear()
-    async with helpdesk_service_factory() as helpdesk_service:
-        tickets = await helpdesk_service.list_operator_tickets(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        tickets = await helpdesk_backend.list_operator_tickets(
             operator_telegram_user_id=message.from_user.id,
             actor=build_request_actor(message.from_user),
         )
@@ -113,7 +113,7 @@ async def handle_ticket_index_page(
     callback: CallbackQuery,
     callback_data: OperatorQueueCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -129,8 +129,8 @@ async def handle_ticket_index_page(
         return
 
     if callback_data.scope == "mine":
-        async with helpdesk_service_factory() as helpdesk_service:
-            tickets = await helpdesk_service.list_operator_tickets(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            tickets = await helpdesk_backend.list_operator_tickets(
                 operator_telegram_user_id=callback.from_user.id,
                 actor=build_request_actor(callback.from_user),
             )
@@ -147,8 +147,8 @@ async def handle_ticket_index_page(
         await callback.message.edit_text(tickets_text, reply_markup=tickets_markup)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        queued_tickets = await helpdesk_service.list_queued_tickets(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        queued_tickets = await helpdesk_backend.list_queued_tickets(
             actor=build_request_actor(callback.from_user),
         )
 
@@ -177,7 +177,7 @@ async def handle_queue_page_noop(
 async def handle_take_next(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -200,18 +200,18 @@ async def handle_take_next(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             operator = build_operator_identity(message.from_user)
             if operator is None:
                 await message.answer(OPERATOR_UNKNOWN_TEXT)
                 return
-            ticket = await helpdesk_service.assign_next_ticket_to_operator(
+            ticket = await helpdesk_backend.assign_next_ticket_to_operator(
                 build_assign_next_ticket_command(operator=operator),
                 actor=build_request_actor(message.from_user),
             )
             ticket_details = None
             if ticket is not None:
-                ticket_details = await helpdesk_service.get_ticket_details(
+                ticket_details = await helpdesk_backend.get_ticket_details(
                     ticket_public_id=ticket.public_id,
                     actor=build_request_actor(message.from_user),
                 )
