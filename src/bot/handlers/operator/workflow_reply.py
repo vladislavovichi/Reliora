@@ -32,6 +32,7 @@ from bot.handlers.operator.ticket_surfaces import send_ticket_details
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
 from bot.texts.common import (
+    ATTACHMENT_NOT_SUPPORTED_TEXT,
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
     TICKET_LOCKED_TEXT,
@@ -144,6 +145,15 @@ async def handle_operator_message(
         ticket_live_session_store=ticket_live_session_store,
         ticket_lock_manager=ticket_lock_manager,
     )
+
+
+@router.message(
+    MagicData(F.event_user_role.in_({UserRole.OPERATOR, UserRole.SUPER_ADMIN})),
+    StateFilter(None),
+    F.content_type.in_({"animation", "audio", "sticker", "video_note"}),
+)
+async def handle_operator_unsupported_attachment(message: Message) -> None:
+    await message.answer(ATTACHMENT_NOT_SUPPORTED_TEXT)
 
 
 async def _handle_operator_message(

@@ -20,6 +20,7 @@ from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
+    OperatorInviteCodeRepository,
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
@@ -619,6 +620,28 @@ class EmptyAuditLogRepository:
         return None
 
 
+class EmptyOperatorInviteCodeRepository:
+    async def create(self, **_: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=1,
+            code_hash="hash",
+            created_by_telegram_user_id=42,
+            expires_at=datetime.now(UTC),
+            max_uses=1,
+            used_count=0,
+            is_active=True,
+            last_used_at=None,
+            last_used_telegram_user_id=None,
+            deactivated_at=None,
+        )
+
+    async def get_by_code_hash(self, **_: object) -> SimpleNamespace | None:
+        return None
+
+    async def mark_used(self, **_: object) -> SimpleNamespace | None:
+        return None
+
+
 @dataclass(slots=True)
 class HelpdeskScenario:
     helpdesk_service: HelpdeskService
@@ -655,6 +678,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
             ticket_event_repository=cast(TicketEventRepository, event_repository),
             audit_log_repository=cast(AuditLogRepository, EmptyAuditLogRepository()),
             operator_repository=cast(OperatorRepository, operator_repository),
+            operator_invite_repository=cast(
+                OperatorInviteCodeRepository, EmptyOperatorInviteCodeRepository()
+            ),
             macro_repository=cast(MacroRepository, EmptyMacroRepository()),
             sla_policy_repository=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),
             tag_repository=cast(TagRepository, EmptyTagRepository()),

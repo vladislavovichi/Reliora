@@ -157,9 +157,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             ),
             sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
         )
-        helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(
-            settings
-        )
+        helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(settings)
 
         if settings.bot.token.strip():
             logger.info("Initializing Telegram bot runtime.")

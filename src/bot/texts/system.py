@@ -8,9 +8,7 @@ PING_RESPONSE_TEXT = "понг"
 
 def format_diagnostics_report(report: DiagnosticsReport) -> str:
     status_line = (
-        "Сервис готов к работе."
-        if report.readiness_ok
-        else "Есть проблемы с готовностью сервиса."
+        "Сервис готов к работе." if report.readiness_ok else "Есть проблемы с готовностью сервиса."
     )
     lines = [status_line, ""]
     lines.append(f"- liveness: {'в порядке' if report.liveness_ok else 'ошибка'}")

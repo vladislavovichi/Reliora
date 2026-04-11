@@ -50,10 +50,23 @@ class OperatorQueueCallback(CallbackData, prefix="operator_queue"):
 
 
 class OperatorArchiveCallback(CallbackData, prefix="operator_archive"):
-    action: Literal["page", "filter", "view", "back", "noop"]
+    action: Literal[
+        "page",
+        "view",
+        "back",
+        "noop",
+        "all",
+        "topics",
+        "topic_pick",
+        "topic_back",
+    ]
     page: int
     category_id: int
     ticket_public_id: str
+
+
+class OperatorInviteCallback(CallbackData, prefix="operator_invite"):
+    action: Literal["confirm", "edit"]
 
 
 class OperatorMacroCallback(CallbackData, prefix="operator_macro"):
@@ -85,6 +98,7 @@ class AdminOperatorCallback(CallbackData, prefix="admin_operator"):
         "refresh",
         "view",
         "add",
+        "invite",
         "back_list",
         "revoke",
         "confirm_revoke",

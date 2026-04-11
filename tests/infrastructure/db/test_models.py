@@ -11,7 +11,9 @@ from infrastructure.db.models.operator import Operator
 
 def test_models_package_populates_base_metadata() -> None:
     assert sorted(Base.metadata.tables.keys()) == [
+        "audit_logs",
         "macros",
+        "operator_invite_codes",
         "operators",
         "sla_policies",
         "tags",

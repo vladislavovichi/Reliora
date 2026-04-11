@@ -49,6 +49,7 @@ class SqlAlchemyTicketReadRepository:
         (
             assigned_operator_name,
             assigned_operator_telegram_user_id,
+            assigned_operator_username,
         ) = await self._get_assigned_operator_details(ticket.assigned_operator_id)
         category_code, category_title = await self._get_category_details(ticket.category_id)
         (
@@ -70,6 +71,7 @@ class SqlAlchemyTicketReadRepository:
             assigned_operator_id=ticket.assigned_operator_id,
             assigned_operator_name=assigned_operator_name,
             assigned_operator_telegram_user_id=assigned_operator_telegram_user_id,
+            assigned_operator_username=assigned_operator_username,
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
@@ -213,19 +215,23 @@ class SqlAlchemyTicketReadRepository:
     async def _get_assigned_operator_details(
         self,
         operator_id: int | None,
-    ) -> tuple[str | None, int | None]:
+    ) -> tuple[str | None, int | None, str | None]:
         if operator_id is None:
-            return None, None
+            return None, None, None
 
         result = await self.session.execute(
-            select(Operator.display_name, Operator.telegram_user_id).where(
+            select(Operator.display_name, Operator.telegram_user_id, Operator.username).where(
                 Operator.id == operator_id
             )
         )
         row = result.first()
         if row is None:
-            return None, None
-        return cast(str | None, row[0]), cast(int | None, row[1])
+            return None, None, None
+        return (
+            cast(str | None, row[0]),
+            cast(int | None, row[1]),
+            cast(str | None, row[2]),
+        )
 
     async def _get_last_message(
         self,

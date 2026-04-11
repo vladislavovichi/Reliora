@@ -18,6 +18,7 @@ from application.services.helpdesk.ticket_operations import HelpdeskTicketOperat
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
+    OperatorInviteCodeRepository,
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
@@ -48,6 +49,7 @@ class HelpdeskService(
     ticket_event_repository: TicketEventRepository
     audit_log_repository: AuditLogRepository
     operator_repository: OperatorRepository
+    operator_invite_repository: OperatorInviteCodeRepository
     macro_repository: MacroRepository
     sla_policy_repository: SLAPolicyRepository
     tag_repository: TagRepository
@@ -57,7 +59,7 @@ class HelpdeskService(
     include_internal_notes_in_ticket_reports: bool = True
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
     _components: HelpdeskComponents = field(init=False, repr=False)
-    _audit_trail: AuditTrail = field(init=False, repr=False)
+    _audit: AuditTrail = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.super_admin_telegram_user_ids:
@@ -70,6 +72,7 @@ class HelpdeskService(
             ticket_internal_note_repository=self.ticket_internal_note_repository,
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
+            operator_invite_repository=self.operator_invite_repository,
             macro_repository=self.macro_repository,
             sla_policy_repository=self.sla_policy_repository,
             tag_repository=self.tag_repository,
@@ -78,7 +81,7 @@ class HelpdeskService(
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
             include_internal_notes_in_ticket_reports=self.include_internal_notes_in_ticket_reports,
         )
-        self._audit_trail = AuditTrail(self.audit_log_repository)
+        self._audit = AuditTrail(self.audit_log_repository)
 
     async def _ensure_permission(
         self,
@@ -107,7 +110,3 @@ class HelpdeskService(
     @property
     def _permissions(self) -> HelpdeskPermissionGuard:
         return self._components.permissions
-
-    @property
-    def _audit(self) -> AuditTrail:
-        return self._audit_trail

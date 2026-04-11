@@ -1,68 +1,45 @@
 # Reliora
 
-`Reliora` — Telegram helpdesk с русскоязычным интерфейсом для операторов и отдельным backend-сервисом на gRPC.
+`Reliora` — внутренний helpdesk в Telegram с отдельным backend-сервисом на gRPC.
 
-## Что Уже Есть
+Проект собран вокруг одной идеи: оператору не нужен шумный кабинет, если рабочее место уже находится там, где идёт диалог. Клиент пишет в Telegram, бот аккуратно ведёт intake, backend держит продуктовые правила, а оператор работает в спокойном кнопочном интерфейсе с архивом, аналитикой, макросами, заметками, вложениями и экспортами.
+
+## Почему проект интересен
+
+- Telegram остаётся основным продуктовым интерфейсом, а не временной оболочкой.
+- Бизнес-логика вынесена из bot-слоя в отдельный application/backend контур.
+- Исторические кейсы, аналитика и отчёты уже оформлены как самостоятельные эксплуатационные поверхности.
+- Вложения, внутренние заметки, feedback и роли встроены в основную модель работы, а не добавлены поверх.
+- Архитектура сохраняет явную границу `bot -> gRPC -> backend -> application -> infrastructure`.
+
+## Что уже есть
 
 - intake по темам и создание заявки из первого сообщения;
 - live-диалог клиента и оператора;
-- очередь и персональные рабочие заявки;
-- архив закрытых кейсов с кнопочным просмотром;
-- HTML/CSV экспорт по заявке;
-- HTML/CSV экспорт аналитики;
-- категории, метки, макросы, заметки и feedback;
+- очередь, личные заявки и активный ticket context;
+- архив закрытых дел с фильтрацией по темам и быстрым экспортом;
+- HTML / CSV экспорт по заявке;
+- HTML / CSV экспорт аналитики;
+- категории, метки, макросы, внутренние заметки и survey/feedback;
 - роли `user`, `operator`, `super_admin`;
-- Redis-backed FSM, runtime locks и явный gRPC boundary.
+- one-time invite-коды для onboarding операторов;
+- Redis-backed FSM, locks, presence и SLA coordination;
+- отдельный gRPC backend с internal auth, audit trail и readiness checks.
 
-## Production Hardening
-
-Текущий контур дополнительно усиливает эксплуатационную часть:
-
-- fail-fast startup checks для PostgreSQL, Redis, bot config и internal gRPC auth;
-- internal auth metadata между bot и backend;
-- correlation id через bot -> gRPC -> backend logs;
-- structured audit log для чувствительных действий;
-- более безопасные `CSV` / `HTML` экспорты;
-- ограничение и валидация входящих вложений;
-- более предсказуемые timeout/retry правила для Telegram delivery и read-only gRPC calls.
-
-## Архитектурная Идея
-
-Направление потока простое:
-
-```text
-Telegram bot -> gRPC client -> backend service -> application use cases -> domain contracts -> infrastructure
-```
-
-Это позволяет держать Telegram presentation тонким, а продуктовые сценарии расширять без размывания границ.
-
-## Быстрый Старт
+## Быстрый старт
 
 ```bash
 cp .env.example .env
-make install
-make migrate
-make run-backend
-make run-bot
+make full
 ```
 
-Если нужен локальный прогон без реального polling:
+Для локального прогона без реального polling:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-Основные developer entrypoint'ы:
-
-```bash
-make test
-make lint
-make check
-make docker-up
-make full
-```
-
-## Документация
+## Где читать дальше
 
 - [Продукт и UX](docs/product/README.md)
 - [Архитектура](docs/architecture/README.md)
@@ -70,3 +47,4 @@ make full
 - [Telegram bot](docs/bot/README.md)
 - [Разработка](docs/development/README.md)
 - [Эксплуатация](docs/operations/README.md)
+- [Безопасность и hardening](docs/security/README.md)

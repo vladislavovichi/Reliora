@@ -5,28 +5,58 @@ from collections.abc import Sequence
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from application.use_cases.tickets.archive_browser import (
+    ALL_ARCHIVE_CATEGORIES_ID,
+    ArchiveCategoryFilter,
+)
 from application.use_cases.tickets.summaries import HistoricalTicketSummary
 from bot.callbacks import OperatorActionCallback, OperatorArchiveCallback
 from bot.formatters.operator_primitives import shorten_text
 
-ALL_ARCHIVE_CATEGORIES_ID = 0
-UNCATEGORIZED_ARCHIVE_CATEGORY_ID = -1
-
 
 def build_archive_markup(
     *,
-    available_tickets: Sequence[HistoricalTicketSummary],
     tickets: Sequence[HistoricalTicketSummary],
+    filters: Sequence[ArchiveCategoryFilter],
     current_page: int,
     total_pages: int,
     selected_category_id: int,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for button in _build_filter_buttons(
-        tickets=available_tickets,
-        selected_category_id=selected_category_id,
-    ):
-        builder.row(*button)
+    builder.row(
+        InlineKeyboardButton(
+            text=_build_all_topics_button_text(selected_category_id),
+            callback_data=OperatorArchiveCallback(
+                action="all",
+                page=1,
+                category_id=ALL_ARCHIVE_CATEGORIES_ID,
+                ticket_public_id="0",
+            ).pack(),
+        ),
+        InlineKeyboardButton(
+            text="Выбрать тему",
+            callback_data=OperatorArchiveCallback(
+                action="topics",
+                page=current_page,
+                category_id=selected_category_id,
+                ticket_public_id="0",
+            ).pack(),
+        ),
+    )
+    if selected_category_id != ALL_ARCHIVE_CATEGORIES_ID:
+        selected_filter = next((item for item in filters if item.id == selected_category_id), None)
+        if selected_filter is not None:
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"Текущая тема · {shorten_text(selected_filter.title, 20)}",
+                    callback_data=OperatorArchiveCallback(
+                        action="noop",
+                        page=current_page,
+                        category_id=selected_category_id,
+                        ticket_public_id="0",
+                    ).pack(),
+                )
+            )
 
     for ticket in tickets:
         builder.row(
@@ -83,6 +113,45 @@ def build_archive_markup(
     return builder.as_markup()
 
 
+def build_archive_topic_picker_markup(
+    *,
+    filters: Sequence[ArchiveCategoryFilter],
+    current_page: int,
+    selected_category_id: int,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for category_filter in filters:
+        if category_filter.id == ALL_ARCHIVE_CATEGORIES_ID:
+            continue
+        builder.row(
+            InlineKeyboardButton(
+                text=_build_topic_picker_button_text(
+                    category_filter=category_filter,
+                    selected_category_id=selected_category_id,
+                ),
+                callback_data=OperatorArchiveCallback(
+                    action="topic_pick",
+                    page=1,
+                    category_id=category_filter.id,
+                    ticket_public_id="0",
+                ).pack(),
+            )
+        )
+
+    builder.row(
+        InlineKeyboardButton(
+            text="К архиву",
+            callback_data=OperatorArchiveCallback(
+                action="topic_back",
+                page=current_page,
+                category_id=selected_category_id,
+                ticket_public_id="0",
+            ).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
 def build_archived_ticket_markup(
     *,
     ticket_public_id: str,
@@ -99,7 +168,7 @@ def build_archived_ticket_markup(
             ).pack(),
         ),
         InlineKeyboardButton(
-            text="CSV",
+            text="CSV выгрузка",
             callback_data=OperatorActionCallback(
                 action="export_csv",
                 ticket_public_id=ticket_public_id,
@@ -120,55 +189,25 @@ def build_archived_ticket_markup(
     return builder.as_markup()
 
 
-def _build_filter_buttons(
-    *,
-    tickets: Sequence[HistoricalTicketSummary],
-    selected_category_id: int,
-) -> tuple[tuple[InlineKeyboardButton, ...], ...]:
-    options: list[tuple[int, str]] = [(ALL_ARCHIVE_CATEGORIES_ID, "Все темы")]
-    seen_category_ids = {ALL_ARCHIVE_CATEGORIES_ID}
-
-    for ticket in tickets:
-        category_id = ticket.category_id
-        if category_id is None:
-            if UNCATEGORIZED_ARCHIVE_CATEGORY_ID not in seen_category_ids:
-                options.append((UNCATEGORIZED_ARCHIVE_CATEGORY_ID, "Без темы"))
-                seen_category_ids.add(UNCATEGORIZED_ARCHIVE_CATEGORY_ID)
-            continue
-        if category_id in seen_category_ids:
-            continue
-        options.append((category_id, ticket.category_title or "Без названия"))
-        seen_category_ids.add(category_id)
-
-    rows: list[tuple[InlineKeyboardButton, ...]] = []
-    current_row: list[InlineKeyboardButton] = []
-    for category_id, title in options:
-        label = (
-            f"• {shorten_text(title, 16)}"
-            if category_id == selected_category_id
-            else shorten_text(title, 16)
-        )
-        current_row.append(
-            InlineKeyboardButton(
-                text=label,
-                callback_data=OperatorArchiveCallback(
-                    action="filter",
-                    page=1,
-                    category_id=category_id,
-                    ticket_public_id="0",
-                ).pack(),
-            )
-        )
-        if len(current_row) == 2:
-            rows.append(tuple(current_row))
-            current_row = []
-    if current_row:
-        rows.append(tuple(current_row))
-    return tuple(rows)
-
-
 def _build_ticket_button_text(ticket: HistoricalTicketSummary) -> str:
     prefix = ticket.public_number
     if ticket.category_title:
-        prefix = f"{prefix} · {shorten_text(ticket.category_title, 14)}"
+        prefix = f"{prefix} · {shorten_text(ticket.category_title, 12)}"
     return shorten_text(prefix, 32)
+
+
+def _build_all_topics_button_text(selected_category_id: int) -> str:
+    if selected_category_id == ALL_ARCHIVE_CATEGORIES_ID:
+        return "• Все темы"
+    return "Все темы"
+
+
+def _build_topic_picker_button_text(
+    *,
+    category_filter: ArchiveCategoryFilter,
+    selected_category_id: int,
+) -> str:
+    title = shorten_text(category_filter.title, 20)
+    if category_filter.id == selected_category_id:
+        return f"• {title} · {category_filter.ticket_count}"
+    return f"{title} · {category_filter.ticket_count}"

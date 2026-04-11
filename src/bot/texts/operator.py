@@ -6,7 +6,7 @@ QUEUE_EMPTY_TEXT = "Очередь пока пуста."
 QUEUE_HEADER_TEXT = "Очередь"
 NO_QUEUE_TICKETS_TEXT = "Сейчас новых заявок нет."
 MY_TICKETS_EMPTY_TEXT = "У вас пока нет активных заявок."
-ARCHIVE_EMPTY_TEXT = "Архив пока пуст."
+ARCHIVE_EMPTY_TEXT = "Архив пока пуст. Закрытых дел ещё нет."
 QUEUE_BUSY_TEXT = "Очередь сейчас занята. Попробуйте ещё раз через пару секунд."
 OPERATOR_ACTION_IDLE_TEXT = "Сейчас нечего отменять."
 OPERATOR_ACTION_CANCELLED_TEXT = "Действие отменено."
@@ -47,6 +47,7 @@ OPERATOR_ADD_PROMPT_TEXT = (
 OPERATOR_ADD_INVALID_TEXT = (
     "Не удалось распознать данные. Укажите Telegram ID и при необходимости имя."
 )
+OPERATOR_INVITE_CREATED_TEXT = "Приглашение для оператора подготовлено."
 OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT = "Сначала завершите текущий шаг или нажмите «Отмена»."
 TAGS_UPDATED_TEXT = "Метки обновлены."
 EXPORT_FAILED_TEXT = "Не удалось подготовить отчёт. Попробуйте ещё раз."
@@ -107,7 +108,7 @@ def build_notes_opened_text(public_number: str) -> str:
 
 
 def build_export_opened_text(public_number: str) -> str:
-    return f"Экспорт по заявке {public_number}."
+    return f"Экспорт по заявке {public_number} открыт."
 
 
 def build_take_answer_text(public_number: str, *, reassigned: bool) -> str:
@@ -228,6 +229,10 @@ def build_archive_page_callback_text(page: int, *, category_title: str | None = 
     if category_title:
         return f"Архив · {category_title} · страница {page}"
     return f"Архив · страница {page}"
+
+
+def build_archive_topic_picker_opened_text() -> str:
+    return "Темы архива открыты."
 
 
 def build_archived_ticket_opened_text(public_number: str) -> str:

@@ -1,51 +1,57 @@
 # Backend И gRPC
 
-## Что Здесь Живёт
+## Роль Backend-Слоя
 
-- protobuf-контракты в `src/backend/proto`;
-- gRPC client/server/translators в `src/backend/grpc`;
-- backend runtime в `src/backend/main.py`;
-- service composition через `application.services.helpdesk`.
+Backend в Reliora — это не вспомогательный proxy для Telegram-бота, а отдельный продуктовый слой. Он принимает transport-запросы, валидирует internal metadata, вызывает use case'ы и возвращает уже собранный результат в protobuf-форме.
 
-## Основные Backend Surface'ы
+Основные точки входа находятся в:
 
-- ticket details и operator workflows;
-- queue и operator ticket lists;
-- archived ticket list;
-- ticket report export `CSV` / `HTML`;
-- analytics snapshot и analytics export `CSV` / `HTML`.
+- `src/backend/proto` — protobuf-контракты;
+- `src/backend/grpc` — client, server, auth, translators;
+- `src/backend/main.py` — runtime backend-процесса;
+- `src/application/services/helpdesk` — композиция продуктовых операций.
 
-## Принцип Работы
+## Что Идёт Через Backend
 
-- gRPC server принимает transport request;
-- translator переводит transport в application-модель;
-- `HelpdeskService` вызывает use case;
-- результат сериализуется обратно в protobuf.
+- создание заявки из клиентского сообщения;
+- ticket details, очередь и личные заявки оператора;
+- архив закрытых дел;
+- reply / close / assign / macros / notes / tags;
+- exports по заявке;
+- analytics snapshot и analytics export.
 
-## Internal Security
+Admin management сейчас остаётся в том же service-контуре, но invite-code onboarding и operator lifecycle всё равно живут ниже presentation-слоя.
 
-Внутренний transport теперь требует явную auth metadata:
+## Transport Boundary
 
-- token берётся из `BACKEND_AUTH__TOKEN`;
-- caller name задаётся через `BACKEND_AUTH__CALLER`;
-- каждый запрос несёт `x-correlation-id`;
-- actor id дополнительно прокидывается metadata-слоем для audit и trace, даже там, где protobuf request не содержит `actor`.
+Backend строится вокруг явного gRPC boundary:
 
-Backend валидирует metadata до входа в бизнес-логику и отклоняет неавторизованные вызовы.
+1. server принимает request и metadata;
+2. translator собирает application-compatible payload;
+3. `HelpdeskService` вызывает соответствующий use case;
+4. результат сериализуется обратно в protobuf response или stream item.
 
-## Наблюдаемость
+Такой контур делает важную вещь: transport можно менять или расширять, не втаскивая protobuf и aiogram во внутреннюю бизнес-логику.
 
-gRPC runtime пишет более полезные structured logs:
+## Internal Auth И Trace
 
-- request started / completed;
-- caller, peer, actor id и correlation id;
-- failure category и duration;
-- transport-level denials без Telegram-facing утечки деталей.
+Внутренний gRPC трафик сопровождается служебными metadata:
 
-Для read-only вызовов client использует узкий retry/backoff на `UNAVAILABLE` и `DEADLINE_EXCEEDED`.
+- `x-helpdesk-internal-token`;
+- `x-helpdesk-caller`;
+- `x-correlation-id`;
+- `x-helpdesk-actor-telegram-user-id` там, где нужен audit context.
 
-## Почему Backend Отделён
+Backend проверяет auth до входа в бизнес-операции. Неавторизованный вызов не должен доходить до application use case'ов.
 
-- Telegram bot не держит внутри себя продуктовые сценарии;
-- transport boundary можно тестировать отдельно;
-- развитие архивов, аналитики и export-потоков не ломает presentation слой.
+## Audit И Эксплуатация
+
+Backend пишет структурные audit-записи по чувствительным действиям, включая:
+
+- ticket assign / close / reply / export;
+- analytics export;
+- operator promote / revoke / invite generation / invite redemption;
+- category и macro management;
+- feedback mutations, когда они действительно зафиксированы.
+
+Это делает backend не только transport-слоем, но и надёжной операционной опорой проекта.

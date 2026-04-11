@@ -16,6 +16,11 @@ from application.use_cases.analytics.exports import (
     AnalyticsSection,
     AnalyticsSnapshotExport,
 )
+from application.use_cases.tickets.operator_invites import (
+    OperatorInviteCodePreview,
+    OperatorInviteCodeRedemptionResult,
+    OperatorInviteCodeSummary,
+)
 from application.use_cases.tickets.summaries import OperatorRoleMutationResult, OperatorSummary
 
 
@@ -87,6 +92,62 @@ class HelpdeskOperatorOperations:
             metadata={
                 "target_telegram_user_id": result.operator.telegram_user_id,
                 "display_name": result.operator.display_name,
+            },
+        )
+        return result
+
+    async def create_operator_invite(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> OperatorInviteCodeSummary:
+        actor_id = actor_telegram_user_id(actor)
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_id,
+        )
+        if actor_id is None:
+            raise RuntimeError("Operator invite creation requires an actor.")
+        result = await self._components.operators.create_operator_invite(
+            created_by_telegram_user_id=actor_id
+        )
+        await self._audit.write(
+            action="operator.invite.create",
+            entity_type="operator_invite",
+            outcome="generated",
+            actor_telegram_user_id=actor_id,
+            metadata={
+                "expires_at": result.expires_at.isoformat(),
+                "max_uses": result.max_uses,
+            },
+        )
+        return result
+
+    async def preview_operator_invite(
+        self,
+        *,
+        code: str,
+    ) -> OperatorInviteCodePreview:
+        return await self._components.operators.preview_operator_invite(code=code)
+
+    async def redeem_operator_invite(
+        self,
+        *,
+        code: str,
+        operator: OperatorIdentity,
+    ) -> OperatorInviteCodeRedemptionResult:
+        result = await self._components.operators.redeem_operator_invite(
+            code=code,
+            operator=operator,
+        )
+        await self._audit.write(
+            action="operator.invite.redeem",
+            entity_type="operator_invite",
+            outcome="applied",
+            actor_telegram_user_id=operator.telegram_user_id,
+            metadata={
+                "display_name": result.operator.operator.display_name,
+                "expires_at": result.expires_at.isoformat(),
             },
         )
         return result

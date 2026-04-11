@@ -36,7 +36,11 @@ from bot.texts.categories import (
     build_intake_category_selected_text,
     build_intake_message_prompt_text,
 )
-from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
+from bot.texts.common import (
+    ATTACHMENT_NOT_SUPPORTED_TEXT,
+    CHAT_RATE_LIMIT_TEXT,
+    SERVICE_UNAVAILABLE_TEXT,
+)
 from domain.enums.roles import UserRole
 from infrastructure.redis.contracts import (
     ChatRateLimiter,
@@ -245,3 +249,12 @@ async def handle_client_intake_message(
             )
         ),
     )
+
+
+@router.message(
+    StateFilter(UserIntakeStates.writing_message),
+    MagicData(F.event_user_role == UserRole.USER),
+    F.content_type.in_({"animation", "audio", "sticker", "video_note"}),
+)
+async def handle_client_intake_unsupported_attachment(message: Message) -> None:
+    await message.answer(ATTACHMENT_NOT_SUPPORTED_TEXT)

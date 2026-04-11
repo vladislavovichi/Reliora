@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+from pytest import MonkeyPatch
+
 from application.services.stats import (
     AnalyticsCategorySnapshot,
     AnalyticsOperatorSnapshot,
@@ -30,7 +32,7 @@ from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
 def test_render_ticket_report_html_embeds_local_photo(
-    monkeypatch,
+    monkeypatch: MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     photo_dir = tmp_path / "photo"
@@ -57,6 +59,7 @@ def test_render_ticket_report_html_embeds_local_photo(
         assigned_operator_id=7,
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
+        assigned_operator_username="ivan_petrov",
         created_at=datetime(2026, 4, 7, 12, 0, tzinfo=UTC),
         updated_at=datetime(2026, 4, 7, 13, 0, tzinfo=UTC),
         first_response_at=datetime(2026, 4, 7, 12, 10, tzinfo=UTC),
@@ -90,6 +93,7 @@ def test_render_ticket_report_html_embeds_local_photo(
     assert "Материалы дела" in html
     assert "data:image/png;base64," in html
     assert "Скриншот ошибки во вложении" in html
+    assert "https://t.me/ivan_petrov" in html
 
 
 def test_render_ticket_report_csv_sanitizes_formula_like_cells() -> None:

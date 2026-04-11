@@ -149,12 +149,12 @@ def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeybo
     callback_value = str(ticket_public_id)
     builder.row(
         _build_callback_button(
-            "CSV",
-            OperatorActionCallback(action="export_csv", ticket_public_id=callback_value).pack(),
-        ),
-        _build_callback_button(
             "HTML отчёт",
             OperatorActionCallback(action="export_html", ticket_public_id=callback_value).pack(),
+        ),
+        _build_callback_button(
+            "CSV выгрузка",
+            OperatorActionCallback(action="export_csv", ticket_public_id=callback_value).pack(),
         ),
     )
     builder.row(

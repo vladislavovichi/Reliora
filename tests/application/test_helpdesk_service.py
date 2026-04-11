@@ -20,6 +20,7 @@ from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.exports import TicketReportFormat
+from application.use_cases.tickets.operator_invites import OPERATOR_INVITE_PREFIX
 from application.use_cases.tickets.summaries import (
     CategoryManagementError,
     MacroManagementError,
@@ -27,7 +28,7 @@ from application.use_cases.tickets.summaries import (
     SLAAutoReassignmentTarget,
     TagSummary,
 )
-from domain.entities.ticket import TicketDetails, TicketMessageDetails
+from domain.entities.ticket import TicketDetails, TicketHistoryEntry, TicketMessageDetails
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
@@ -156,6 +157,7 @@ class StubTicketRepository:
             assigned_operator_telegram_user_id=getattr(
                 ticket, "assigned_operator_telegram_user_id", None
             ),
+            assigned_operator_username=getattr(ticket, "assigned_operator_username", None),
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             first_response_at=ticket.first_response_at,
@@ -223,6 +225,31 @@ class StubTicketRepository:
         if limit is None:
             return tickets
         return tickets[:limit]
+
+    async def list_closed_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[TicketHistoryEntry]:
+        tickets = [
+            TicketHistoryEntry(
+                public_id=ticket.public_id,
+                status=ticket.status,
+                subject=ticket.subject,
+                created_at=ticket.created_at,
+                closed_at=ticket.closed_at,
+                category_id=getattr(ticket, "category_id", None),
+                category_code=getattr(ticket, "category_code", None),
+                category_title=getattr(ticket, "category_title", None),
+            )
+            for ticket in self.tickets.values()
+            if ticket.status == TicketStatus.CLOSED
+        ]
+        tickets.sort(key=lambda ticket: ticket.closed_at or ticket.created_at, reverse=True)
+        if limit is None:
+            return tickets[offset:]
+        return tickets[offset : offset + limit]
 
     async def get_by_public_id(self, public_id: UUID) -> SimpleNamespace | None:
         return self.tickets.get(public_id)
@@ -669,6 +696,61 @@ class StubOperatorManagementRepository:
         return telegram_user_id
 
 
+@dataclass
+class StubOperatorInviteRepository:
+    def __post_init__(self) -> None:
+        self.records_by_hash: dict[str, SimpleNamespace] = {}
+        self.next_id = 1
+
+    async def create(
+        self,
+        *,
+        code_hash: str,
+        created_by_telegram_user_id: int,
+        expires_at: datetime,
+        max_uses: int = 1,
+    ) -> SimpleNamespace:
+        record = SimpleNamespace(
+            id=self.next_id,
+            code_hash=code_hash,
+            created_by_telegram_user_id=created_by_telegram_user_id,
+            expires_at=expires_at,
+            max_uses=max_uses,
+            used_count=0,
+            is_active=True,
+            last_used_at=None,
+            last_used_telegram_user_id=None,
+            deactivated_at=None,
+        )
+        self.records_by_hash[code_hash] = record
+        self.next_id += 1
+        return record
+
+    async def get_by_code_hash(self, *, code_hash: str) -> SimpleNamespace | None:
+        return self.records_by_hash.get(code_hash)
+
+    async def mark_used(
+        self,
+        *,
+        invite_id: int,
+        telegram_user_id: int,
+        used_at: datetime,
+    ) -> SimpleNamespace | None:
+        record = next(
+            (item for item in self.records_by_hash.values() if item.id == invite_id),
+            None,
+        )
+        if record is None:
+            return None
+        record.used_count += 1
+        record.last_used_at = used_at
+        record.last_used_telegram_user_id = telegram_user_id
+        if record.used_count >= record.max_uses:
+            record.is_active = False
+            record.deactivated_at = used_at
+        return record
+
+
 def build_macro_repository_mock(
     macros: list[SimpleNamespace] | None = None,
 ) -> Mock:
@@ -954,6 +1036,7 @@ def build_service(
     internal_note_repository: Any | None = None,
     event_repository: Any | None = None,
     operator_repository: Any | None = None,
+    operator_invite_repository: Any | None = None,
     macro_repository: Any | None = None,
     sla_policy_repository: Any | None = None,
     tag_repository: StubTagRepository | None = None,
@@ -972,6 +1055,7 @@ def build_service(
         ticket_event_repository=event_repository or build_event_repository_mock(),
         audit_log_repository=build_audit_repository_mock(),
         operator_repository=operator_repository or build_operator_repository_mock({}),
+        operator_invite_repository=operator_invite_repository or StubOperatorInviteRepository(),
         macro_repository=macro_repository or build_macro_repository_mock(),
         sla_policy_repository=sla_policy_repository
         or build_sla_policy_repository_mock(
@@ -1228,6 +1312,53 @@ async def test_promote_operator_marks_user_as_operator() -> None:
     assert result.changed is True
     assert result.operator.telegram_user_id == 3001
     assert 3001 in operator_repository.active_operator_ids
+
+
+async def test_create_operator_invite_returns_one_time_code() -> None:
+    invite_repository = StubOperatorInviteRepository()
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        operator_invite_repository=invite_repository,
+    )
+
+    result = await service.create_operator_invite(actor=RequestActor(telegram_user_id=42))
+
+    assert result.code.startswith(OPERATOR_INVITE_PREFIX)
+    stored = next(iter(invite_repository.records_by_hash.values()))
+    assert stored.max_uses == 1
+    assert stored.is_active is True
+
+
+async def test_redeem_operator_invite_promotes_user_and_deactivates_code() -> None:
+    operator_repository = StubOperatorManagementRepository()
+    invite_repository = StubOperatorInviteRepository()
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        operator_repository=operator_repository,
+        operator_invite_repository=invite_repository,
+    )
+
+    invite = await service.create_operator_invite(actor=RequestActor(telegram_user_id=42))
+    preview = await service.preview_operator_invite(code=invite.code)
+    result = await service.redeem_operator_invite(
+        code=invite.code,
+        operator=OperatorIdentity(
+            telegram_user_id=3001,
+            display_name="Анна Смирнова",
+            username="anna_smirnova",
+        ),
+    )
+
+    assert preview.remaining_uses == 1
+    assert result.operator.operator.telegram_user_id == 3001
+    assert 3001 in operator_repository.active_operator_ids
+    stored = next(iter(invite_repository.records_by_hash.values()))
+    assert stored.used_count == 1
+    assert stored.is_active is False
 
 
 async def test_list_client_ticket_categories_returns_only_active_items_in_order() -> None:

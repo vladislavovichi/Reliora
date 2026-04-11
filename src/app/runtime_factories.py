@@ -27,6 +27,7 @@ from infrastructure.db.repositories.catalog import (
     SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.repositories.feedback import SqlAlchemyTicketFeedbackRepository
+from infrastructure.db.repositories.operator_invites import SqlAlchemyOperatorInviteCodeRepository
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
 from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
@@ -90,6 +91,7 @@ def build_helpdesk_service(
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
         audit_log_repository=SqlAlchemyAuditLogRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
+        operator_invite_repository=SqlAlchemyOperatorInviteCodeRepository(session),
         macro_repository=SqlAlchemyMacroRepository(session),
         sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
         tag_repository=SqlAlchemyTagRepository(session),

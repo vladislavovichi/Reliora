@@ -96,6 +96,7 @@ class TicketDetails:
     updated_at: datetime
     first_response_at: datetime | None
     closed_at: datetime | None
+    assigned_operator_username: str | None = None
     category_id: int | None = None
     category_code: str | None = None
     category_title: str | None = None

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
 from application.use_cases.tickets.summaries import TicketSummary
-from domain.entities.ticket import Ticket, TicketAttachmentDetails
+from domain.entities.ticket import Ticket, TicketAttachmentDetails, TicketDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 
 
@@ -21,7 +21,7 @@ def build_ticket_subject(message_text: str) -> str:
 
 
 def build_ticket_summary(
-    ticket: Ticket,
+    ticket: Ticket | TicketDetails,
     *,
     created: bool = False,
     event_type: TicketEventType | None = None,

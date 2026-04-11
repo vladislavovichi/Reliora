@@ -9,6 +9,7 @@ from application.use_cases.tickets.summaries import OperatorSummary
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_primitives import format_operator_button_text
 from bot.texts.buttons import BACK_BUTTON_TEXT, REFRESH_BUTTON_TEXT
+from bot.texts.operator_invites import INVITE_OPERATOR_BUTTON_TEXT
 
 
 def build_operator_management_markup(
@@ -29,9 +30,15 @@ def build_operator_management_markup(
 
     builder.row(
         _build_callback_button(
+            INVITE_OPERATOR_BUTTON_TEXT,
+            AdminOperatorCallback(action="invite", telegram_user_id=0).pack(),
+        ),
+        _build_callback_button(
             "Добавить",
             AdminOperatorCallback(action="add", telegram_user_id=0).pack(),
         ),
+    )
+    builder.row(
         _build_callback_button(
             REFRESH_BUTTON_TEXT,
             AdminOperatorCallback(action="refresh", telegram_user_id=0).pack(),

@@ -3,17 +3,19 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.use_cases.tickets.operator_invites import OperatorInviteCodeError
 from application.use_cases.tickets.summaries import OperatorManagementError, OperatorSummary
 from bot.adapters.helpdesk import build_operator_identity_from_parts, build_request_actor
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_admin_views import (
     format_operator_detail_response,
+    format_operator_invite_response,
     format_operator_list_response,
 )
 from bot.handlers.admin.states import AdminOperatorStates
@@ -38,6 +40,10 @@ from bot.texts.operator import (
     build_revoke_confirm_message,
     build_revoke_operator_result_text,
 )
+from bot.texts.operator_invites import (
+    INVITE_OPERATOR_STARTED_TEXT,
+    build_invite_link_missing_text,
+)
 from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
@@ -54,6 +60,51 @@ async def handle_add_operator_start(
     await callback.answer(OPERATOR_ADD_STARTED_TEXT)
     if isinstance(callback.message, Message):
         await callback.message.answer(OPERATOR_ADD_PROMPT_TEXT)
+
+
+@router.callback_query(AdminOperatorCallback.filter(F.action == "invite"))
+async def handle_create_operator_invite(
+    callback: CallbackQuery,
+    bot: Bot,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await respond_to_operator(callback, SERVICE_UNAVAILABLE_TEXT)
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
+    async with helpdesk_service_factory() as helpdesk_service:
+        try:
+            invite = await helpdesk_service.create_operator_invite(
+                actor=build_request_actor(callback.from_user)
+            )
+        except OperatorInviteCodeError as exc:
+            await respond_to_operator(callback, str(exc))
+            return
+
+    await callback.answer(INVITE_OPERATOR_STARTED_TEXT)
+    if not isinstance(callback.message, Message):
+        return
+
+    bot_username = None
+    try:
+        bot_info = await bot.get_me()
+        bot_username = bot_info.username
+    except Exception:
+        logger.exception("Failed to resolve bot username for operator invite.")
+
+    if bot_username:
+        deep_link = f"https://t.me/{bot_username}?start={invite.code}"
+        text = format_operator_invite_response(
+            code=invite.code,
+            deep_link=deep_link,
+            expires_at=invite.expires_at,
+        )
+    else:
+        text = build_invite_link_missing_text(invite.code)
+    await callback.message.answer(text)
 
 
 @router.message(StateFilter(AdminOperatorStates.adding_operator), F.text)

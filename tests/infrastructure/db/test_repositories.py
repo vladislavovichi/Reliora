@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -25,6 +26,7 @@ from infrastructure.db.repositories.catalog import (
     SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.repositories.feedback import SqlAlchemyTicketFeedbackRepository
+from infrastructure.db.repositories.operator_invites import SqlAlchemyOperatorInviteCodeRepository
 from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
 from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
@@ -443,6 +445,50 @@ async def test_revoke_operator_marks_record_inactive() -> None:
     assert session.flush_count == 1
 
 
+async def test_create_operator_invite_code_persists_record() -> None:
+    session = build_session()
+    repository = SqlAlchemyOperatorInviteCodeRepository(session)
+
+    invite = await repository.create(
+        code_hash="hash-1",
+        created_by_telegram_user_id=42,
+        expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
+    )
+
+    assert invite.code_hash == "hash-1"
+    assert invite.max_uses == 1
+    assert invite.is_active is True
+    assert session.flush_count == 1
+
+
+async def test_mark_used_operator_invite_code_deactivates_when_limit_reached() -> None:
+    invite = SimpleNamespace(
+        id=1,
+        code_hash="hash-1",
+        created_by_telegram_user_id=42,
+        expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
+        max_uses=1,
+        used_count=0,
+        is_active=True,
+        last_used_at=None,
+        last_used_telegram_user_id=None,
+        deactivated_at=None,
+    )
+    session = build_session(result=build_result(scalar=invite))
+    repository = SqlAlchemyOperatorInviteCodeRepository(session)
+
+    result = await repository.mark_used(
+        invite_id=1,
+        telegram_user_id=3001,
+        used_at=datetime(2026, 4, 12, 12, 0, tzinfo=UTC),
+    )
+
+    assert result is not None
+    assert invite.used_count == 1
+    assert invite.is_active is False
+    assert invite.last_used_telegram_user_id == 3001
+
+
 async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags() -> None:
     ticket = Ticket(
         client_chat_id=100,
@@ -456,7 +502,7 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
     ticket.id = 1
     session = build_session(
         build_result(scalar=ticket),
-        build_result(rows=[("Operator One", 1001)]),
+        build_result(rows=[("Operator One", 1001, "operator_one")]),
         build_result(rows=[("access", "Доступ и вход")]),
         build_result(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
         build_result(scalar_items=["billing", "vip"]),

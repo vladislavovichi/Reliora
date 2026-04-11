@@ -8,3 +8,8 @@ class UserIntakeStates(StatesGroup):
 
 class UserFeedbackStates(StatesGroup):
     writing_comment = State()
+
+
+class UserOperatorInviteStates(StatesGroup):
+    writing_display_name = State()
+    confirming_display_name = State()

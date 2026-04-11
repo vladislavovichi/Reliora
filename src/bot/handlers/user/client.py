@@ -31,7 +31,11 @@ from bot.texts.client import (
     build_ticket_already_closed_text,
     build_ticket_closed_text,
 )
-from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
+from bot.texts.common import (
+    ATTACHMENT_NOT_SUPPORTED_TEXT,
+    CHAT_RATE_LIMIT_TEXT,
+    SERVICE_UNAVAILABLE_TEXT,
+)
 from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
@@ -112,6 +116,15 @@ async def handle_client_text(
         logger=logger,
         content=content,
     )
+
+
+@router.message(
+    StateFilter(None),
+    MagicData(F.event_user_role == UserRole.USER),
+    F.content_type.in_({"animation", "audio", "sticker", "video_note"}),
+)
+async def handle_client_unsupported_attachment(message: Message) -> None:
+    await message.answer(ATTACHMENT_NOT_SUPPORTED_TEXT)
 
 
 @router.callback_query(

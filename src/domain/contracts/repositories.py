@@ -270,6 +270,30 @@ class OperatorRepository(Protocol):
         """Return an operator identifier, creating or refreshing the operator record if needed."""
 
 
+class OperatorInviteCodeRepository(Protocol):
+    async def create(
+        self,
+        *,
+        code_hash: str,
+        created_by_telegram_user_id: int,
+        expires_at: datetime,
+        max_uses: int = 1,
+    ) -> OperatorInviteCodeRecord:
+        """Persist and return a new operator invite code."""
+
+    async def get_by_code_hash(self, *, code_hash: str) -> OperatorInviteCodeRecord | None:
+        """Return an invite code record by its stored hash."""
+
+    async def mark_used(
+        self,
+        *,
+        invite_id: int,
+        telegram_user_id: int,
+        used_at: datetime,
+    ) -> OperatorInviteCodeRecord | None:
+        """Increase usage counters and deactivate the invite when the limit is reached."""
+
+
 class OperatorTicketLoadRecord(Protocol):
     @property
     def operator_id(self) -> int:
@@ -376,6 +400,19 @@ class OperatorRecord(Protocol):
     username: str | None
     display_name: str
     is_active: bool
+
+
+class OperatorInviteCodeRecord(Protocol):
+    id: int
+    code_hash: str
+    created_by_telegram_user_id: int
+    expires_at: datetime
+    max_uses: int
+    used_count: int
+    is_active: bool
+    last_used_at: datetime | None
+    last_used_telegram_user_id: int | None
+    deactivated_at: datetime | None
 
 
 class MacroRecord(Protocol):

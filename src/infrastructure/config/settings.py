@@ -163,6 +163,18 @@ class AttachmentLimitsConfig(BaseModel):
     document_max_bytes: int = 20 * 1024 * 1024
     voice_max_bytes: int = 10 * 1024 * 1024
     video_max_bytes: int = 20 * 1024 * 1024
+    blocked_document_mime_types: tuple[str, ...] = (
+        "application/java-archive",
+        "application/javascript",
+        "application/vnd.microsoft.portable-executable",
+        "application/x-bat",
+        "application/x-dosexec",
+        "application/x-executable",
+        "application/x-msdownload",
+        "application/x-msi",
+        "application/x-powershell",
+        "application/x-sh",
+    )
     blocked_document_extensions: tuple[str, ...] = (
         ".bat",
         ".cmd",

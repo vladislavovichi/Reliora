@@ -42,10 +42,7 @@ def resolve_backend_request_context(
     auth_config: BackendAuthConfig,
     fallback_actor: RequestActor | None = None,
 ) -> BackendRequestContext:
-    metadata = {
-        item.key.lower(): item.value
-        for item in context.invocation_metadata()
-    }
+    metadata = {item.key.lower(): item.value for item in context.invocation_metadata()}
 
     provided_token = metadata.get(INTERNAL_AUTH_TOKEN_HEADER)
     if not provided_token or provided_token != auth_config.token.strip():

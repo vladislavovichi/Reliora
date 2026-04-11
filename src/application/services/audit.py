@@ -75,7 +75,6 @@ def _is_supported_audit_value(value: object) -> bool:
         return all(_is_supported_audit_value(item) for item in value)
     if isinstance(value, dict):
         return all(
-            isinstance(key, str) and _is_supported_audit_value(item)
-            for key, item in value.items()
+            isinstance(key, str) and _is_supported_audit_value(item) for key, item in value.items()
         )
     return False

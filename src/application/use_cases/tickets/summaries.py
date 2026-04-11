@@ -225,6 +225,7 @@ class TicketDetailsSummary:
     assigned_operator_telegram_user_id: int | None
     created_at: datetime
     closed_at: datetime | None = None
+    assigned_operator_username: str | None = None
     category_id: int | None = None
     category_code: str | None = None
     category_title: str | None = None
@@ -247,6 +248,7 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         assigned_operator_id=ticket.assigned_operator_id,
         assigned_operator_name=ticket.assigned_operator_name,
         assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
+        assigned_operator_username=ticket.assigned_operator_username,
         created_at=ticket.created_at,
         closed_at=ticket.closed_at,
         category_id=ticket.category_id,

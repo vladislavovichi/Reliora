@@ -37,6 +37,11 @@ from application.use_cases.tickets.messaging import (
     AddMessageToTicketUseCase,
     ReplyToTicketAsOperatorUseCase,
 )
+from application.use_cases.tickets.operator_invites import (
+    CreateOperatorInviteCodeUseCase,
+    PreviewOperatorInviteCodeUseCase,
+    RedeemOperatorInviteCodeUseCase,
+)
 from application.use_cases.tickets.operators import (
     ListOperatorsUseCase,
     PromoteOperatorUseCase,
@@ -70,6 +75,7 @@ from application.use_cases.tickets.workflow import (
 )
 from domain.contracts.repositories import (
     MacroRepository,
+    OperatorInviteCodeRepository,
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
@@ -116,6 +122,9 @@ class HelpdeskOperatorUseCases:
     list_operators: ListOperatorsUseCase
     promote_operator: PromoteOperatorUseCase
     revoke_operator: RevokeOperatorUseCase
+    create_operator_invite: CreateOperatorInviteCodeUseCase
+    preview_operator_invite: PreviewOperatorInviteCodeUseCase
+    redeem_operator_invite: RedeemOperatorInviteCodeUseCase
     export_analytics_snapshot: ExportAnalyticsSnapshotUseCase
 
 
@@ -165,6 +174,7 @@ def build_helpdesk_components(
     ticket_internal_note_repository: TicketInternalNoteRepository,
     ticket_event_repository: TicketEventRepository,
     operator_repository: OperatorRepository,
+    operator_invite_repository: OperatorInviteCodeRepository,
     macro_repository: MacroRepository,
     sla_policy_repository: SLAPolicyRepository,
     tag_repository: TagRepository,
@@ -261,6 +271,17 @@ def build_helpdesk_components(
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             ),
             revoke_operator=RevokeOperatorUseCase(
+                operator_repository=operator_repository,
+                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+            ),
+            create_operator_invite=CreateOperatorInviteCodeUseCase(
+                operator_invite_repository=operator_invite_repository
+            ),
+            preview_operator_invite=PreviewOperatorInviteCodeUseCase(
+                operator_invite_repository=operator_invite_repository
+            ),
+            redeem_operator_invite=RedeemOperatorInviteCodeUseCase(
+                operator_invite_repository=operator_invite_repository,
                 operator_repository=operator_repository,
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             ),

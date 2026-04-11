@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from contextvars import ContextVar
-from contextvars import Token
+from contextvars import ContextVar, Token
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 _correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)

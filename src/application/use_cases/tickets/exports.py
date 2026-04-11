@@ -94,6 +94,7 @@ class TicketReport:
     feedback: TicketReportFeedback | None
     messages: tuple[TicketReportMessage, ...]
     events: tuple[TicketReportEvent, ...]
+    assigned_operator_username: str | None = None
     internal_notes: tuple[TicketReportInternalNote, ...] = ()
 
 
@@ -187,6 +188,7 @@ def build_ticket_report(
         assigned_operator_id=ticket.assigned_operator_id,
         assigned_operator_name=ticket.assigned_operator_name,
         assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
+        assigned_operator_username=ticket.assigned_operator_username,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
         first_response_at=ticket.first_response_at,

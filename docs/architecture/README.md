@@ -1,38 +1,63 @@
 # Архитектура Reliora
 
-## Слои
+## Общая Картина
 
-- `src/bot` — Telegram presentation: handlers, keyboards, formatters, texts, middlewares.
-- `src/backend` — отдельный gRPC transport layer и server runtime.
-- `src/application` — use cases, orchestration и продуктовые операции.
-- `src/domain` — сущности, инварианты и контракты репозиториев.
-- `src/infrastructure` — PostgreSQL, Redis, exports, config, logging.
-- `src/app` — runtime Telegram-бота и клиентская health-проверка.
+Reliora разделяет Telegram presentation и продуктовый backend настолько явно, насколько это разумно для helpdesk-продукта без web-dashboard.
 
-## Главные Правила
+Базовый маршрут данных:
 
-- handlers не принимают бизнес-решения и не работают напрямую с БД;
-- backend публикует явные protobuf/gRPC контракты;
-- application не знает о Telegram и protobuf;
-- exports рендерятся отдельными модулями;
-- аналитика и архив не привязаны к Telegram transport;
-- PostgreSQL остаётся source of truth, Redis — runtime-слой.
+```text
+Telegram bot -> gRPC client -> backend service -> application use cases -> repositories -> infrastructure
+```
 
-## Текущий Transport Boundary
+Это не декоративная схема. Она определяет, где именно живут решения:
 
-Через внутренний gRPC уже идут:
+- `src/bot` — экраны, тексты, клавиатуры, форматирование и реакция на update;
+- `src/backend` — protobuf, gRPC server/client и transport boundary;
+- `src/application` — продуктовые сценарии, orchestration и бизнес-правила;
+- `src/domain` — сущности, инварианты и repository contracts;
+- `src/infrastructure` — PostgreSQL, Redis, exports, assets, config, logging;
+- `src/app` — wiring Telegram runtime и bootstrap.
 
-- создание заявки и intake;
-- карточка заявки и список очереди;
-- активные заявки оператора;
-- reply, close, assign, macros;
-- analytics snapshot и exports;
-- archived ticket browsing и historical exports.
+## Что Здесь Считается Важным
 
-## Почему Это Важно
+- Handler'ы остаются тонкими и не принимают продуктовых решений.
+- Telegram-специфика не должна протекать в application use case'ы без необходимости.
+- Экспорты рендерятся отдельными модулями и не смешиваются с transport-кодом.
+- Архив, аналитика и onboarding операторов оформляются как backend/application capabilities, а не как набор callback-трюков.
+- PostgreSQL остаётся source of truth; Redis отвечает за runtime coordination.
 
-Такой контур позволяет:
+## Текущие Границы Ответственности
 
-- развивать продукт без размазывания логики по presentation-коду;
-- проверять бизнес-поведение на application/backend уровне;
-- удерживать premium Telegram UX при растущей backend-сложности.
+### Bot
+
+Bot-слой отвечает за то, как продукт ощущается:
+
+- русскоязычный интерфейс;
+- кнопочная навигация;
+- спокойные empty/error/confirmation states;
+- live delivery клиенту и оператору;
+- стартовые потоки, включая invite-code onboarding.
+
+### Backend
+
+Backend принимает transport request, переводит их в application-модель и возвращает уже собранный результат. Именно здесь держатся:
+
+- ticket workflows;
+- archive browsing data;
+- exports;
+- analytics snapshot;
+- role mutations и invite-code lifecycle.
+
+### Application
+
+Именно application-слой должен знать:
+
+- что считать валидным workflow;
+- как обрабатывать архив и фильтры;
+- как выдавать и погашать invite-коды;
+- какие события и audit-записи сопровождать продуктовые действия.
+
+## Почему Такая Схема Нужна
+
+Telegram-интерфейс у проекта намеренно богатый: очередь, active context, архив, analytics, exports, notes, attachments, macros, tags. Без явной backend extraction всё это быстро превращается в плотный слой handler'ов с неясными границами. Текущая схема удерживает проект управляемым: UI можно полировать отдельно, а бизнес-поведение — проверять на application и repository уровне.

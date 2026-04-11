@@ -534,9 +534,11 @@ async def _abort_for_exception(
     *,
     method: str,
 ) -> None:
-    level = logging.WARNING if isinstance(
-        exc, (InvalidTicketTransitionError, PermissionError, ValueError)
-    ) else logging.ERROR
+    level = (
+        logging.WARNING
+        if isinstance(exc, (InvalidTicketTransitionError, PermissionError, ValueError))
+        else logging.ERROR
+    )
     logger.log(
         level,
         "gRPC request failed method=%s error_type=%s error=%s",

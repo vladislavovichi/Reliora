@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,7 +65,11 @@ async def extract_ticket_content(
             size_bytes=document.file_size,
             limits=settings.attachments,
         )
-        _ensure_document_is_safe(document.file_name, settings.attachments)
+        _ensure_document_is_safe(
+            filename=document.file_name,
+            mime_type=document.mime_type,
+            limits=settings.attachments,
+        )
         return IncomingTicketContent(
             text=text,
             attachment=await _store_attachment(
@@ -73,8 +78,8 @@ async def extract_ticket_content(
                     kind=TicketAttachmentKind.DOCUMENT,
                     telegram_file_id=document.file_id,
                     telegram_file_unique_id=document.file_unique_id,
-                    filename=document.file_name,
-                    mime_type=document.mime_type,
+                    filename=_normalize_filename(document.file_name),
+                    mime_type=_normalize_mime_type(document.mime_type),
                 ),
             ),
         )
@@ -94,7 +99,7 @@ async def extract_ticket_content(
                     telegram_file_id=voice.file_id,
                     telegram_file_unique_id=voice.file_unique_id,
                     filename=None,
-                    mime_type=voice.mime_type,
+                    mime_type=_normalize_mime_type(voice.mime_type),
                 ),
             ),
         )
@@ -113,8 +118,8 @@ async def extract_ticket_content(
                     kind=TicketAttachmentKind.VIDEO,
                     telegram_file_id=video.file_id,
                     telegram_file_unique_id=video.file_unique_id,
-                    filename=video.file_name,
-                    mime_type=video.mime_type,
+                    filename=_normalize_filename(video.file_name),
+                    mime_type=_normalize_mime_type(video.mime_type),
                 ),
             ),
         )
@@ -172,12 +177,41 @@ def _ensure_size_allowed(
 
 
 def _ensure_document_is_safe(
+    *,
     filename: str | None,
+    mime_type: str | None,
     limits: AttachmentLimitsConfig,
 ) -> None:
+    normalized_mime_type = _normalize_mime_type(mime_type)
+    if normalized_mime_type in limits.blocked_document_mime_types:
+        logger.warning("Attachment rejected by mime_type mime_type=%s", normalized_mime_type)
+        raise AttachmentRejectedError(ATTACHMENT_UNSAFE_TEXT)
     if not filename:
         return
     suffix = Path(filename).suffix.lower()
     if suffix in limits.blocked_document_extensions:
         logger.warning("Attachment rejected by extension filename=%s", filename)
         raise AttachmentRejectedError(ATTACHMENT_UNSAFE_TEXT)
+
+
+def _normalize_filename(filename: str | None) -> str | None:
+    if filename is None:
+        return None
+    normalized = Path(filename).name.strip()
+    if not normalized:
+        return None
+    normalized = re.sub(r"\s+", " ", normalized)
+    if len(normalized) > 128:
+        stem = Path(normalized).stem[:96].rstrip()
+        suffix = Path(normalized).suffix[:16]
+        normalized = f"{stem}{suffix}" if stem else normalized[:128]
+    return normalized
+
+
+def _normalize_mime_type(mime_type: str | None) -> str | None:
+    if mime_type is None:
+        return None
+    normalized = mime_type.strip().lower()
+    if not normalized:
+        return None
+    return normalized[:128]
