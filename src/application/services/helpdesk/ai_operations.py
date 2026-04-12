@@ -18,6 +18,7 @@ class HelpdeskAIOperations:
         self,
         *,
         ticket_public_id: UUID,
+        refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot | None:
         await self._require_permission_if_actor(
@@ -25,7 +26,8 @@ class HelpdeskAIOperations:
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.ai.build_ticket_assist_snapshot(
-            ticket_public_id=ticket_public_id
+            ticket_public_id=ticket_public_id,
+            refresh_summary=refresh_summary,
         )
 
     async def predict_ticket_category(

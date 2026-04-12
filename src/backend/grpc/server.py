@@ -431,6 +431,7 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
                 async with self.helpdesk_service_factory() as helpdesk_service:
                     snapshot = await helpdesk_service.get_ticket_ai_assist_snapshot(
                         ticket_public_id=UUID(request.ticket_public_id),
+                        refresh_summary=request.refresh_summary,
                         actor=request_context.actor,
                     )
             except Exception as exc:

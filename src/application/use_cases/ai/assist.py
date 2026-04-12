@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 from uuid import UUID
@@ -15,31 +16,37 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketSummaryStatus,
 )
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.use_cases.tickets.summaries import MacroSummary, TicketCategorySummary
 from domain.contracts.repositories import (
     MacroRepository,
+    TicketAISummaryRepository,
     TicketCategoryRepository,
     TicketRepository,
 )
+from domain.entities.ai import TicketAISummaryDetails
 from domain.entities.ticket import TicketDetails
 from domain.enums.tickets import TicketAttachmentKind
 
 _SUMMARY_INSTRUCTIONS = (
     "Ты помогаешь оператору русскоязычного helpdesk. "
     "Верни только JSON без пояснений и markdown. "
-    "Тон деловой, спокойный, короткий. Не выдумывай факты."
+    "Тон деловой, спокойный, короткий. "
+    "Пиши как внутреннюю support-сводку. Не выдумывай факты."
 )
 _MACRO_INSTRUCTIONS = (
     "Ты подбираешь операторские макросы для helpdesk. "
     "Верни только JSON без пояснений и markdown. "
-    "Выбирай только из переданного списка макросов. Не придумывай новые."
+    "Выбирай только из переданного списка макросов. Не придумывай новые. "
+    "Если уверенность слабая, не предлагай макрос."
 )
 _CATEGORY_INSTRUCTIONS = (
     "Ты помогаешь предсказать тему нового обращения в helpdesk. "
     "Верни только JSON без пояснений и markdown. "
-    "Выбирай только из переданного списка тем."
+    "Выбирай только из переданного списка тем. "
+    "Если уверенность низкая, верни отсутствие предсказания."
 )
 
 
@@ -53,6 +60,7 @@ class _TicketSummaryPayload(BaseModel):
 class _MacroSuggestionItemPayload(BaseModel):
     macro_id: int
     reason: str = Field(min_length=4, max_length=220)
+    confidence: AIPredictionConfidence = AIPredictionConfidence.MEDIUM
 
 
 class _MacroSuggestionPayload(BaseModel):
@@ -80,54 +88,118 @@ class BuildTicketAssistSnapshotUseCase:
         self,
         *,
         ticket_repository: TicketRepository,
+        ticket_ai_summary_repository: TicketAISummaryRepository,
         macro_repository: MacroRepository,
         ai_provider: AIProvider,
         profile: AIGenerationProfile,
     ) -> None:
         self.ticket_repository = ticket_repository
+        self.ticket_ai_summary_repository = ticket_ai_summary_repository
         self.macro_repository = macro_repository
         self.ai_provider = ai_provider
         self.profile = profile
 
-    async def __call__(self, *, ticket_public_id: UUID) -> TicketAssistSnapshot | None:
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        refresh_summary: bool = False,
+    ) -> TicketAssistSnapshot | None:
         ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
         if ticket is None:
             return None
-        if not self.ai_provider.is_enabled:
+        stored_summary = await self.ticket_ai_summary_repository.get_by_ticket_id(
+            ticket_id=ticket.id
+        )
+
+        status_note: str | None = None
+        if refresh_summary:
+            if not self.ai_provider.is_enabled:
+                status_note = (
+                    "Обновление AI сейчас недоступно. Показываю последнюю сохранённую версию."
+                    if stored_summary is not None
+                    else "AI сейчас недоступен. Сводку можно сформировать позже."
+                )
+            else:
+                refreshed_summary = await _build_ticket_summary(
+                    provider=self.ai_provider,
+                    profile=self.profile,
+                    ticket=ticket,
+                )
+                if refreshed_summary is None:
+                    status_note = (
+                        "Не удалось обновить сводку. Оставил последнюю сохранённую версию."
+                        if stored_summary is not None
+                        else "Не удалось подготовить сводку сейчас."
+                    )
+                else:
+                    stored_summary = await self.ticket_ai_summary_repository.upsert(
+                        ticket_id=ticket.id,
+                        short_summary=refreshed_summary.short_summary,
+                        user_goal=refreshed_summary.user_goal,
+                        actions_taken=refreshed_summary.actions_taken,
+                        current_status=refreshed_summary.current_status,
+                        generated_at=datetime.now(UTC),
+                        source_ticket_updated_at=ticket.updated_at,
+                        source_message_count=len(ticket.message_history),
+                        source_internal_note_count=len(ticket.internal_notes),
+                        model_id=self.ai_provider.model_id,
+                    )
+                    status_note = "Сводка обновлена."
+
+        macro_suggestions: tuple[TicketMacroSuggestion, ...] = ()
+        if self.ai_provider.is_enabled:
+            macro_suggestions = await _build_macro_suggestions(
+                provider=self.ai_provider,
+                profile=self.profile,
+                ticket=ticket,
+                macros=await self._list_macros(),
+            )
+
+        if not self.ai_provider.is_enabled and stored_summary is None:
             return TicketAssistSnapshot(
                 available=False,
                 unavailable_reason="AI-провайдер не настроен.",
                 model_id=self.ai_provider.model_id,
             )
 
-        summary = await _build_ticket_summary(
-            provider=self.ai_provider,
-            profile=self.profile,
-            ticket=ticket,
-        )
-        macro_suggestions = await _build_macro_suggestions(
-            provider=self.ai_provider,
-            profile=self.profile,
-            ticket=ticket,
-            macros=await self._list_macros(),
-        )
-
-        available = summary is not None or bool(macro_suggestions)
-        if not available:
-            return TicketAssistSnapshot(
-                available=False,
-                unavailable_reason="AI не смог подготовить подсказки по этой заявке.",
-                model_id=self.ai_provider.model_id,
+        summary_status = _resolve_summary_status(ticket=ticket, stored_summary=stored_summary)
+        if (
+            stored_summary is not None
+            and summary_status is TicketSummaryStatus.STALE
+            and status_note is None
+        ):
+            status_note = "В переписке появились изменения. Сводку лучше обновить."
+        if stored_summary is None and self.ai_provider.is_enabled and status_note is None:
+            status_note = (
+                "Сводка ещё не подготовлена. При необходимости её можно сформировать вручную."
+            )
+        if not macro_suggestions and self.ai_provider.is_enabled and status_note is None:
+            status_note = (
+                "Точных AI-подсказок по макросам сейчас нет. "
+                "Обычная библиотека макросов остаётся доступной."
             )
 
         return TicketAssistSnapshot(
             available=True,
-            short_summary=summary.short_summary if summary is not None else None,
-            user_goal=summary.user_goal if summary is not None else None,
-            actions_taken=summary.actions_taken if summary is not None else None,
-            current_status=summary.current_status if summary is not None else None,
+            summary_status=summary_status,
+            summary_generated_at=(
+                stored_summary.generated_at if stored_summary is not None else None
+            ),
+            short_summary=stored_summary.short_summary if stored_summary is not None else None,
+            user_goal=stored_summary.user_goal if stored_summary is not None else None,
+            actions_taken=stored_summary.actions_taken if stored_summary is not None else None,
+            current_status=stored_summary.current_status if stored_summary is not None else None,
             macro_suggestions=tuple(macro_suggestions),
-            model_id=self.ai_provider.model_id,
+            status_note=status_note,
+            unavailable_reason=(
+                "Новые AI-подсказки временно недоступны."
+                if not self.ai_provider.is_enabled and stored_summary is not None
+                else None
+            ),
+            model_id=(
+                stored_summary.model_id if stored_summary is not None else self.ai_provider.model_id
+            ),
         )
 
     async def _list_macros(self) -> tuple[MacroSummary, ...]:
@@ -175,6 +247,14 @@ class PredictTicketCategoryUseCase:
             temperature=self.profile.category_temperature,
         )
         if payload is None or payload.category_id is None:
+            return TicketCategoryPrediction(
+                available=False,
+                model_id=self.ai_provider.model_id,
+            )
+        if payload.confidence not in {
+            AIPredictionConfidence.MEDIUM,
+            AIPredictionConfidence.HIGH,
+        }:
             return TicketCategoryPrediction(
                 available=False,
                 model_id=self.ai_provider.model_id,
@@ -253,6 +333,11 @@ async def _build_macro_suggestions(
     suggestions: list[TicketMacroSuggestion] = []
     seen_macro_ids: set[int] = set()
     for item in payload.macro_ids:
+        if item.confidence not in {
+            AIPredictionConfidence.MEDIUM,
+            AIPredictionConfidence.HIGH,
+        }:
+            continue
         macro = macro_by_id.get(item.macro_id)
         if macro is None or macro.id in seen_macro_ids:
             continue
@@ -263,9 +348,26 @@ async def _build_macro_suggestions(
                 title=macro.title,
                 body=macro.body,
                 reason=item.reason,
+                confidence=item.confidence,
             )
         )
     return tuple(suggestions)
+
+
+def _resolve_summary_status(
+    *,
+    ticket: TicketDetails,
+    stored_summary: TicketAISummaryDetails | None,
+) -> TicketSummaryStatus:
+    if stored_summary is None:
+        return TicketSummaryStatus.MISSING
+    if (
+        ticket.updated_at > stored_summary.source_ticket_updated_at
+        or len(ticket.message_history) != stored_summary.source_message_count
+        or len(ticket.internal_notes) != stored_summary.source_internal_note_count
+    ):
+        return TicketSummaryStatus.STALE
+    return TicketSummaryStatus.FRESH
 
 
 async def _complete_json[SchemaT: BaseModel](
@@ -354,7 +456,10 @@ def _build_macro_suggestion_prompt(
         [
             "Подбери до трёх макросов для оператора.",
             "Нужен JSON вида:",
-            '{"macro_ids":[{"macro_id":1,"reason":"..."},{"macro_id":2,"reason":"..."}]}',
+            (
+                '{"macro_ids":[{"macro_id":1,"reason":"...","confidence":"high"},'
+                '{"macro_id":2,"reason":"...","confidence":"medium"}]}'
+            ),
             "Если ничего не подходит, верни пустой массив.",
             "",
             f"Тема: {ticket.subject}",

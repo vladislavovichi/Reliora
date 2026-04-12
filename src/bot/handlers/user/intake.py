@@ -13,6 +13,7 @@ from application.use_cases.tickets.summaries import TicketCategorySummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_client_ticket_message_command_from_values
 from bot.callbacks import ClientIntakeCallback
+from bot.handlers.common.state_reset import reset_transient_state
 from bot.handlers.common.ticket_attachments import (
     AttachmentRejectedError,
     IncomingTicketContent,
@@ -24,14 +25,20 @@ from bot.handlers.user.intake_draft import (
     store_pending_client_intake_draft,
 )
 from bot.handlers.user.states import UserIntakeStates
-from bot.handlers.user.workflow import process_client_ticket_command, process_client_ticket_message
+from bot.handlers.user.workflow import (
+    process_client_intake_submission,
+    process_client_ticket_command,
+    process_client_ticket_message,
+)
 from bot.keyboards.inline.categories import (
     build_client_intake_categories_markup,
     build_client_intake_message_markup,
+    build_client_intake_suggestion_markup,
 )
 from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.categories import (
     INTAKE_CANCELLED_TEXT,
+    INTAKE_CATEGORY_PROMPT_TEXT,
     INTAKE_CATEGORY_STALE_TEXT,
     build_intake_attachment_prompt_text,
     build_intake_category_prompt_text,
@@ -74,18 +81,67 @@ async def start_client_intake(
             telegram_message_id=message.message_id,
             content=content,
         ),
-    )
-    await message.answer(
-        build_intake_category_prompt_text(
-            suggested_category_title=(
-                prediction.category_title
-                if prediction is not None and prediction.available
+        extra_data={
+            "suggested_category_id": (
+                prediction.category_id
+                if (
+                    prediction is not None
+                    and prediction.available
+                    and prediction.category_id is not None
+                )
                 else None
+            )
+        },
+    )
+    if prediction is not None and prediction.available and prediction.category_id is not None:
+        await message.answer(
+            build_intake_category_prompt_text(
+                suggested_category_title=prediction.category_title,
+                reason=prediction.reason,
             ),
-            reason=prediction.reason if prediction is not None and prediction.available else None,
-        ),
+            reply_markup=build_client_intake_suggestion_markup(
+                category_id=prediction.category_id,
+                category_title=prediction.category_title or "Тема",
+            ),
+        )
+        return
+
+    await message.answer(
+        build_intake_category_prompt_text(),
         reply_markup=build_client_intake_categories_markup(ordered_categories),
     )
+
+
+@router.callback_query(
+    MagicData(F.event_user_role == UserRole.USER),
+    ClientIntakeCallback.filter(F.action == "browse"),
+)
+async def handle_client_intake_category_browse(
+    callback: CallbackQuery,
+    state: FSMContext,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
+) -> None:
+    if await state.get_state() != UserIntakeStates.choosing_category.state:
+        await callback.answer(INTAKE_CATEGORY_STALE_TEXT, show_alert=True)
+        return
+
+    state_data = await state.get_data()
+    suggested_category_id = state_data.get("suggested_category_id")
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_client_ticket_categories()
+    ordered_categories = _prioritize_categories(
+        categories,
+        TicketCategoryPrediction(
+            available=isinstance(suggested_category_id, int),
+            category_id=(suggested_category_id if isinstance(suggested_category_id, int) else None),
+        ),
+    )
+    await callback.answer()
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            INTAKE_CATEGORY_PROMPT_TEXT,
+            reply_markup=build_client_intake_categories_markup(ordered_categories),
+        )
 
 
 @router.callback_query(
@@ -182,7 +238,7 @@ async def handle_client_intake_cancel(
     callback: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    await state.clear()
+    await reset_transient_state(state)
     await callback.answer()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(INTAKE_CANCELLED_TEXT, reply_markup=None)
@@ -259,8 +315,46 @@ async def handle_client_intake_message(
             else INTAKE_CATEGORY_STALE_TEXT
         )
         return
+    if (
+        draft is not None
+        and draft.attachment is not None
+        and current_content.attachment is not None
+    ):
+        category_title = state_data.get("category_title")
+        await message.answer(
+            build_intake_attachment_prompt_text(category_title)
+            if isinstance(category_title, str)
+            else INTAKE_CATEGORY_STALE_TEXT
+        )
+        return
 
     await state.clear()
+    if draft is not None and draft.attachment is not None and draft.text is None:
+        await process_client_intake_submission(
+            response_message=message,
+            bot=bot,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
+            operator_active_ticket_store=operator_active_ticket_store,
+            ticket_live_session_store=ticket_live_session_store,
+            ticket_stream_publisher=ticket_stream_publisher,
+            logger=logger,
+            initial_command=build_client_ticket_message_command_from_values(
+                client_chat_id=draft.client_chat_id,
+                telegram_message_id=draft.telegram_message_id,
+                text=None,
+                attachment=draft.attachment,
+                category_id=category_id,
+            ),
+            follow_up_command=build_client_ticket_message_command_from_values(
+                client_chat_id=message.chat.id,
+                telegram_message_id=message.message_id,
+                text=current_content.text,
+                attachment=None,
+                category_id=None,
+            ),
+        )
+        return
+
     await process_client_ticket_message(
         message=message,
         bot=bot,

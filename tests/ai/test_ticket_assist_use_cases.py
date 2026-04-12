@@ -7,7 +7,7 @@ from typing import cast
 from uuid import uuid4
 
 from application.ai.contracts import AIMessage, AIProvider
-from application.ai.summaries import AIPredictionConfidence
+from application.ai.summaries import AIPredictionConfidence, TicketSummaryStatus
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.use_cases.ai.assist import (
     AIGenerationProfile,
@@ -16,9 +16,11 @@ from application.use_cases.ai.assist import (
 )
 from domain.contracts.repositories import (
     MacroRepository,
+    TicketAISummaryRepository,
     TicketCategoryRepository,
     TicketRepository,
 )
+from domain.entities.ai import TicketAISummaryDetails
 from domain.entities.ticket import (
     TicketDetails,
     TicketInternalNoteDetails,
@@ -98,6 +100,44 @@ class StubCategoryRepository:
         )
 
 
+class StubTicketAISummaryRepository:
+    def __init__(self) -> None:
+        self.summary: TicketAISummaryDetails | None = None
+
+    async def get_by_ticket_id(self, *, ticket_id: int) -> TicketAISummaryDetails | None:
+        if self.summary is None or self.summary.ticket_id != ticket_id:
+            return None
+        return self.summary
+
+    async def upsert(
+        self,
+        *,
+        ticket_id: int,
+        short_summary: str,
+        user_goal: str,
+        actions_taken: str,
+        current_status: str,
+        generated_at: datetime,
+        source_ticket_updated_at: datetime,
+        source_message_count: int,
+        source_internal_note_count: int,
+        model_id: str | None,
+    ) -> TicketAISummaryDetails:
+        self.summary = TicketAISummaryDetails(
+            ticket_id=ticket_id,
+            short_summary=short_summary,
+            user_goal=user_goal,
+            actions_taken=actions_taken,
+            current_status=current_status,
+            generated_at=generated_at,
+            source_ticket_updated_at=source_ticket_updated_at,
+            source_message_count=source_message_count,
+            source_internal_note_count=source_internal_note_count,
+            model_id=model_id,
+        )
+        return self.summary
+
+
 def _build_ticket() -> TicketDetails:
     return TicketDetails(
         id=1,
@@ -148,8 +188,10 @@ def _build_ticket() -> TicketDetails:
 
 
 async def test_build_ticket_assist_snapshot_returns_summary_and_macro_suggestions() -> None:
+    summary_repository = StubTicketAISummaryRepository()
     use_case = BuildTicketAssistSnapshotUseCase(
         ticket_repository=cast(TicketRepository, StubTicketRepository(_build_ticket())),
+        ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
         macro_repository=cast(MacroRepository, StubMacroRepository()),
         ai_provider=StubAIProvider(
             (
@@ -158,17 +200,21 @@ async def test_build_ticket_assist_snapshot_returns_summary_and_macro_suggestion
                 '"actions_taken":"Оператор проверил профиль и готовит сброс.",'
                 '"current_status":"Ожидается финальное подтверждение после сброса."}'
             ),
-            '{"macro_ids":[{"macro_id":1,"reason":"Нужен готовый ответ про сброс доступа."}]}',
+            (
+                '{"macro_ids":[{"macro_id":1,"reason":"Нужен готовый ответ про сброс доступа.",'
+                '"confidence":"high"}]}'
+            ),
         ),
         profile=AIGenerationProfile(),
     )
 
-    snapshot = await use_case(ticket_public_id=uuid4())
+    snapshot = await use_case(ticket_public_id=uuid4(), refresh_summary=True)
 
     assert snapshot is not None
     assert snapshot.available is True
     assert snapshot.short_summary == "Клиент потерял доступ после смены пароля."
     assert snapshot.macro_suggestions[0].macro_id == 1
+    assert snapshot.summary_status is TicketSummaryStatus.FRESH
     assert snapshot.model_id == "Qwen/Qwen3.5-4B"
 
 
@@ -192,3 +238,33 @@ async def test_predict_ticket_category_returns_valid_prediction() -> None:
     assert prediction.category_id == 1
     assert prediction.category_title == "Доступ и вход"
     assert prediction.confidence == AIPredictionConfidence.HIGH
+
+
+async def test_saved_ticket_summary_becomes_stale_after_history_changes() -> None:
+    ticket = _build_ticket()
+    summary_repository = StubTicketAISummaryRepository()
+    await summary_repository.upsert(
+        ticket_id=ticket.id,
+        short_summary="Старая сводка",
+        user_goal="Старый запрос",
+        actions_taken="Старые действия",
+        current_status="Старое состояние",
+        generated_at=datetime(2026, 4, 12, 10, 7, tzinfo=UTC),
+        source_ticket_updated_at=datetime(2026, 4, 12, 10, 7, tzinfo=UTC),
+        source_message_count=1,
+        source_internal_note_count=0,
+        model_id="Qwen/Qwen3.5-4B",
+    )
+    use_case = BuildTicketAssistSnapshotUseCase(
+        ticket_repository=cast(TicketRepository, StubTicketRepository(ticket)),
+        ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
+        macro_repository=cast(MacroRepository, StubMacroRepository()),
+        ai_provider=StubAIProvider('{"macro_ids":[]}'),
+        profile=AIGenerationProfile(),
+    )
+
+    snapshot = await use_case(ticket_public_id=ticket.public_id)
+
+    assert snapshot is not None
+    assert snapshot.summary_status is TicketSummaryStatus.STALE
+    assert snapshot.short_summary == "Старая сводка"

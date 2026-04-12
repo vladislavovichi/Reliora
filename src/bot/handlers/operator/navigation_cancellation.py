@@ -17,6 +17,7 @@ from bot.handlers.admin.states import (
     AdminMacroStates,
     AdminOperatorStates,
 )
+from bot.handlers.common.state_reset import reset_transient_state
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
@@ -70,8 +71,7 @@ async def handle_cancel(
         await message.answer(OPERATOR_ACTION_IDLE_TEXT)
         return
 
-    state_data = await state.get_data()
-    await state.clear()
+    state_name, state_data = await reset_transient_state(state)
     await message.answer(OPERATOR_ACTION_CANCELLED_TEXT)
     if message.from_user is None:
         return

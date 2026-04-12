@@ -30,6 +30,33 @@ def build_client_intake_categories_markup(
     return builder.as_markup()
 
 
+def build_client_intake_suggestion_markup(
+    *,
+    category_id: int,
+    category_title: str,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        _button(
+            f"Подтвердить · {category_title}",
+            ClientIntakeCallback(action="pick", category_id=category_id).pack(),
+        )
+    )
+    builder.row(
+        _button(
+            "Выбрать другую тему",
+            ClientIntakeCallback(action="browse", category_id=category_id).pack(),
+        )
+    )
+    builder.row(
+        _button(
+            CANCEL_BUTTON_TEXT,
+            ClientIntakeCallback(action="cancel", category_id=0).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
 def build_client_intake_message_markup() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(

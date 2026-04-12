@@ -88,10 +88,9 @@ async def test_client_intake_uses_category_prediction_when_available() -> None:
 
     service.predict_ticket_category.assert_awaited_once()
     cast(AsyncMock, message.answer).assert_awaited_once_with(
-        "Выберите тему обращения.\n"
-        "Вероятнее всего подойдёт «Доступ и вход».\n"
+        "Похоже, это тема «Доступ и вход».\n"
         "Текст явно про восстановление доступа.\n"
-        "Если нет, просто выберите другую тему.",
+        "Подтвердите вариант или выберите другую тему.",
         reply_markup=ANY,
     )
 
@@ -100,6 +99,7 @@ async def test_user_cancel_clears_feedback_state() -> None:
     message = build_message(text="Отмена")
     state = SimpleNamespace(
         get_state=AsyncMock(return_value=UserFeedbackStates.writing_comment.state),
+        get_data=AsyncMock(return_value={}),
         clear=AsyncMock(),
     )
 

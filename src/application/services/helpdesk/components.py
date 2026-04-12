@@ -85,6 +85,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketAISummaryRepository,
     TicketAnalyticsRepository,
     TicketCategoryRepository,
     TicketEventRepository,
@@ -183,6 +184,7 @@ def build_helpdesk_components(
     *,
     ticket_repository: TicketRepository,
     ticket_feedback_repository: TicketFeedbackRepository,
+    ticket_ai_summary_repository: TicketAISummaryRepository,
     ticket_message_repository: TicketMessageRepository,
     ticket_internal_note_repository: TicketInternalNoteRepository,
     ticket_event_repository: TicketEventRepository,
@@ -379,6 +381,7 @@ def build_helpdesk_components(
         ai=HelpdeskAIUseCases(
             build_ticket_assist_snapshot=BuildTicketAssistSnapshotUseCase(
                 ticket_repository=ticket_repository,
+                ticket_ai_summary_repository=ticket_ai_summary_repository,
                 macro_repository=macro_repository,
                 ai_provider=ai_provider,
                 profile=ai_generation_profile,

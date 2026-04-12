@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from domain.entities.ai import TicketAISummaryDetails
 from domain.entities.feedback import TicketFeedback
 from domain.entities.ticket import (
     Ticket,
@@ -239,6 +240,27 @@ class TicketFeedbackRepository(Protocol):
         comment: str,
     ) -> TicketFeedback | None:
         """Persist a feedback comment for the ticket."""
+
+
+class TicketAISummaryRepository(Protocol):
+    async def get_by_ticket_id(self, *, ticket_id: int) -> TicketAISummaryDetails | None:
+        """Return the latest stored AI summary for the ticket when it exists."""
+
+    async def upsert(
+        self,
+        *,
+        ticket_id: int,
+        short_summary: str,
+        user_goal: str,
+        actions_taken: str,
+        current_status: str,
+        generated_at: datetime,
+        source_ticket_updated_at: datetime,
+        source_message_count: int,
+        source_internal_note_count: int,
+        model_id: str | None,
+    ) -> TicketAISummaryDetails:
+        """Create or update the stored AI summary for the ticket."""
 
 
 class OperatorRepository(Protocol):

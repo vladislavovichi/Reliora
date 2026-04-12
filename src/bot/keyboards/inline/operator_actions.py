@@ -7,6 +7,7 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from application.ai.summaries import TicketSummaryStatus
 from application.use_cases.tickets.summaries import (
     MacroSummary,
     OperatorTicketSummary,
@@ -175,10 +176,24 @@ def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeybo
 def build_ticket_assist_markup(
     *,
     ticket_public_id: UUID,
+    summary_status: TicketSummaryStatus,
     suggested_macro_ids: Sequence[tuple[int, str]],
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     callback_value = str(ticket_public_id)
+    builder.row(
+        _build_callback_button(
+            (
+                "Обновить сводку"
+                if summary_status in {TicketSummaryStatus.FRESH, TicketSummaryStatus.STALE}
+                else "Сформировать сводку"
+            ),
+            OperatorActionCallback(
+                action="assist_refresh",
+                ticket_public_id=callback_value,
+            ).pack(),
+        )
+    )
     for macro_id, title in suggested_macro_ids[:3]:
         builder.row(
             _build_callback_button(

@@ -12,6 +12,7 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketSummaryStatus,
 )
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
@@ -409,6 +410,12 @@ def serialize_ticket_assist_snapshot(
         message.actions_taken = snapshot.actions_taken
     if snapshot.current_status is not None:
         message.current_status = snapshot.current_status
+    if snapshot.summary_status is not None:
+        message.summary_status = snapshot.summary_status.value
+    if snapshot.summary_generated_at is not None:
+        message.summary_generated_at.CopyFrom(_serialize_timestamp(snapshot.summary_generated_at))
+    if snapshot.status_note is not None:
+        message.status_note = snapshot.status_note
     message.macro_suggestions.extend(
         [
             helpdesk_pb2.TicketAssistMacroSuggestion(
@@ -416,6 +423,7 @@ def serialize_ticket_assist_snapshot(
                 title=item.title,
                 body=item.body,
                 reason=item.reason,
+                confidence=item.confidence.value,
             )
             for item in snapshot.macro_suggestions
         ]
@@ -428,6 +436,16 @@ def deserialize_ticket_assist_snapshot(
 ) -> TicketAssistSnapshot:
     return TicketAssistSnapshot(
         available=snapshot.available,
+        summary_status=(
+            TicketSummaryStatus(snapshot.summary_status)
+            if _has(snapshot, "summary_status")
+            else TicketSummaryStatus.MISSING
+        ),
+        summary_generated_at=(
+            _deserialize_timestamp(snapshot.summary_generated_at)
+            if snapshot.HasField("summary_generated_at")
+            else None
+        ),
         unavailable_reason=(
             snapshot.unavailable_reason if _has(snapshot, "unavailable_reason") else None
         ),
@@ -436,12 +454,18 @@ def deserialize_ticket_assist_snapshot(
         user_goal=snapshot.user_goal if _has(snapshot, "user_goal") else None,
         actions_taken=snapshot.actions_taken if _has(snapshot, "actions_taken") else None,
         current_status=snapshot.current_status if _has(snapshot, "current_status") else None,
+        status_note=snapshot.status_note if _has(snapshot, "status_note") else None,
         macro_suggestions=tuple(
             TicketMacroSuggestion(
                 macro_id=item.macro_id,
                 title=item.title,
                 body=item.body,
                 reason=item.reason,
+                confidence=(
+                    AIPredictionConfidence(item.confidence)
+                    if item.confidence
+                    else AIPredictionConfidence.MEDIUM
+                ),
             )
             for item in snapshot.macro_suggestions
         ),

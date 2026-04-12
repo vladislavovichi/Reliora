@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from . import ai as ai
 from . import audit as audit
 from . import catalog as catalog
 from . import feedback as feedback

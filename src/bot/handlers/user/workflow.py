@@ -172,3 +172,67 @@ async def process_client_ticket_command(
         ),
         reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
     )
+
+
+async def process_client_intake_submission(
+    *,
+    response_message: Message,
+    bot: Bot,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
+    ticket_stream_publisher: TicketStreamPublisher,
+    logger: logging.Logger,
+    initial_command: ClientTicketMessageCommand,
+    follow_up_command: ClientTicketMessageCommand | None = None,
+) -> None:
+    del bot, operator_active_ticket_store
+
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket = await helpdesk_backend.create_ticket_from_client_intake(initial_command)
+        if follow_up_command is not None:
+            await helpdesk_backend.create_ticket_from_client_message(follow_up_command)
+        ticket_details = await helpdesk_backend.get_ticket_details(
+            ticket_public_id=ticket.public_id,
+        )
+
+    if ticket_details is None:
+        await response_message.answer(SERVICE_UNAVAILABLE_TEXT)
+        return
+
+    await ticket_live_session_store.refresh_session(
+        ticket_public_id=str(ticket.public_id),
+        client_chat_id=initial_command.client_chat_id,
+        operator_telegram_user_id=ticket_details.assigned_operator_telegram_user_id,
+    )
+
+    logger.info(
+        (
+            "Client intake submission processed "
+            "client_chat_id=%s ticket=%s created=%s has_follow_up=%s"
+        ),
+        initial_command.client_chat_id,
+        ticket.public_number,
+        ticket.created,
+        follow_up_command is not None,
+    )
+
+    if ticket.created:
+        await ticket_stream_publisher.publish_new_ticket(
+            ticket_id=str(ticket.public_id),
+            client_chat_id=initial_command.client_chat_id,
+            subject=ticket_details.subject,
+        )
+        await response_message.answer(
+            build_ticket_created_text(ticket.public_number),
+            reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
+        )
+        return
+
+    await response_message.answer(
+        build_ticket_message_added_text(
+            ticket.public_number,
+            operator_connected=ticket_details.assigned_operator_telegram_user_id is not None,
+        ),
+        reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
+    )

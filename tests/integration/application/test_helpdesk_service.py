@@ -557,6 +557,13 @@ def build_audit_repository_mock() -> Mock:
     return repository
 
 
+def build_ticket_ai_summary_repository_mock() -> Mock:
+    repository = Mock()
+    repository.get_by_ticket_id = AsyncMock(return_value=None)
+    repository.upsert = AsyncMock()
+    return repository
+
+
 def build_operator_repository_mock(operator_ids: dict[int, int]) -> Mock:
     repository = Mock()
     repository.calls = []
@@ -1054,6 +1061,7 @@ def build_service(
     *,
     ticket_repository: StubTicketRepository,
     ticket_feedback_repository: StubTicketFeedbackRepository | None = None,
+    ticket_ai_summary_repository: Any | None = None,
     message_repository: Any | None = None,
     internal_note_repository: Any | None = None,
     event_repository: Any | None = None,
@@ -1070,6 +1078,9 @@ def build_service(
     return HelpdeskService(
         ticket_repository=ticket_repository,
         ticket_feedback_repository=ticket_feedback_repository or StubTicketFeedbackRepository(),
+        ticket_ai_summary_repository=(
+            ticket_ai_summary_repository or build_ticket_ai_summary_repository_mock()
+        ),
         ticket_message_repository=message_repository or build_message_repository_mock(),
         ticket_internal_note_repository=(
             internal_note_repository or build_internal_note_repository_mock()

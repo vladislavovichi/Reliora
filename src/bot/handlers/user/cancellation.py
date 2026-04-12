@@ -5,6 +5,7 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from bot.handlers.common.state_reset import reset_transient_state
 from bot.handlers.user.states import UserFeedbackStates, UserIntakeStates, UserOperatorInviteStates
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import CANCEL_BUTTON_TEXT
@@ -31,8 +32,7 @@ async def handle_user_cancel(
     message: Message,
     state: FSMContext,
 ) -> None:
-    state_name = await state.get_state()
-    await state.clear()
+    state_name, _ = await reset_transient_state(state)
     text = INTAKE_CANCELLED_TEXT
     if state_name == UserFeedbackStates.writing_comment.state:
         text = TICKET_FEEDBACK_COMMENT_CANCELLED_TEXT

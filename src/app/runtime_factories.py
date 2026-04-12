@@ -21,6 +21,7 @@ from backend.grpc.client import build_helpdesk_backend_client_factory as build_g
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from infrastructure.ai.provider import build_ai_provider
 from infrastructure.config.settings import Settings
+from infrastructure.db.repositories.ai import SqlAlchemyTicketAISummaryRepository
 from infrastructure.db.repositories.audit import SqlAlchemyAuditLogRepository
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
@@ -91,6 +92,7 @@ def build_helpdesk_service(
     return HelpdeskService(
         ticket_repository=SqlAlchemyTicketRepository(session),
         ticket_feedback_repository=SqlAlchemyTicketFeedbackRepository(session),
+        ticket_ai_summary_repository=SqlAlchemyTicketAISummaryRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         ticket_internal_note_repository=SqlAlchemyTicketInternalNoteRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),

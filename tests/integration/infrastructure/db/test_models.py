@@ -17,6 +17,7 @@ def test_models_package_populates_base_metadata() -> None:
         "operators",
         "sla_policies",
         "tags",
+        "ticket_ai_summaries",
         "ticket_categories",
         "ticket_events",
         "ticket_feedback",

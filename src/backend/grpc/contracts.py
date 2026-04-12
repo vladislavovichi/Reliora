@@ -126,6 +126,7 @@ class HelpdeskBackendClient(Protocol):
         self,
         *,
         ticket_public_id: UUID,
+        refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot | None: ...
 

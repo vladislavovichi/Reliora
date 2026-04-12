@@ -359,10 +359,12 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         self,
         *,
         ticket_public_id: UUID,
+        refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot | None:
         request = helpdesk_pb2.GetTicketAssistSnapshotRequest(
-            ticket_public_id=str(ticket_public_id)
+            ticket_public_id=str(ticket_public_id),
+            refresh_summary=refresh_summary,
         )
         _apply_actor(request, actor)
         try:

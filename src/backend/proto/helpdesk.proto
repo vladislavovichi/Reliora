@@ -163,6 +163,7 @@ message TicketAssistMacroSuggestion {
   string title = 2;
   string body = 3;
   string reason = 4;
+  string confidence = 5;
 }
 
 message TicketAssistSnapshot {
@@ -174,6 +175,9 @@ message TicketAssistSnapshot {
   optional string actions_taken = 6;
   optional string current_status = 7;
   repeated TicketAssistMacroSuggestion macro_suggestions = 8;
+  optional string summary_status = 9;
+  optional google.protobuf.Timestamp summary_generated_at = 10;
+  optional string status_note = 11;
 }
 
 message PredictTicketCategoryCommand {
@@ -342,6 +346,7 @@ message ApplyMacroToTicketRequest {
 message GetTicketAssistSnapshotRequest {
   string ticket_public_id = 1;
   RequestActor actor = 2;
+  bool refresh_summary = 3;
 }
 
 message PredictTicketCategoryRequest {

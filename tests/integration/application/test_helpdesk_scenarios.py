@@ -26,6 +26,7 @@ from domain.contracts.repositories import (
     OperatorRepository,
     SLAPolicyRepository,
     TagRepository,
+    TicketAISummaryRepository,
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
@@ -62,6 +63,15 @@ class DisabledTestAIProvider(AIProvider):
     ) -> str:
         del messages, max_output_tokens, temperature
         raise RuntimeError("AI is disabled in scenario tests.")
+
+
+class EmptyTicketAISummaryRepository:
+    async def get_by_ticket_id(self, *, ticket_id: int) -> None:
+        del ticket_id
+        return None
+
+    async def upsert(self, **_: object) -> None:
+        return None
 
 
 @dataclass(slots=True)
@@ -692,6 +702,9 @@ def helpdesk_scenario() -> HelpdeskScenario:
             ticket_repository=cast(TicketRepository, ticket_repository),
             ticket_feedback_repository=cast(
                 TicketFeedbackRepository, EmptyTicketFeedbackRepository()
+            ),
+            ticket_ai_summary_repository=cast(
+                TicketAISummaryRepository, EmptyTicketAISummaryRepository()
             ),
             ticket_message_repository=cast(TicketMessageRepository, message_repository),
             ticket_internal_note_repository=cast(

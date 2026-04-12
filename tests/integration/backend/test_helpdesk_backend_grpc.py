@@ -15,6 +15,7 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketSummaryStatus,
 )
 from application.contracts.actors import RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
@@ -94,6 +95,7 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
             )
             ticket_assist = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
+                refresh_summary=True,
                 actor=RequestActor(telegram_user_id=1001),
             )
             category_prediction = await client.predict_ticket_category(
@@ -117,6 +119,7 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert snapshot.feedback_count == 4
     assert ticket_assist is not None
     assert ticket_assist.short_summary == "Клиент потерял доступ после смены пароля."
+    assert ticket_assist.summary_status is TicketSummaryStatus.FRESH
     assert ticket_assist.macro_suggestions[0].macro_id == 11
     assert category_prediction.category_id == 2
     assert category_prediction.confidence == AIPredictionConfidence.HIGH
@@ -235,12 +238,15 @@ def _build_ticket_assist_call() -> Any:
     async def call(
         *,
         ticket_public_id: Any,
+        refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot:
         assert actor == RequestActor(telegram_user_id=1001)
         assert ticket_public_id is not None
+        assert refresh_summary is True
         return TicketAssistSnapshot(
             available=True,
+            summary_status=TicketSummaryStatus.FRESH,
             short_summary="Клиент потерял доступ после смены пароля.",
             user_goal="Хочет быстро восстановить вход без новой регистрации.",
             actions_taken="Оператор проверил карточку профиля и подготовил сброс доступа.",
@@ -251,6 +257,7 @@ def _build_ticket_assist_call() -> Any:
                     title="Сброс доступа",
                     body="Сбросили пароль и обновили ссылку.",
                     reason="Подходит под типовой сценарий восстановления входа.",
+                    confidence=AIPredictionConfidence.HIGH,
                 ),
             ),
             model_id="Qwen/Qwen3.5-4B",

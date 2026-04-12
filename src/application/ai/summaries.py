@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -17,16 +18,26 @@ class TicketMacroSuggestion:
     title: str
     body: str
     reason: str
+    confidence: AIPredictionConfidence = AIPredictionConfidence.MEDIUM
+
+
+class TicketSummaryStatus(StrEnum):
+    MISSING = "missing"
+    FRESH = "fresh"
+    STALE = "stale"
 
 
 @dataclass(slots=True, frozen=True)
 class TicketAssistSnapshot:
     available: bool
+    summary_status: TicketSummaryStatus = TicketSummaryStatus.MISSING
+    summary_generated_at: datetime | None = None
     short_summary: str | None = None
     user_goal: str | None = None
     actions_taken: str | None = None
     current_status: str | None = None
     macro_suggestions: tuple[TicketMacroSuggestion, ...] = ()
+    status_note: str | None = None
     unavailable_reason: str | None = None
     model_id: str | None = None
 

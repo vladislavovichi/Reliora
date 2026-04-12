@@ -18,6 +18,7 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
         "tags",
         "more",
         "assist",
+        "assist_refresh",
         "card",
         "notes",
         "note_add",
@@ -40,7 +41,7 @@ class ClientFeedbackCallback(CallbackData, prefix="client_feedback"):
 
 
 class ClientIntakeCallback(CallbackData, prefix="client_intake"):
-    action: Literal["pick", "cancel"]
+    action: Literal["pick", "browse", "cancel"]
     category_id: int
 
 
