@@ -5,6 +5,7 @@ from typing import cast
 from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
+from application.contracts.runtime import SLADeadlineScheduler
 from application.contracts.tickets import (
     AddInternalNoteCommand,
     AssignNextQueuedTicketCommand,
@@ -33,7 +34,6 @@ from application.use_cases.tickets.summaries import (
 )
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketMessageSenderType
-from infrastructure.redis.contracts import SLADeadlineScheduler
 
 
 class HelpdeskTicketOperations:

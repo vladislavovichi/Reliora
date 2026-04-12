@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from uuid import UUID
 
+from application.contracts.runtime import SLADeadlineScheduler
 from application.services.helpdesk.components import HelpdeskComponents
 from application.use_cases.tickets.summaries import (
     SLAAutoReassignmentTarget,
@@ -11,7 +12,6 @@ from application.use_cases.tickets.summaries import (
     TicketSLAEvaluationSummary,
     TicketSummary,
 )
-from infrastructure.redis.contracts import SLADeadlineScheduler
 
 
 class HelpdeskSLAOperations:

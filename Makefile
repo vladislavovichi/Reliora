@@ -33,14 +33,14 @@ endef
 help:
 	@printf "Available targets:\n"
 	@printf "  install            Install project dependencies with Poetry\n"
-	@printf "  lint               Run Ruff and mypy\n"
+	@printf "  lint               Run Ruff\n"
 	@printf "  format             Auto-fix Ruff issues and format code\n"
 	@printf "  typecheck          Run mypy\n"
 	@printf "  test               Run the test suite\n"
 	@printf "  proto              Regenerate gRPC Python stubs from proto\n"
 	@printf "  proto-check        Verify that generated gRPC stubs are up to date\n"
-	@printf "  check              Run lint and tests\n"
-	@printf "  ci                 Run lint, typing, tests, proto-check, and migration consistency\n"
+	@printf "  check              Run lint, typing, and tests\n"
+	@printf "  ci                 Run check, proto-check, and migration consistency\n"
 	@printf "  health             Run the bot-side health check\n"
 	@printf "  health-backend     Run the backend-side health check\n"
 	@printf "  health-ai          Run the ai-service health check\n"
@@ -71,7 +71,6 @@ format:
 lint:
 	$(call ensure_poetry_env)
 	$(POETRY) run ruff check .
-	$(POETRY) run mypy src tests
 
 typecheck:
 	$(call ensure_poetry_env)
@@ -134,7 +133,7 @@ make-migration:
 
 check: lint typecheck test
 
-ci: lint typecheck test proto-check migration-check
+ci: check proto-check migration-check
 
 docker-up:
 	$(COMPOSE) -f $(COMPOSE_FILE) up --build -d

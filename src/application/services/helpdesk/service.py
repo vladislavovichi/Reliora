@@ -5,12 +5,14 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 
 from application.contracts.ai import AIServiceClientFactory
+from application.contracts.runtime import CorrelationIdProvider, SLADeadlineScheduler
 from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.ai_operations import HelpdeskAIOperations
 from application.services.helpdesk.catalog_operations import HelpdeskCatalogOperations
 from application.services.helpdesk.components import (
     HelpdeskComponents,
+    HelpdeskExportRenderers,
     build_helpdesk_components,
 )
 from application.services.helpdesk.operator_operations import HelpdeskOperatorOperations
@@ -25,6 +27,7 @@ from domain.contracts.repositories import (
     SLAPolicyRepository,
     TagRepository,
     TicketAISummaryRepository,
+    TicketAnalyticsRepository,
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
@@ -33,7 +36,6 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
-from infrastructure.redis.contracts import SLADeadlineScheduler
 
 HelpdeskServiceFactory = Callable[[], AbstractAsyncContextManager["HelpdeskService"]]
 
@@ -47,6 +49,7 @@ class HelpdeskService(
     HelpdeskAIOperations,
 ):
     ticket_repository: TicketRepository
+    ticket_analytics_repository: TicketAnalyticsRepository
     ticket_feedback_repository: TicketFeedbackRepository
     ticket_ai_summary_repository: TicketAISummaryRepository
     ticket_message_repository: TicketMessageRepository
@@ -61,9 +64,11 @@ class HelpdeskService(
     ticket_category_repository: TicketCategoryRepository
     ticket_tag_repository: TicketTagRepository
     ai_client_factory: AIServiceClientFactory
+    export_renderers: HelpdeskExportRenderers
     super_admin_telegram_user_ids: frozenset[int]
     include_internal_notes_in_ticket_reports: bool = True
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
+    correlation_id_provider: CorrelationIdProvider | None = None
     _components: HelpdeskComponents = field(init=False, repr=False)
     _audit: AuditTrail = field(init=False, repr=False)
 
@@ -73,6 +78,7 @@ class HelpdeskService(
 
         self._components = build_helpdesk_components(
             ticket_repository=self.ticket_repository,
+            ticket_analytics_repository=self.ticket_analytics_repository,
             ticket_feedback_repository=self.ticket_feedback_repository,
             ticket_ai_summary_repository=self.ticket_ai_summary_repository,
             ticket_message_repository=self.ticket_message_repository,
@@ -87,9 +93,13 @@ class HelpdeskService(
             ticket_tag_repository=self.ticket_tag_repository,
             ai_client_factory=self.ai_client_factory,
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
+            export_renderers=self.export_renderers,
             include_internal_notes_in_ticket_reports=self.include_internal_notes_in_ticket_reports,
         )
-        self._audit = AuditTrail(self.audit_log_repository)
+        self._audit = AuditTrail(
+            repository=self.audit_log_repository,
+            correlation_id_provider=self.correlation_id_provider,
+        )
 
     async def _ensure_permission(
         self,

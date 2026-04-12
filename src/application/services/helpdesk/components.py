@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 from application.contracts.ai import AIServiceClientFactory
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
@@ -10,7 +9,10 @@ from application.use_cases.ai.assist import (
     BuildTicketAssistSnapshotUseCase,
     PredictTicketCategoryUseCase,
 )
-from application.use_cases.analytics.exports import ExportAnalyticsSnapshotUseCase
+from application.use_cases.analytics.exports import (
+    AnalyticsSnapshotRenderer,
+    ExportAnalyticsSnapshotUseCase,
+)
 from application.use_cases.tickets.categories import (
     CreateTicketCategoryUseCase,
     GetTicketCategoryUseCase,
@@ -22,7 +24,7 @@ from application.use_cases.tickets.creation import (
     CreateTicketFromClientMessageUseCase,
     GetActiveClientTicketUseCase,
 )
-from application.use_cases.tickets.exports import ExportTicketReportUseCase
+from application.use_cases.tickets.exports import ExportTicketReportUseCase, TicketReportRenderer
 from application.use_cases.tickets.feedback import (
     AddTicketFeedbackCommentUseCase,
     GetTicketFeedbackUseCase,
@@ -94,10 +96,14 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
-from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
-from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
-from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
-from infrastructure.exports.ticket_report_html import render_ticket_report_html
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskExportRenderers:
+    ticket_report_csv: TicketReportRenderer
+    ticket_report_html: TicketReportRenderer
+    analytics_snapshot_csv: AnalyticsSnapshotRenderer
+    analytics_snapshot_html: AnalyticsSnapshotRenderer
 
 
 @dataclass(slots=True, frozen=True)
@@ -182,6 +188,7 @@ class HelpdeskComponents:
 def build_helpdesk_components(
     *,
     ticket_repository: TicketRepository,
+    ticket_analytics_repository: TicketAnalyticsRepository,
     ticket_feedback_repository: TicketFeedbackRepository,
     ticket_ai_summary_repository: TicketAISummaryRepository,
     ticket_message_repository: TicketMessageRepository,
@@ -196,11 +203,10 @@ def build_helpdesk_components(
     ticket_tag_repository: TicketTagRepository,
     ai_client_factory: AIServiceClientFactory,
     super_admin_telegram_user_ids: frozenset[int],
+    export_renderers: HelpdeskExportRenderers,
     include_internal_notes_in_ticket_reports: bool = True,
 ) -> HelpdeskComponents:
-    stats_service = HelpdeskStatsService(
-        analytics_repository=cast(TicketAnalyticsRepository, ticket_repository)
-    )
+    stats_service = HelpdeskStatsService(analytics_repository=ticket_analytics_repository)
     return HelpdeskComponents(
         permissions=HelpdeskPermissionGuard(
             operator_repository=operator_repository,
@@ -256,8 +262,8 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_feedback_repository=ticket_feedback_repository,
                 ticket_event_repository=ticket_event_repository,
-                csv_renderer=render_ticket_report_csv,
-                html_renderer=render_ticket_report_html,
+                csv_renderer=export_renderers.ticket_report_csv,
+                html_renderer=export_renderers.ticket_report_html,
                 include_internal_notes=include_internal_notes_in_ticket_reports,
             ),
             reply_as_operator=ReplyToTicketAsOperatorUseCase(
@@ -302,8 +308,8 @@ def build_helpdesk_components(
             ),
             export_analytics_snapshot=ExportAnalyticsSnapshotUseCase(
                 stats_service=stats_service,
-                csv_renderer=render_analytics_snapshot_csv,
-                html_renderer=render_analytics_snapshot_html,
+                csv_renderer=export_renderers.analytics_snapshot_csv,
+                html_renderer=export_renderers.analytics_snapshot_html,
             ),
         ),
         catalog=HelpdeskCatalogUseCases(

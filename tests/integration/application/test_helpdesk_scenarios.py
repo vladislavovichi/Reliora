@@ -24,6 +24,7 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
 )
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
+from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
     AuditLogRepository,
@@ -33,6 +34,7 @@ from domain.contracts.repositories import (
     SLAPolicyRepository,
     TagRepository,
     TicketAISummaryRepository,
+    TicketAnalyticsRepository,
     TicketCategoryRepository,
     TicketEventRepository,
     TicketFeedbackRepository,
@@ -49,6 +51,10 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
+from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
+from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
+from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
+from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
 class DisabledTestAIClient(AIServiceClient):
@@ -711,6 +717,7 @@ def helpdesk_scenario() -> HelpdeskScenario:
     return HelpdeskScenario(
         helpdesk_service=HelpdeskService(
             ticket_repository=cast(TicketRepository, ticket_repository),
+            ticket_analytics_repository=cast(TicketAnalyticsRepository, ticket_repository),
             ticket_feedback_repository=cast(
                 TicketFeedbackRepository, EmptyTicketFeedbackRepository()
             ),
@@ -735,6 +742,12 @@ def helpdesk_scenario() -> HelpdeskScenario:
             ),
             ticket_tag_repository=cast(TicketTagRepository, EmptyTicketTagRepository()),
             ai_client_factory=build_ai_client_factory(),
+            export_renderers=HelpdeskExportRenderers(
+                ticket_report_csv=render_ticket_report_csv,
+                ticket_report_html=render_ticket_report_html,
+                analytics_snapshot_csv=render_analytics_snapshot_csv,
+                analytics_snapshot_html=render_analytics_snapshot_html,
+            ),
             super_admin_telegram_user_ids=frozenset({super_admin_telegram_user_id}),
         ),
         authorization_service=AuthorizationService(

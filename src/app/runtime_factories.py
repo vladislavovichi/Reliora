@@ -11,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from ai_service.grpc.client import build_ai_service_client_factory
 from app.runtime import RedisWorkflowRuntime
 from application.contracts.ai import AIServiceClientFactory
+from application.contracts.runtime import SLADeadlineScheduler
 from application.services.authorization import (
     AuthorizationService,
     AuthorizationServiceFactory,
 )
 from application.services.diagnostics import DiagnosticsService
+from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
@@ -39,8 +41,11 @@ from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketRepository,
 )
 from infrastructure.db.session import ping_database_engine, session_scope
+from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
+from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
+from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
+from infrastructure.exports.ticket_report_html import render_ticket_report_html
 from infrastructure.redis.client import ping_redis_client
-from infrastructure.redis.contracts import SLADeadlineScheduler
 from infrastructure.redis.locks import RedisTicketLockManager
 from infrastructure.redis.operator_context import RedisTicketLiveSessionStore
 from infrastructure.redis.presence import RedisOperatorPresenceHelper
@@ -50,6 +55,7 @@ from infrastructure.redis.streams import (
     RedisTicketStreamConsumer,
     RedisTicketStreamPublisher,
 )
+from infrastructure.runtime_context import get_correlation_id
 
 
 def build_authorization_service(
@@ -87,8 +93,10 @@ def build_helpdesk_service(
     include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
+    ticket_repository = SqlAlchemyTicketRepository(session)
     return HelpdeskService(
-        ticket_repository=SqlAlchemyTicketRepository(session),
+        ticket_repository=ticket_repository,
+        ticket_analytics_repository=ticket_repository,
         ticket_feedback_repository=SqlAlchemyTicketFeedbackRepository(session),
         ticket_ai_summary_repository=SqlAlchemyTicketAISummaryRepository(session),
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
@@ -103,7 +111,14 @@ def build_helpdesk_service(
         ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         ai_client_factory=ai_client_factory,
+        export_renderers=HelpdeskExportRenderers(
+            ticket_report_csv=render_ticket_report_csv,
+            ticket_report_html=render_ticket_report_html,
+            analytics_snapshot_csv=render_analytics_snapshot_csv,
+            analytics_snapshot_html=render_analytics_snapshot_html,
+        ),
         sla_deadline_scheduler=sla_deadline_scheduler,
+        correlation_id_provider=get_correlation_id,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,
         include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
     )

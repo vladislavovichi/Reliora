@@ -25,6 +25,7 @@ from application.contracts.tickets import (
     TicketAssignmentCommand,
 )
 from application.services.authorization import AuthorizationError
+from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.exports import TicketReportFormat
@@ -44,6 +45,10 @@ from domain.enums.tickets import (
     TicketStatus,
 )
 from domain.tickets import InvalidTicketTransitionError
+from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
+from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
+from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
+from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
 class DisabledTestAIClient(AIServiceClient):
@@ -1088,6 +1093,7 @@ def build_service(
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
         ticket_repository=ticket_repository,
+        ticket_analytics_repository=ticket_repository,
         ticket_feedback_repository=ticket_feedback_repository or StubTicketFeedbackRepository(),
         ticket_ai_summary_repository=(
             ticket_ai_summary_repository or build_ticket_ai_summary_repository_mock()
@@ -1124,6 +1130,12 @@ def build_service(
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
         ai_client_factory=build_ai_client_factory(),
+        export_renderers=HelpdeskExportRenderers(
+            ticket_report_csv=render_ticket_report_csv,
+            ticket_report_html=render_ticket_report_html,
+            analytics_snapshot_csv=render_analytics_snapshot_csv,
+            analytics_snapshot_html=render_analytics_snapshot_html,
+        ),
         super_admin_telegram_user_ids=super_admin_telegram_user_ids or frozenset({42}),
     )
 

@@ -4,13 +4,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
+from application.contracts.runtime import CorrelationIdProvider
 from domain.contracts.repositories import AuditLogRepository
-from infrastructure.runtime_context import get_correlation_id
 
 
 @dataclass(slots=True)
 class AuditTrail:
     repository: AuditLogRepository
+    correlation_id_provider: CorrelationIdProvider | None = None
 
     async def write(
         self,
@@ -30,7 +31,7 @@ class AuditTrail:
             actor_telegram_user_id=actor_telegram_user_id,
             entity_id=entity_id,
             entity_public_id=entity_public_id,
-            correlation_id=get_correlation_id(),
+            correlation_id=self.correlation_id_provider() if self.correlation_id_provider else None,
             metadata_json=_normalize_metadata(metadata),
         )
 
