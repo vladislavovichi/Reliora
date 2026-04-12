@@ -374,6 +374,95 @@ async def test_category_pick_creates_ticket_immediately_when_first_text_is_alrea
     assert command.category_id == 2
 
 
+async def test_category_pick_with_initial_photo_creates_ticket_immediately() -> None:
+    ticket_public_id = uuid4()
+    callback_message = build_message(text="stub", message_id=77)
+    object.__setattr__(callback_message, "edit_text", AsyncMock())
+    callback = CallbackQuery.model_construct(
+        id="pick-photo-id",
+        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
+        chat_instance="chat-instance",
+        message=callback_message,
+        data="client_intake:pick:2",
+    )
+    object.__setattr__(callback, "answer", AsyncMock())
+    attachment = TicketAttachmentDetails(
+        kind=TicketAttachmentKind.PHOTO,
+        telegram_file_id="photo-1",
+        telegram_file_unique_id="photo-unique-1",
+        filename=None,
+        mime_type="image/jpeg",
+        storage_path="photo/photo-unique-1.jpg",
+    )
+    draft = PendingClientIntakeDraft(
+        client_chat_id=2002,
+        telegram_message_id=15,
+        text=None,
+        attachment=attachment,
+    )
+    state = SimpleNamespace(
+        get_state=AsyncMock(return_value=UserIntakeStates.choosing_category.state),
+        get_data=AsyncMock(return_value={"draft": serialize_pending_client_intake_draft(draft)}),
+        clear=AsyncMock(),
+    )
+    ticket = TicketSummary(
+        public_id=ticket_public_id,
+        public_number="HD-AAAA1111",
+        status=TicketStatus.QUEUED,
+        created=True,
+    )
+    ticket_details = TicketDetailsSummary(
+        public_id=ticket_public_id,
+        public_number="HD-AAAA1111",
+        client_chat_id=2002,
+        status=TicketStatus.QUEUED,
+        priority="normal",
+        subject="Обращение клиента",
+        assigned_operator_id=None,
+        assigned_operator_name=None,
+        assigned_operator_telegram_user_id=None,
+        created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        category_id=2,
+        category_title="Доступ и вход",
+    )
+    service = SimpleNamespace(
+        list_client_ticket_categories=AsyncMock(
+            return_value=(
+                TicketCategorySummary(
+                    id=2,
+                    code="access",
+                    title="Доступ и вход",
+                    is_active=True,
+                    sort_order=10,
+                ),
+            )
+        ),
+        create_ticket_from_client_intake=AsyncMock(return_value=ticket),
+        get_ticket_details=AsyncMock(return_value=ticket_details),
+    )
+
+    await handle_client_intake_category_pick(
+        callback=callback,
+        callback_data=SimpleNamespace(category_id=2),
+        state=state,
+        bot=Mock(),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
+        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+        operator_active_ticket_store=SimpleNamespace(
+            get_active_ticket=AsyncMock(return_value=None)
+        ),
+        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
+        ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+    )
+
+    state.clear.assert_awaited_once_with()
+    service.create_ticket_from_client_intake.assert_awaited_once()
+    command = service.create_ticket_from_client_intake.await_args.args[0]
+    assert command.text is None
+    assert command.attachment == attachment
+    assert command.category_id == 2
+
+
 async def test_intake_keeps_initial_attachment_until_text_arrives() -> None:
     ticket_public_id = uuid4()
     attachment = TicketAttachmentDetails(

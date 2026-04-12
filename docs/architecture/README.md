@@ -7,13 +7,15 @@ Reliora разделяет Telegram presentation и продуктовый backe
 Базовый маршрут данных:
 
 ```text
-Telegram bot -> gRPC client -> backend service -> application use cases -> repositories -> infrastructure
+Telegram bot -> gRPC client -> backend service -> gRPC client -> ai-service
+                                          \-> application use cases -> repositories -> infrastructure
 ```
 
 Это не декоративная схема. Она определяет, где именно живут решения:
 
 - `src/bot` — экраны, тексты, клавиатуры, форматирование и реакция на update;
 - `src/backend` — protobuf, gRPC server/client и transport boundary;
+- `src/ai_service` — отдельный runtime inference-сервиса и его gRPC boundary;
 - `src/application` — продуктовые сценарии, orchestration и бизнес-правила;
 - `src/domain` — сущности, инварианты и repository contracts;
 - `src/infrastructure` — PostgreSQL, Redis, exports, assets, config, logging;
@@ -48,6 +50,16 @@ Backend принимает transport request, переводит их в applica
 - exports;
 - analytics snapshot;
 - role mutations и invite-code lifecycle.
+- orchestration AI-вызовов и graceful degradation при сбоях inference.
+
+### AI-Service
+
+`ai-service` не знает про Telegram UX и не решает продуктовый workflow. Его зона ответственности уже уже и чище:
+
+- task-shaped gRPC методы `GenerateTicketSummary`, `SuggestMacros`, `PredictCategory`;
+- provider/model runtime config;
+- prompt assembly, inference и разбор AI-ответа;
+- internal auth для backend-to-ai запросов.
 
 ### Application
 
@@ -56,6 +68,7 @@ Backend принимает transport request, переводит их в applica
 - что считать валидным workflow;
 - как обрабатывать архив и фильтры;
 - как выдавать и погашать invite-коды;
+- когда AI вообще нужен и какие бизнес-данные в него отправлять;
 - какие события и audit-записи сопровождать продуктовые действия.
 
 ## Почему Такая Схема Нужна

@@ -6,6 +6,7 @@
 cp .env.example .env
 make install
 make migrate
+make run-ai
 make run-backend
 make run-bot
 ```
@@ -40,6 +41,7 @@ make check
 ## Что Важно Не Сломать
 
 - реальный gRPC backend extraction;
+- отдельный ai-service runtime и backend-to-ai gRPC boundary;
 - роли и authorization;
 - live dialogue;
 - queue pagination и active ticket context;

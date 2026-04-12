@@ -11,8 +11,7 @@ from app.runtime import AppRuntime, RedisWorkflowRuntime
 from app.runtime_factories import (
     build_authorization_service_factory,
     build_diagnostics_service,
-    build_helpdesk_ai_generation_profile,
-    build_helpdesk_ai_provider,
+    build_helpdesk_ai_client_factory,
     build_helpdesk_backend_client_factory,
     build_helpdesk_service_factory,
     build_redis_workflow_runtime,
@@ -151,13 +150,11 @@ async def build_runtime(settings: Settings) -> AppRuntime:
 
         fsm_storage = build_fsm_storage(redis)
         redis_workflow = build_redis_workflow_runtime(redis)
-        ai_provider = build_helpdesk_ai_provider(settings)
-        ai_generation_profile = build_helpdesk_ai_generation_profile(settings)
+        ai_client_factory = build_helpdesk_ai_client_factory(settings)
         helpdesk_service_factory = build_helpdesk_service_factory(
             db_session_factory,
             super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-            ai_provider=ai_provider,
-            ai_generation_profile=ai_generation_profile,
+            ai_client_factory=ai_client_factory,
             include_internal_notes_in_ticket_reports=(
                 settings.exports.include_internal_notes_in_ticket_reports
             ),

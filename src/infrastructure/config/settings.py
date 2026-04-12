@@ -136,6 +136,31 @@ class BackendServiceConfig(BaseModel):
         return f"{self.listen_host}:{self.port}"
 
 
+class AIServiceConfig(BaseModel):
+    host: str = "ai-service"
+    port: int = 50061
+    expose_port: int | None = None
+    listen_host: str = "0.0.0.0"
+
+    @property
+    def runtime_target(self) -> tuple[str, int]:
+        return _resolve_service_target(
+            host=self.host,
+            port=self.port,
+            service_host="ai-service",
+            expose_port=self.expose_port,
+        )
+
+    @property
+    def target(self) -> str:
+        host, port = self.runtime_target
+        return f"{host}:{port}"
+
+    @property
+    def bind_target(self) -> str:
+        return f"{self.listen_host}:{self.port}"
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     structured: bool = True
@@ -144,6 +169,11 @@ class LoggingConfig(BaseModel):
 class BackendAuthConfig(BaseModel):
     token: str = ""
     caller: str = "telegram-bot"
+
+
+class AIServiceAuthConfig(BaseModel):
+    token: str = ""
+    caller: str = "helpdesk-backend"
 
 
 class AIConfig(BaseModel):
@@ -241,10 +271,16 @@ class Settings(BaseSettings):
     postgres_expose_port: int | None = Field(default=None, validation_alias="POSTGRES_EXPOSE_PORT")
     redis_expose_port: int | None = Field(default=None, validation_alias="REDIS_EXPOSE_PORT")
     backend_expose_port: int | None = Field(default=None, validation_alias="BACKEND_EXPOSE_PORT")
+    ai_service_expose_port: int | None = Field(
+        default=None,
+        validation_alias="AI_SERVICE_EXPOSE_PORT",
+    )
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     backend_service: BackendServiceConfig = Field(default_factory=BackendServiceConfig)
+    ai_service: AIServiceConfig = Field(default_factory=AIServiceConfig)
     backend_auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
+    ai_service_auth: AIServiceAuthConfig = Field(default_factory=AIServiceAuthConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
@@ -257,6 +293,7 @@ class Settings(BaseSettings):
         self.database.expose_port = self.postgres_expose_port
         self.redis.expose_port = self.redis_expose_port
         self.backend_service.expose_port = self.backend_expose_port
+        self.ai_service.expose_port = self.ai_service_expose_port
         return self
 
 

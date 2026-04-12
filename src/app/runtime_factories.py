@@ -8,18 +8,17 @@ from aiogram.fsm.storage.base import BaseStorage
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from ai_service.grpc.client import build_ai_service_client_factory
 from app.runtime import RedisWorkflowRuntime
-from application.ai.contracts import AIProvider
+from application.contracts.ai import AIServiceClientFactory
 from application.services.authorization import (
     AuthorizationService,
     AuthorizationServiceFactory,
 )
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
-from application.use_cases.ai.assist import AIGenerationProfile
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from infrastructure.ai.provider import build_ai_provider
 from infrastructure.config.settings import Settings
 from infrastructure.db.repositories.ai import SqlAlchemyTicketAISummaryRepository
 from infrastructure.db.repositories.audit import SqlAlchemyAuditLogRepository
@@ -84,8 +83,7 @@ def build_helpdesk_service(
     session: AsyncSession,
     *,
     super_admin_telegram_user_ids: frozenset[int],
-    ai_provider: AIProvider,
-    ai_generation_profile: AIGenerationProfile,
+    ai_client_factory: AIServiceClientFactory,
     include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
@@ -104,8 +102,7 @@ def build_helpdesk_service(
         tag_repository=SqlAlchemyTagRepository(session),
         ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
-        ai_provider=ai_provider,
-        ai_generation_profile=ai_generation_profile,
+        ai_client_factory=ai_client_factory,
         sla_deadline_scheduler=sla_deadline_scheduler,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,
         include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
@@ -116,8 +113,7 @@ def build_helpdesk_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     super_admin_telegram_user_ids: frozenset[int],
-    ai_provider: AIProvider,
-    ai_generation_profile: AIGenerationProfile,
+    ai_client_factory: AIServiceClientFactory,
     include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
@@ -127,8 +123,7 @@ def build_helpdesk_service_factory(
             yield build_helpdesk_service(
                 session,
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-                ai_provider=ai_provider,
-                ai_generation_profile=ai_generation_profile,
+                ai_client_factory=ai_client_factory,
                 include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
@@ -146,18 +141,11 @@ def build_helpdesk_backend_client_factory(
     )
 
 
-def build_helpdesk_ai_provider(settings: Settings) -> AIProvider:
-    return build_ai_provider(settings.ai)
-
-
-def build_helpdesk_ai_generation_profile(settings: Settings) -> AIGenerationProfile:
-    return AIGenerationProfile(
-        summary_temperature=settings.ai.summary_temperature,
-        summary_max_output_tokens=settings.ai.summary_max_output_tokens,
-        macros_temperature=settings.ai.macros_temperature,
-        macros_max_output_tokens=settings.ai.macros_max_output_tokens,
-        category_temperature=settings.ai.category_temperature,
-        category_max_output_tokens=settings.ai.category_max_output_tokens,
+def build_helpdesk_ai_client_factory(settings: Settings) -> AIServiceClientFactory:
+    return build_ai_service_client_factory(
+        settings.ai_service,
+        auth_config=settings.ai_service_auth,
+        resilience_config=settings.resilience,
     )
 
 

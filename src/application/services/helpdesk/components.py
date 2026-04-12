@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-from application.ai.contracts import AIProvider
+from application.contracts.ai import AIServiceClientFactory
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
 from application.use_cases.ai.assist import (
-    AIGenerationProfile,
     BuildTicketAssistSnapshotUseCase,
     PredictTicketCategoryUseCase,
 )
@@ -195,8 +194,7 @@ def build_helpdesk_components(
     tag_repository: TagRepository,
     ticket_category_repository: TicketCategoryRepository,
     ticket_tag_repository: TicketTagRepository,
-    ai_provider: AIProvider,
-    ai_generation_profile: AIGenerationProfile,
+    ai_client_factory: AIServiceClientFactory,
     super_admin_telegram_user_ids: frozenset[int],
     include_internal_notes_in_ticket_reports: bool = True,
 ) -> HelpdeskComponents:
@@ -383,13 +381,11 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_ai_summary_repository=ticket_ai_summary_repository,
                 macro_repository=macro_repository,
-                ai_provider=ai_provider,
-                profile=ai_generation_profile,
+                ai_client_factory=ai_client_factory,
             ),
             predict_ticket_category=PredictTicketCategoryUseCase(
                 ticket_category_repository=ticket_category_repository,
-                ai_provider=ai_provider,
-                profile=ai_generation_profile,
+                ai_client_factory=ai_client_factory,
             ),
         ),
         stats=stats_service,

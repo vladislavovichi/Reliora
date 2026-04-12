@@ -4,8 +4,9 @@
 
 - PostgreSQL — основное постоянное хранилище;
 - Redis — FSM, locks, presence, streams и SLA coordination;
+- ai-service — внутренний gRPC inference runtime;
 - backend — внутренний gRPC-сервис;
-- bot — Telegram runtime поверх backend client и локального service wiring.
+- bot — Telegram runtime поверх backend client.
 
 ## Основные Команды
 
@@ -15,6 +16,7 @@ make logs
 make docker-down
 make health
 make health-backend
+make health-ai
 make migrate
 ```
 
@@ -36,19 +38,21 @@ make full
 
 - `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`;
 - `BACKEND_AUTH__TOKEN`;
+- `AI_SERVICE_AUTH__TOKEN`;
 - `BOT__TOKEN`, если `APP__DRY_RUN=false`;
 - доступность PostgreSQL и Redis;
+- для backend runtime — доступность ai-service gRPC;
 - для bot runtime — доступность backend gRPC.
 
 ## Health И Диагностика
 
-`make health` и `make health-backend` показывают:
+`make health`, `make health-backend` и `make health-ai` показывают:
 
 - `liveness`;
 - `readiness`;
 - детализацию по dependency checks.
 
-Команда `/health` доступна операторским ролям и помогает быстро понять, что именно сейчас не готово: база, Redis, backend auth, gRPC или сам Telegram runtime.
+Команда `/health` доступна операторским ролям и помогает быстро понять, что именно сейчас не готово: база, Redis, backend auth, ai-service, backend gRPC или сам Telegram runtime.
 
 ## Экспорты И Архив
 

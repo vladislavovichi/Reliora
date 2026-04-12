@@ -30,7 +30,7 @@ addopts = "-q"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
-extend-exclude = ["src/backend/grpc/generated"]
+extend-exclude = ["src/backend/grpc/generated", "src/ai_service/grpc/generated"]
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP", "W"]
@@ -42,7 +42,7 @@ indent-style = "space"
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"
-packages = ["app", "application", "bot", "domain", "infrastructure", "tests"]
+packages = ["ai_service", "app", "application", "bot", "domain", "infrastructure", "tests"]
 explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -56,7 +56,13 @@ disallow_incomplete_defs = true
 exclude = ["^migrations/", "^src/backend/grpc/generated/"]
 
 [[tool.mypy.overrides]]
-module = ["backend.grpc.generated.*", "google.protobuf.*", "grpc", "grpc.*"]
+module = [
+    "ai_service.grpc.generated.*",
+    "backend.grpc.generated.*",
+    "google.protobuf.*",
+    "grpc",
+    "grpc.*",
+]
 ignore_missing_imports = true
 ignore_errors = true
 

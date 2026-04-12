@@ -18,7 +18,8 @@ class StartupDependencyCheck:
 
 
 def validate_app_startup_settings(settings: Settings) -> None:
-    _validate_common_settings(settings)
+    _validate_helpdesk_settings(settings)
+    _validate_backend_auth(settings)
     if settings.app.dry_run:
         return
     if not settings.bot.token.strip():
@@ -26,7 +27,13 @@ def validate_app_startup_settings(settings: Settings) -> None:
 
 
 def validate_backend_startup_settings(settings: Settings) -> None:
-    _validate_common_settings(settings)
+    _validate_helpdesk_settings(settings)
+    _validate_backend_auth(settings)
+    _validate_ai_service_auth(settings)
+
+
+def validate_ai_service_startup_settings(settings: Settings) -> None:
+    _validate_ai_service_auth(settings)
 
 
 async def run_startup_dependency_checks(
@@ -98,8 +105,16 @@ async def _run_single_dependency_check(
             await asyncio.sleep(backoff * attempt)
 
 
-def _validate_common_settings(settings: Settings) -> None:
+def _validate_helpdesk_settings(settings: Settings) -> None:
     if not settings.authorization.super_admin_telegram_user_ids:
         raise RuntimeError("AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS не настроен.")
+
+
+def _validate_backend_auth(settings: Settings) -> None:
     if not settings.backend_auth.token.strip():
         raise RuntimeError("BACKEND_AUTH__TOKEN не задан.")
+
+
+def _validate_ai_service_auth(settings: Settings) -> None:
+    if not settings.ai_service_auth.token.strip():
+        raise RuntimeError("AI_SERVICE_AUTH__TOKEN не задан.")

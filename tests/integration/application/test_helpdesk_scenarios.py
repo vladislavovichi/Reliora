@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -9,8 +10,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from application.ai.contracts import AIProvider
 from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.ai import (
+    AIPredictedCategoryResult,
+    AIServiceClient,
+    AIServiceClientFactory,
+    GeneratedTicketSummaryResult,
+    SuggestedMacrosResult,
+)
 from application.contracts.tickets import (
     AssignNextQueuedTicketCommand,
     ClientTicketMessageCommand,
@@ -18,7 +25,6 @@ from application.contracts.tickets import (
 )
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
 from application.services.helpdesk.service import HelpdeskService
-from application.use_cases.ai.assist import AIGenerationProfile
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
@@ -45,24 +51,29 @@ from domain.enums.tickets import (
 )
 
 
-class DisabledTestAIProvider(AIProvider):
-    @property
-    def is_enabled(self) -> bool:
-        return False
+class DisabledTestAIClient(AIServiceClient):
+    async def get_service_status(self) -> tuple[str, str]:
+        return "helpdesk-ai-service", "ready"
 
-    @property
-    def model_id(self) -> str | None:
-        return None
+    async def generate_ticket_summary(self, command: object) -> GeneratedTicketSummaryResult:
+        del command
+        return GeneratedTicketSummaryResult(available=False)
 
-    async def complete(
-        self,
-        *,
-        messages: object,
-        max_output_tokens: int,
-        temperature: float,
-    ) -> str:
-        del messages, max_output_tokens, temperature
-        raise RuntimeError("AI is disabled in scenario tests.")
+    async def suggest_macros(self, command: object) -> SuggestedMacrosResult:
+        del command
+        return SuggestedMacrosResult(available=False)
+
+    async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
+        del command
+        return AIPredictedCategoryResult(available=False)
+
+
+def build_ai_client_factory(client: AIServiceClient | None = None) -> AIServiceClientFactory:
+    @asynccontextmanager
+    async def provide() -> AsyncIterator[AIServiceClient]:
+        yield client or DisabledTestAIClient()
+
+    return provide
 
 
 class EmptyTicketAISummaryRepository:
@@ -723,8 +734,7 @@ def helpdesk_scenario() -> HelpdeskScenario:
                 TicketCategoryRepository, EmptyTicketCategoryRepository()
             ),
             ticket_tag_repository=cast(TicketTagRepository, EmptyTicketTagRepository()),
-            ai_provider=DisabledTestAIProvider(),
-            ai_generation_profile=AIGenerationProfile(),
+            ai_client_factory=build_ai_client_factory(),
             super_admin_telegram_user_ids=frozenset({super_admin_telegram_user_id}),
         ),
         authorization_service=AuthorizationService(

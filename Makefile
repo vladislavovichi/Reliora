@@ -7,12 +7,16 @@ ALEMBIC_CONFIG ?= migrations/alembic.ini
 ALEMBIC ?= $(POETRY) run alembic -c $(ALEMBIC_CONFIG)
 APP_MODULE ?= app.main
 BACKEND_MODULE ?= backend.main
+AI_SERVICE_MODULE ?= ai_service.main
 FULL_SCRIPT ?= ops/docker/full.sh
-FULL_SERVICES ?= postgres redis backend bot
+FULL_SERVICES ?= postgres redis ai-service backend bot
 FULL_TIMEOUT ?= 180
-PROTO_SRC ?= src/backend/proto/helpdesk.proto
-PROTO_INCLUDE ?= src/backend/proto
-PROTO_OUT ?= src/backend/grpc/generated
+BACKEND_PROTO_SRC ?= src/backend/proto/helpdesk.proto
+BACKEND_PROTO_INCLUDE ?= src/backend/proto
+BACKEND_PROTO_OUT ?= src/backend/grpc/generated
+AI_PROTO_SRC ?= src/ai_service/proto/ai_service.proto
+AI_PROTO_INCLUDE ?= src/ai_service/proto
+AI_PROTO_OUT ?= src/ai_service/grpc/generated
 
 define ensure_poetry_env
 	@if ! command -v "$(PYTHON)" >/dev/null 2>&1; then \
@@ -24,7 +28,7 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test proto proto-check check ci health health-backend run run-backend run-bot migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test proto proto-check check ci health health-backend health-ai run run-backend run-ai run-bot migrate migration-check make-migration docker-up docker-down full full-down logs logs-ai up down pre-commit-install pre-commit-run
 
 help:
 	@printf "Available targets:\n"
@@ -39,8 +43,10 @@ help:
 	@printf "  ci                 Run lint, typing, tests, proto-check, and migration consistency\n"
 	@printf "  health             Run the bot-side health check\n"
 	@printf "  health-backend     Run the backend-side health check\n"
+	@printf "  health-ai          Run the ai-service health check\n"
 	@printf "  run                Start the Telegram bot runtime locally\n"
 	@printf "  run-backend        Start the backend gRPC service locally\n"
+	@printf "  run-ai             Start the ai-service gRPC runtime locally\n"
 	@printf "  run-bot            Start the Telegram bot runtime locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
 	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
@@ -77,11 +83,13 @@ test:
 
 proto:
 	$(call ensure_poetry_env)
-	$(POETRY) run python -m grpc_tools.protoc -I $(PROTO_INCLUDE) --python_out=$(PROTO_OUT) --grpc_python_out=$(PROTO_OUT) $(PROTO_SRC)
-	$(POETRY) run python -c "from pathlib import Path; path = Path('$(PROTO_OUT)/helpdesk_pb2_grpc.py'); path.write_text(path.read_text().replace('import helpdesk_pb2 as helpdesk__pb2', 'from . import helpdesk_pb2 as helpdesk__pb2'))"
+	$(POETRY) run python -m grpc_tools.protoc -I $(BACKEND_PROTO_INCLUDE) --python_out=$(BACKEND_PROTO_OUT) --grpc_python_out=$(BACKEND_PROTO_OUT) $(BACKEND_PROTO_SRC)
+	$(POETRY) run python -c "from pathlib import Path; path = Path('$(BACKEND_PROTO_OUT)/helpdesk_pb2_grpc.py'); path.write_text(path.read_text().replace('import helpdesk_pb2 as helpdesk__pb2', 'from . import helpdesk_pb2 as helpdesk__pb2'))"
+	$(POETRY) run python -m grpc_tools.protoc -I $(AI_PROTO_INCLUDE) --python_out=$(AI_PROTO_OUT) --grpc_python_out=$(AI_PROTO_OUT) $(AI_PROTO_SRC)
+	$(POETRY) run python -c "from pathlib import Path; path = Path('$(AI_PROTO_OUT)/ai_service_pb2_grpc.py'); path.write_text(path.read_text().replace('import ai_service_pb2 as ai__service__pb2', 'from . import ai_service_pb2 as ai__service__pb2'))"
 
 proto-check: proto
-	git diff --exit-code -- $(PROTO_OUT)
+	git diff --exit-code -- $(BACKEND_PROTO_OUT) $(AI_PROTO_OUT)
 
 health:
 	$(call ensure_poetry_env)
@@ -90,6 +98,10 @@ health:
 health-backend:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m backend.healthcheck
+
+health-ai:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m ai_service.healthcheck
 
 migration-check:
 	$(call ensure_poetry_env)
@@ -102,6 +114,10 @@ run:
 run-backend:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(BACKEND_MODULE)
+
+run-ai:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m $(AI_SERVICE_MODULE)
 
 run-bot:
 	$(call ensure_poetry_env)
@@ -132,7 +148,10 @@ full:
 full-down: docker-down
 
 logs:
-	$(COMPOSE) -f $(COMPOSE_FILE) logs -f backend bot
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f ai-service backend bot
+
+logs-ai:
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f ai-service
 
 up: docker-up
 

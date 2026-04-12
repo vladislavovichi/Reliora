@@ -5,10 +5,10 @@ import logging
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from ai_service.grpc.client import ping_ai_service
 from app.runtime import RedisWorkflowRuntime
 from app.runtime_factories import (
-    build_helpdesk_ai_generation_profile,
-    build_helpdesk_ai_provider,
+    build_helpdesk_ai_client_factory,
     build_helpdesk_service_factory,
     build_redis_workflow_runtime,
 )
@@ -44,6 +44,10 @@ def _redis_target(settings: Settings) -> str:
     return settings.redis.url or f"{settings.redis.host}:{settings.redis.port}/{settings.redis.db}"
 
 
+def _ai_service_target(settings: Settings) -> str:
+    return settings.ai_service.target
+
+
 async def _close_runtime_resources(
     *,
     db_engine: AsyncEngine | None = None,
@@ -72,10 +76,11 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
         logger.exception("Backend startup configuration is invalid.")
         raise
     logger.info(
-        "Initializing backend runtime database=%s redis=%s grpc_bind=%s",
+        "Initializing backend runtime database=%s redis=%s grpc_bind=%s ai_service=%s",
         _database_target(settings),
         _redis_target(settings),
         settings.backend_service.bind_target,
+        _ai_service_target(settings),
     )
 
     db_engine = build_engine(settings.database)
@@ -98,21 +103,28 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
                     target=_redis_target(settings),
                     check=lambda: ping_redis_client(redis),
                 ),
+                StartupDependencyCheck(
+                    name="ai_service_grpc",
+                    target=_ai_service_target(settings),
+                    check=lambda: ping_ai_service(
+                        settings.ai_service,
+                        auth_config=settings.ai_service_auth,
+                        resilience_config=settings.resilience,
+                    ),
+                ),
             ),
             settings=settings,
             logger=logger,
         )
 
         redis_workflow = build_redis_workflow_runtime(redis)
-        ai_provider = build_helpdesk_ai_provider(settings)
-        ai_generation_profile = build_helpdesk_ai_generation_profile(settings)
+        ai_client_factory = build_helpdesk_ai_client_factory(settings)
         helpdesk_service_factory = build_helpdesk_service_factory(
             db_session_factory,
             super_admin_telegram_user_ids=frozenset(
                 settings.authorization.super_admin_telegram_user_ids
             ),
-            ai_provider=ai_provider,
-            ai_generation_profile=ai_generation_profile,
+            ai_client_factory=ai_client_factory,
             include_internal_notes_in_ticket_reports=(
                 settings.exports.include_internal_notes_in_ticket_reports
             ),

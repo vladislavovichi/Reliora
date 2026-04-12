@@ -1,16 +1,24 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 from uuid import uuid4
 
-from application.ai.contracts import AIMessage, AIProvider
 from application.ai.summaries import AIPredictionConfidence, TicketSummaryStatus
-from application.contracts.ai import PredictTicketCategoryCommand
+from application.contracts.ai import (
+    AIGeneratedTicketSummary,
+    AIPredictedCategoryResult,
+    AIServiceClient,
+    AIServiceClientFactory,
+    AISuggestedMacro,
+    GeneratedTicketSummaryResult,
+    PredictTicketCategoryCommand,
+    SuggestedMacrosResult,
+)
 from application.use_cases.ai.assist import (
-    AIGenerationProfile,
     BuildTicketAssistSnapshotUseCase,
     PredictTicketCategoryUseCase,
 )
@@ -29,29 +37,49 @@ from domain.entities.ticket import (
 from domain.enums.tickets import TicketMessageSenderType, TicketPriority, TicketStatus
 
 
-class StubAIProvider(AIProvider):
-    def __init__(self, *responses: str) -> None:
-        self._responses = list(responses)
-
-    @property
-    def is_enabled(self) -> bool:
-        return True
-
-    @property
-    def model_id(self) -> str | None:
-        return "Qwen/Qwen3.5-4B"
-
-    async def complete(
+class StubAIClient(AIServiceClient):
+    def __init__(
         self,
         *,
-        messages: Sequence[AIMessage],
-        max_output_tokens: int,
-        temperature: float,
-    ) -> str:
-        del messages, max_output_tokens, temperature
-        if not self._responses:
-            raise RuntimeError("No more stub responses configured.")
-        return self._responses.pop(0)
+        summary_result: GeneratedTicketSummaryResult | None = None,
+        macros_result: SuggestedMacrosResult | None = None,
+        category_result: AIPredictedCategoryResult | None = None,
+    ) -> None:
+        self.summary_result = summary_result or GeneratedTicketSummaryResult(
+            available=False,
+            model_id="Qwen/Qwen3.5-4B",
+        )
+        self.macros_result = macros_result or SuggestedMacrosResult(
+            available=False,
+            model_id="Qwen/Qwen3.5-4B",
+        )
+        self.category_result = category_result or AIPredictedCategoryResult(
+            available=False,
+            model_id="Qwen/Qwen3.5-4B",
+        )
+
+    async def get_service_status(self) -> tuple[str, str]:
+        return "helpdesk-ai-service", "ready"
+
+    async def generate_ticket_summary(self, command: object) -> GeneratedTicketSummaryResult:
+        del command
+        return self.summary_result
+
+    async def suggest_macros(self, command: object) -> SuggestedMacrosResult:
+        del command
+        return self.macros_result
+
+    async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
+        del command
+        return self.category_result
+
+
+def build_ai_client_factory(client: StubAIClient) -> AIServiceClientFactory:
+    @asynccontextmanager
+    async def provide() -> AsyncIterator[AIServiceClient]:
+        yield client
+
+    return provide
 
 
 class StubTicketRepository:
@@ -193,19 +221,31 @@ async def test_build_ticket_assist_snapshot_returns_summary_and_macro_suggestion
         ticket_repository=cast(TicketRepository, StubTicketRepository(_build_ticket())),
         ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
         macro_repository=cast(MacroRepository, StubMacroRepository()),
-        ai_provider=StubAIProvider(
-            (
-                '{"short_summary":"Клиент потерял доступ после смены пароля.",'
-                '"user_goal":"Восстановить вход без повторной регистрации.",'
-                '"actions_taken":"Оператор проверил профиль и готовит сброс.",'
-                '"current_status":"Ожидается финальное подтверждение после сброса."}'
-            ),
-            (
-                '{"macro_ids":[{"macro_id":1,"reason":"Нужен готовый ответ про сброс доступа.",'
-                '"confidence":"high"}]}'
-            ),
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                summary_result=GeneratedTicketSummaryResult(
+                    available=True,
+                    summary=AIGeneratedTicketSummary(
+                        short_summary="Клиент потерял доступ после смены пароля.",
+                        user_goal="Восстановить вход без повторной регистрации.",
+                        actions_taken="Оператор проверил профиль и готовит сброс.",
+                        current_status="Ожидается финальное подтверждение после сброса.",
+                    ),
+                    model_id="Qwen/Qwen3.5-4B",
+                ),
+                macros_result=SuggestedMacrosResult(
+                    available=True,
+                    suggestions=(
+                        AISuggestedMacro(
+                            macro_id=1,
+                            reason="Нужен готовый ответ про сброс доступа.",
+                            confidence=AIPredictionConfidence.HIGH,
+                        ),
+                    ),
+                    model_id="Qwen/Qwen3.5-4B",
+                ),
+            )
         ),
-        profile=AIGenerationProfile(),
     )
 
     snapshot = await use_case(ticket_public_id=uuid4(), refresh_summary=True)
@@ -221,11 +261,17 @@ async def test_build_ticket_assist_snapshot_returns_summary_and_macro_suggestion
 async def test_predict_ticket_category_returns_valid_prediction() -> None:
     use_case = PredictTicketCategoryUseCase(
         ticket_category_repository=cast(TicketCategoryRepository, StubCategoryRepository()),
-        ai_provider=StubAIProvider(
-            '{"category_id":1,"confidence":"high",'
-            '"reason":"Есть явные признаки проблемы со входом."}'
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                category_result=AIPredictedCategoryResult(
+                    available=True,
+                    category_id=1,
+                    confidence=AIPredictionConfidence.HIGH,
+                    reason="Есть явные признаки проблемы со входом.",
+                    model_id="Qwen/Qwen3.5-4B",
+                )
+            )
         ),
-        profile=AIGenerationProfile(),
     )
 
     prediction = await use_case(
@@ -259,8 +305,15 @@ async def test_saved_ticket_summary_becomes_stale_after_history_changes() -> Non
         ticket_repository=cast(TicketRepository, StubTicketRepository(ticket)),
         ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
         macro_repository=cast(MacroRepository, StubMacroRepository()),
-        ai_provider=StubAIProvider('{"macro_ids":[]}'),
-        profile=AIGenerationProfile(),
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                macros_result=SuggestedMacrosResult(
+                    available=True,
+                    suggestions=(),
+                    model_id="Qwen/Qwen3.5-4B",
+                )
+            )
+        ),
     )
 
     snapshot = await use_case(ticket_public_id=ticket.public_id)

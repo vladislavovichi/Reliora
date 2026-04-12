@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package helpdesk.ai.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message Empty {}
+
+message AIContextAttachment {
+  string kind = 1;
+  optional string filename = 2;
+  optional string mime_type = 3;
+}
+
+message AIContextMessage {
+  string sender_type = 1;
+  optional string sender_label = 2;
+  optional string text = 3;
+  google.protobuf.Timestamp created_at = 4;
+  AIContextAttachment attachment = 5;
+}
+
+message AIContextInternalNote {
+  optional string author_name = 1;
+  string text = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message GenerateTicketSummaryCommand {
+  string ticket_public_id = 1;
+  string subject = 2;
+  string status = 3;
+  optional string category_title = 4;
+  repeated string tags = 5;
+  repeated AIContextMessage message_history = 6;
+  repeated AIContextInternalNote internal_notes = 7;
+}
+
+message GeneratedTicketSummary {
+  string short_summary = 1;
+  string user_goal = 2;
+  string actions_taken = 3;
+  string current_status = 4;
+}
+
+message GenerateTicketSummaryResponse {
+  bool available = 1;
+  GeneratedTicketSummary summary = 2;
+  optional string unavailable_reason = 3;
+  optional string model_id = 4;
+}
+
+message MacroCandidate {
+  int32 id = 1;
+  string title = 2;
+  string body = 3;
+}
+
+message SuggestMacrosCommand {
+  string ticket_public_id = 1;
+  string subject = 2;
+  string status = 3;
+  optional string category_title = 4;
+  repeated string tags = 5;
+  repeated AIContextMessage message_history = 6;
+  repeated MacroCandidate macros = 7;
+}
+
+message AISuggestedMacro {
+  int32 macro_id = 1;
+  string reason = 2;
+  string confidence = 3;
+}
+
+message SuggestMacrosResponse {
+  bool available = 1;
+  repeated AISuggestedMacro suggestions = 2;
+  optional string unavailable_reason = 3;
+  optional string model_id = 4;
+}
+
+message AICategoryOption {
+  int32 id = 1;
+  string code = 2;
+  string title = 3;
+}
+
+message PredictCategoryCommand {
+  optional string text = 1;
+  AIContextAttachment attachment = 2;
+  repeated AICategoryOption categories = 3;
+}
+
+message PredictCategoryResponse {
+  bool available = 1;
+  optional int32 category_id = 2;
+  string confidence = 3;
+  optional string reason = 4;
+  optional string unavailable_reason = 5;
+  optional string model_id = 6;
+}
+
+message AIServiceStatus {
+  string service = 1;
+  string status = 2;
+  optional string provider = 3;
+  optional string model_id = 4;
+}
+
+service HelpdeskAIService {
+  rpc GetAIServiceStatus(Empty) returns (AIServiceStatus);
+  rpc GenerateTicketSummary(GenerateTicketSummaryCommand) returns (GenerateTicketSummaryResponse);
+  rpc SuggestMacros(SuggestMacrosCommand) returns (SuggestMacrosResponse);
+  rpc PredictCategory(PredictCategoryCommand) returns (PredictCategoryResponse);
+}

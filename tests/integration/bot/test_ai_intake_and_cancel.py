@@ -100,11 +100,15 @@ async def test_user_cancel_clears_feedback_state() -> None:
     state = SimpleNamespace(
         get_state=AsyncMock(return_value=UserFeedbackStates.writing_comment.state),
         get_data=AsyncMock(return_value={}),
+        set_data=AsyncMock(),
+        set_state=AsyncMock(),
         clear=AsyncMock(),
     )
 
     await handle_user_cancel(message=message, state=state)
 
+    state.set_data.assert_awaited_once_with({})
+    state.set_state.assert_awaited_once_with(None)
     state.clear.assert_awaited_once_with()
     cast(AsyncMock, message.answer).assert_awaited_once_with(
         TICKET_FEEDBACK_COMMENT_CANCELLED_TEXT,

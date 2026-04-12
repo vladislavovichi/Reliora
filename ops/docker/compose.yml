@@ -1,4 +1,29 @@
 services:
+  ai-service:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    command: ["sh", "/app/ops/docker/entrypoint.sh"]
+    environment:
+      PYTHONPATH: /app/src
+      AI_SERVICE__HOST: ai-service
+      AI_SERVICE__PORT: 50061
+      RUN_MIGRATIONS: "false"
+      SERVICE_MODULE: ai_service.main
+    env_file:
+      - ../../.env
+    healthcheck:
+      test: ["CMD", "python", "-m", "ai_service.healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${AI_SERVICE_EXPOSE_PORT:-50081}:50061"
+    restart: unless-stopped
+    volumes:
+      - ../..:/app
+
   backend:
     build:
       context: ../..
@@ -11,11 +36,15 @@ services:
       REDIS__HOST: redis
       REDIS__PORT: 6379
       BACKEND_SERVICE__PORT: 50051
+      AI_SERVICE__HOST: ai-service
+      AI_SERVICE__PORT: 50061
       RUN_MIGRATIONS: "true"
       SERVICE_MODULE: backend.main
     env_file:
       - ../../.env
     depends_on:
+      ai-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

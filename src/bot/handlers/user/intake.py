@@ -184,7 +184,9 @@ async def handle_client_intake_category_pick(
             await callback.message.edit_text(INTAKE_CATEGORY_STALE_TEXT, reply_markup=None)
         return
 
-    if isinstance(callback.message, Message) and draft.has_meaningful_text:
+    if isinstance(callback.message, Message) and (
+        draft.has_meaningful_text or draft.attachment is not None
+    ):
         await callback.message.edit_text(
             build_intake_category_selected_text(category.title),
             reply_markup=None,
@@ -307,14 +309,6 @@ async def handle_client_intake_message(
         )
         return
 
-    if draft is not None and draft.attachment is not None and current_content.text is None:
-        category_title = state_data.get("category_title")
-        await message.answer(
-            build_intake_attachment_prompt_text(category_title)
-            if isinstance(category_title, str)
-            else INTAKE_CATEGORY_STALE_TEXT
-        )
-        return
     if (
         draft is not None
         and draft.attachment is not None
