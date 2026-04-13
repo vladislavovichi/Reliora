@@ -1,6 +1,10 @@
 # Разработка
 
-## Базовый Локальный Цикл
+Этот документ про обычный рабочий цикл: как поднять проект локально, чем проверять изменения и куда их класть.
+
+## Локальный запуск
+
+Минимальный цикл выглядит так:
 
 ```bash
 cp .env.example .env
@@ -11,50 +15,66 @@ make run-backend
 make run-bot
 ```
 
-Если нужен локальный прогон без реального Telegram polling:
+Если Telegram polling сейчас не нужен:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-## Что Считается Нормой Для Изменений
-
-- handlers остаются тонкими;
-- новые product rules идут в `application`;
-- transport-изменения не смешиваются с бизнес-логикой;
-- тексты живут в `bot/texts`;
-- клавиатуры — в `bot/keyboards`;
-- форматирование — в `bot/formatters`;
-- HTML/CSV rendering — в `infrastructure/exports`;
-- repository contracts меняются явно, а не побочно.
-
-## Основные Команды
+Для запуска всего контура в Docker:
 
 ```bash
-make format
-make lint
-make typecheck
-make test
-make check
+make up
+make health
+make smoke
 ```
 
-## Что Важно Не Сломать
+## Основные команды
 
-- реальный gRPC backend extraction;
-- отдельный ai-service runtime и backend-to-ai gRPC boundary;
-- роли и authorization;
-- live dialogue;
-- queue pagination и active ticket context;
-- categories, feedback, exports и analytics;
-- attachments и internal notes;
-- Redis-backed FSM и runtime locks;
-- premium button-first UX.
+- `make format` — форматирование и автоисправления Ruff;
+- `make lint` — линтер;
+- `make typecheck` — mypy;
+- `make test` — тесты;
+- `make check` — линтер, типы и тесты;
+- `make ci` — локальный прогон того, что важно перед отправкой изменений;
+- `make proto-check` — проверка, что сгенерированные gRPC-файлы не разошлись с `.proto`;
+- `make migration-check` — проверка согласованности миграций и моделей.
 
-## Практический Подход
+## Куда класть изменения
 
-Лучший способ двигать проект дальше — улучшать продукт маленькими законченными проходами:
+- новые продуктовые правила — в `application`;
+- транспортный код — в `backend` или `ai_service`;
+- Telegram-тексты — в `bot/texts`;
+- клавиатуры — в `bot/keyboards`;
+- форматирование экранов — в `bot/formatters`;
+- экспорт в `HTML` и `CSV` — в `infrastructure/exports`;
+- работа с PostgreSQL и Redis — в `infrastructure`.
 
-- одна capability;
-- одна понятная архитектурная точка расширения;
-- тесты рядом с изменением;
-- без широких speculative refactor'ов.
+Если логика начинает требовать Telegram-специфичных объектов в `application`, это обычно сигнал, что граница слоёв поплыла.
+
+## Что важно не ломать
+
+- разделение `bot -> backend -> ai-service`;
+- роли и внутреннюю авторизацию;
+- живой диалог клиента и оператора;
+- очередь и активный контекст по заявке;
+- вложения, заметки, обратную связь, теги, макросы и темы;
+- Redis-контур для FSM и координации;
+- архив, аналитику и выгрузки.
+
+## Как устроены проверки в CI
+
+В GitHub Actions проект проверяется отдельными задачами:
+
+- `lint`;
+- `typecheck`;
+- `proto-check`;
+- `test`;
+- `migration-check`.
+
+Если изменение затрагивает транспортный слой, миграции или генерацию gRPC-контрактов, лучше прогнать соответствующую проверку локально до коммита.
+
+См. также:
+
+- [Архитектура](../architecture/README.md)
+- [Эксплуатация](../operations/README.md)

@@ -1,9 +1,27 @@
-# Alembic placeholder
+# Миграции
 
-This directory is intentionally present before the first migration is created.
+Проект использует Alembic. Все ревизии лежат в `migrations/versions/`.
 
-Planned follow-up work:
+Сейчас в репозитории уже есть рабочая история миграций: от начальной схемы до изменений по сценариям работы, SLA, категориям, обратной связи, вложениям, инвайт-кодам и AI-сводкам.
 
-- add SQLAlchemy models mapped to the shared metadata
-- generate the first Alembic revision
-- wire deployment-specific migration commands into CI/CD
+## Основные команды
+
+Локально:
+
+```bash
+make migrate
+make make-migration name=short_description
+make migration-check
+```
+
+В Docker-стеке:
+
+```bash
+make migrate-stack
+```
+
+## Что важно помнить
+
+- `backend` выполняет `alembic upgrade head` при старте контейнера;
+- новые миграции нужно держать в согласии с SQLAlchemy-моделями;
+- перед обновлением в рабочем окружении стоит понимать, есть ли у миграции обратная совместимость с предыдущим кодом.

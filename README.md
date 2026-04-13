@@ -1,54 +1,55 @@
 # Reliora
 
-`Reliora` — внутренний helpdesk в Telegram с отдельными `backend` и `ai-service` на gRPC.
+`Reliora` — внутренний helpdesk в Telegram. Клиент пишет в чат, оператор работает там же.
 
-Проект собран вокруг одной идеи: оператору не нужен шумный кабинет, если рабочее место уже находится там, где идёт диалог. Клиент пишет в Telegram, бот аккуратно ведёт intake, backend держит продуктовые правила, а оператор работает в спокойном кнопочном интерфейсе с архивом, аналитикой, макросами, заметками, вложениями и экспортами.
+## Что внутри
 
-## Почему проект интересен
+Контур состоит из пяти служб:
 
-- Telegram остаётся основным продуктовым интерфейсом, а не временной оболочкой.
-- Бизнес-логика вынесена из bot-слоя в отдельный application/backend контур.
-- Исторические кейсы, аналитика и отчёты уже оформлены как самостоятельные эксплуатационные поверхности.
-- Вложения, внутренние заметки, feedback и роли встроены в основную модель работы, а не добавлены поверх.
-- Архитектура сохраняет явную границу `bot -> gRPC -> backend -> gRPC -> ai-service`.
+- `bot` — Telegram-слой: тексты, клавиатуры, маршрутизация, доставка сообщений;
+- `backend` — внутренний gRPC-сервис с продуктовой логикой;
+- `ai-service` — отдельная служба для AI-задач;
+- `postgres` — основное хранилище;
+- `redis` — состояние диалогов, блокировки, presence, потоки и координация SLA.
+
+Граница остаётся прямой и читаемой:
+
+```text
+bot -> gRPC -> backend -> gRPC -> ai-service
+```
 
 ## Что уже есть
 
-- intake по темам и создание заявки из первого сообщения;
-- live-диалог клиента и оператора;
-- очередь, личные заявки и активный ticket context;
-- архив закрытых дел с фильтрацией по темам и быстрым экспортом;
-- HTML / CSV экспорт по заявке;
-- HTML / CSV экспорт аналитики;
-- AI assist вынесен в отдельный runtime `ai-service`: автосводка дела, подсказки по макросам и рекомендация темы intake;
-- категории, метки, макросы, внутренние заметки и survey/feedback;
+- приём обращения с выбором темы;
+- живой диалог клиента и оператора;
+- очередь, личные заявки и активный контекст оператора;
+- архив закрытых дел;
+- HTML- и CSV-экспорт по заявке;
+- HTML- и CSV-экспорт аналитики;
 - роли `user`, `operator`, `super_admin`;
-- one-time invite-коды для onboarding операторов;
-- Redis-backed FSM, locks, presence и SLA coordination;
-- отдельный gRPC backend с internal auth, audit trail и readiness checks.
+- одноразовые инвайт-коды для операторов;
+- вложения, внутренние заметки, теги, макросы, обратная связь;
+- Redis-backed FSM и отдельный gRPC `backend`;
+- AI-помощь через `ai-service`: сводка по делу, подсказки по макросам и рекомендация темы.
 
 ## Быстрый старт
 
 ```bash
 cp .env.example .env
-make up
-make health
-make smoke
+make full
 ```
 
-Для более аккуратной конфигурации можно собрать `.env` из доменных шаблонов в [ops/env/README.md](ops/env/README.md).
-
-Для локального прогона без реального polling:
+Если нужен локальный запуск без реального polling Telegram, оставьте в `.env`:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-### AI assist
+Для более аккуратной сборки окружения можно брать значения из шаблонов в [ops/env/README.md](ops/env/README.md).
 
-Bot остаётся presentation-слоем: он не хостит модель и не знает provider-деталей. Backend решает, когда запрашивать AI, а сам inference живёт в отдельном `ai-service` за контуром `bot -> gRPC -> backend -> gRPC -> ai-service`.
+## AI-контур
 
-Минимальный набор env:
+Минимально для AI нужны:
 
 ```dotenv
 AI_SERVICE__HOST=localhost
@@ -60,32 +61,20 @@ AI__MODEL_ID=Qwen/Qwen3.5-4B
 AI__API_TOKEN=hf_xxx
 ```
 
-Этого достаточно, чтобы включить:
+## Основные команды
 
-- автосводку заявки по полной сохранённой истории;
-- подсказки по релевантным макросам внутри карточки оператора;
-- рекомендацию темы при новом intake.
+- `make up` — поднять стек в Docker Compose;
+- `make health` — посмотреть состояние контейнеров;
+- `make smoke` — прогнать прикладную smoke проверку;
+- `make logs` — смотреть логи `ai-service`, `backend` и `bot`;
+- `make backup-db` — сделать логическую резервную копию PostgreSQL.
 
-Полный стек в Docker Compose теперь поднимает `postgres`, `redis`, `ai-service`, `backend` и `bot`. Для локального старта пригодятся:
+## Документация
 
-- `make up`
-- `make health`
-- `make smoke`
-- `make run-ai`
-- `make run-backend`
-- `make run-bot`
-- `make backup-db`
-- `make health-ai`
-- `make logs-ai`
-
-Базовый Compose-файл теперь production-oriented и не опирается на bind-mount исходников. Для локальной разработки `make` по умолчанию добавляет `ops/docker/compose.dev.yml`, который монтирует репозиторий поверх контейнеров `bot`, `backend` и `ai-service`.
-
-## Где читать дальше
-
-- [Продукт и UX](docs/product/README.md)
+- [Продукт](docs/product/README.md)
 - [Архитектура](docs/architecture/README.md)
-- [Backend и gRPC](docs/backend/README.md)
-- [Telegram bot](docs/bot/README.md)
+- [Backend](docs/backend/README.md)
+- [Bot](docs/bot/README.md)
 - [Разработка](docs/development/README.md)
 - [Эксплуатация](docs/operations/README.md)
-- [Безопасность и hardening](docs/security/README.md)
+- [Безопасность](docs/security/README.md)
