@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import grpc
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -26,6 +27,7 @@ from bot.texts.operator import (
     build_export_opened_text,
     build_export_ready_text,
 )
+from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorActiveTicketStore,
@@ -113,7 +115,15 @@ async def handle_export_file_action(
                 format=export_format,
                 actor=build_request_actor(callback.from_user),
             )
-    except Exception:
+    except (
+        grpc.aio.AioRpcError,
+        InvalidTicketTransitionError,
+        PermissionError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        OSError,
+    ):
         logger.exception(
             "Ticket export failed operator_id=%s ticket_public_id=%s format=%s",
             callback.from_user.id,

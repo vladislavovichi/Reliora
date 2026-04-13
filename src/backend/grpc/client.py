@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 import grpc
@@ -601,4 +601,4 @@ def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
         return PermissionError(exc.details() or "Недостаточно прав.")
     if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
         return ValueError(exc.details() or "Некорректный запрос.")
-    return cast(Exception, exc)
+    return RuntimeError(exc.details() or "Внутренняя ошибка backend gRPC.")

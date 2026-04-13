@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, cast
 from uuid import uuid4
 
 from redis.asyncio import Redis
 
+from infrastructure.redis.async_support import resolve_redis_result
 from infrastructure.redis.contracts import TicketLock, TicketLockManager
 from infrastructure.redis.keys import ticket_lock_key
 
@@ -32,7 +32,7 @@ class RedisTicketLock(TicketLock):
         if not self._is_acquired:
             return
 
-        await cast(Any, self.redis.eval(_RELEASE_LOCK_SCRIPT, 1, self.key, self.token))
+        await resolve_redis_result(self.redis.eval(_RELEASE_LOCK_SCRIPT, 1, self.key, self.token))
         self._is_acquired = False
 
 

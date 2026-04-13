@@ -72,7 +72,7 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
     logger = logging.getLogger(__name__)
     try:
         validate_backend_startup_settings(settings)
-    except Exception:
+    except RuntimeError:
         logger.exception("Backend startup configuration is invalid.")
         raise
     logger.info(

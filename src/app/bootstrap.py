@@ -91,7 +91,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     logger = logging.getLogger(__name__)
     try:
         validate_app_startup_settings(settings)
-    except Exception:
+    except RuntimeError:
         logger.exception("Runtime startup configuration is invalid.")
         raise
     logger.info(

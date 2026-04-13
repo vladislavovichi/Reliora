@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
 from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
@@ -36,7 +35,11 @@ from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketMessageSenderType
 
 
-class HelpdeskTicketOperations:
+class HelpdeskSLASync:
+    async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None: ...
+
+
+class HelpdeskTicketOperations(HelpdeskSLASync):
     _components: HelpdeskComponents
     sla_deadline_scheduler: SLADeadlineScheduler | None
     _audit: AuditTrail
@@ -48,7 +51,7 @@ class HelpdeskTicketOperations:
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
         result = await self._components.tickets.create_from_client_message(command)
-        await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+        await self._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
     async def create_ticket_from_client_intake(
@@ -56,7 +59,7 @@ class HelpdeskTicketOperations:
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
         result = await self._components.tickets.create_from_client_message(command)
-        await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+        await self._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
@@ -139,7 +142,7 @@ class HelpdeskTicketOperations:
             sender_operator_id=sender_operator_id,
         )
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
     async def assign_ticket_to_operator(
@@ -153,7 +156,7 @@ class HelpdeskTicketOperations:
         )
         result = await self._components.tickets.assign_ticket(command)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
             await self._audit.write(
                 action="ticket.assign",
                 entity_type="ticket",
@@ -178,7 +181,7 @@ class HelpdeskTicketOperations:
     ) -> TicketSummary | None:
         result = await self._components.tickets.close_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
             await self._audit.write(
                 action="ticket.close",
                 entity_type="ticket",
@@ -237,7 +240,7 @@ class HelpdeskTicketOperations:
         )
         result = await self._components.tickets.assign_next_queued(command)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
             await self._audit.write(
                 action="ticket.take_next",
                 entity_type="ticket",
@@ -337,9 +340,7 @@ class HelpdeskTicketOperations:
         )
         result = await self._components.tickets.reply_as_operator(command)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(
-                ticket_public_id=result.ticket.public_id
-            )
+            await self._sync_sla_deadline(ticket_public_id=result.ticket.public_id)
             await self._audit.write(
                 action="ticket.reply",
                 entity_type="ticket",
@@ -366,7 +367,7 @@ class HelpdeskTicketOperations:
         )
         result = await self._components.tickets.add_internal_note(command)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
             await self._audit.write(
                 action="ticket.internal_note.create",
                 entity_type="ticket",
@@ -388,7 +389,7 @@ class HelpdeskTicketOperations:
     ) -> TicketSummary | None:
         result = await self._components.tickets.escalate_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
             await self._audit.write(
                 action="ticket.escalate",
                 entity_type="ticket",
@@ -413,7 +414,3 @@ class HelpdeskTicketOperations:
 
     async def get_basic_stats(self) -> TicketStats:
         return await self._components.tickets.basic_stats()
-
-
-class HelpdeskSLASync:
-    async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None: ...

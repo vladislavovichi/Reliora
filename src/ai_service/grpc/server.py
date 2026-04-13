@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
+from typing import TypeVar
 
 import grpc
 
@@ -24,6 +25,7 @@ from infrastructure.config.settings import AIServiceAuthConfig
 from infrastructure.runtime_context import bind_correlation_id, reset_correlation_id
 
 logger = logging.getLogger(__name__)
+_ResponseT = TypeVar("_ResponseT")
 
 
 @dataclass(slots=True)
@@ -65,6 +67,19 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
         finally:
             reset_correlation_id(correlation_token)
 
+    async def _invoke(
+        self,
+        context: grpc.aio.ServicerContext,
+        *,
+        method: str,
+        call: Callable[[], Awaitable[_ResponseT]],
+    ) -> _ResponseT:
+        try:
+            return await call()
+        except Exception as exc:
+            await _abort_for_exception(context, exc, method=method)
+        raise RuntimeError("unreachable")
+
     async def GetAIServiceStatus(
         self,
         request: ai_service_pb2.Empty,
@@ -87,12 +102,13 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> ai_service_pb2.GenerateTicketSummaryResponse:
         async with self._rpc_scope(context, method="GenerateTicketSummary"):
-            try:
-                result = await self.service.generate_ticket_summary(
+            result = await self._invoke(
+                context,
+                method="GenerateTicketSummary",
+                call=lambda: self.service.generate_ticket_summary(
                     deserialize_generate_ticket_summary_command(request)
-                )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="GenerateTicketSummary")
+                ),
+            )
             return serialize_generated_ticket_summary_result(result)
 
     async def SuggestMacros(
@@ -101,12 +117,13 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> ai_service_pb2.SuggestMacrosResponse:
         async with self._rpc_scope(context, method="SuggestMacros"):
-            try:
-                result = await self.service.suggest_macros(
+            result = await self._invoke(
+                context,
+                method="SuggestMacros",
+                call=lambda: self.service.suggest_macros(
                     deserialize_suggest_macros_command(request)
-                )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="SuggestMacros")
+                ),
+            )
             return serialize_suggested_macros_result(result)
 
     async def PredictCategory(
@@ -115,12 +132,13 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> ai_service_pb2.PredictCategoryResponse:
         async with self._rpc_scope(context, method="PredictCategory"):
-            try:
-                result = await self.service.predict_ticket_category(
+            result = await self._invoke(
+                context,
+                method="PredictCategory",
+                call=lambda: self.service.predict_ticket_category(
                     deserialize_predict_category_command(request)
-                )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="PredictCategory")
+                ),
+            )
             return serialize_predicted_category_result(result)
 
 

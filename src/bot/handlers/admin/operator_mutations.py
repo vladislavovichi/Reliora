@@ -4,6 +4,7 @@ import logging
 from collections.abc import Sequence
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -92,7 +93,7 @@ async def handle_create_operator_invite(
     try:
         bot_info = await bot.get_me()
         bot_username = bot_info.username
-    except Exception:
+    except TelegramAPIError:
         logger.exception("Failed to resolve bot username for operator invite.")
 
     if bot_username:

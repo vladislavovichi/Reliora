@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.entities.ticket import Ticket as TicketEntity
@@ -35,7 +36,7 @@ class SqlAlchemyTicketWriteRepository:
         return cast(TicketEntity, ticket)
 
     async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
-        ticket = cast(TicketEntity | None, await cast(Any, self).get_by_public_id(ticket_public_id))
+        ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
             return None
 
@@ -49,7 +50,7 @@ class SqlAlchemyTicketWriteRepository:
         ticket_public_id: UUID,
         operator_id: int,
     ) -> TicketEntity | None:
-        ticket = cast(TicketEntity | None, await cast(Any, self).get_by_public_id(ticket_public_id))
+        ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None or ticket.status != TicketStatus.QUEUED:
             return None
 
@@ -64,7 +65,7 @@ class SqlAlchemyTicketWriteRepository:
         ticket_public_id: UUID,
         operator_id: int,
     ) -> TicketEntity | None:
-        ticket = cast(TicketEntity | None, await cast(Any, self).get_by_public_id(ticket_public_id))
+        ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
             return None
 
@@ -74,7 +75,7 @@ class SqlAlchemyTicketWriteRepository:
         return ticket
 
     async def escalate(self, *, ticket_public_id: UUID) -> TicketEntity | None:
-        ticket = cast(TicketEntity | None, await cast(Any, self).get_by_public_id(ticket_public_id))
+        ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
             return None
 
@@ -83,7 +84,7 @@ class SqlAlchemyTicketWriteRepository:
         return ticket
 
     async def close(self, *, ticket_public_id: UUID) -> TicketEntity | None:
-        ticket = cast(TicketEntity | None, await cast(Any, self).get_by_public_id(ticket_public_id))
+        ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
             return None
 
@@ -91,3 +92,9 @@ class SqlAlchemyTicketWriteRepository:
         ticket.closed_at = utcnow()
         await self.session.flush()
         return ticket
+
+    async def _get_ticket_for_update(self, ticket_public_id: UUID) -> TicketEntity | None:
+        result = await self.session.execute(
+            select(TicketModel).where(TicketModel.public_id == ticket_public_id)
+        )
+        return cast(TicketEntity | None, result.scalar_one_or_none())

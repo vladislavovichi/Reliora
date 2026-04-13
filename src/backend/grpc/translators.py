@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -1045,7 +1045,7 @@ def _serialize_timestamp(value: datetime) -> Timestamp:
 
 
 def _deserialize_timestamp(value: Timestamp) -> datetime:
-    return cast(datetime, value.ToDatetime(tzinfo=UTC))
+    return datetime.fromtimestamp(value.ToMilliseconds() / 1000, tz=UTC)
 
 
 def _has(message: Any, field: str) -> bool:

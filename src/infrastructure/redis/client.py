@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, cast
-
 from redis.asyncio import Redis
 
 from infrastructure.config.settings import RedisConfig
+from infrastructure.redis.async_support import resolve_redis_result
 
 
 def build_redis_client(config: RedisConfig) -> Redis:
@@ -16,7 +15,7 @@ def build_redis_client(config: RedisConfig) -> Redis:
 
 
 async def ping_redis_client(client: Redis) -> bool:
-    result = await cast(Any, client.ping())
+    result = await resolve_redis_result(client.ping())
     return bool(result)
 
 

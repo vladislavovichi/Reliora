@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
-from typing import cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,7 +129,7 @@ class SqlAlchemyTicketEventRepository:
             .limit(1)
         )
         result = await self.session.execute(statement)
-        return cast(object | None, result.scalar_one_or_none()) is not None
+        return result.scalar_one_or_none() is not None
 
     async def list_for_ticket(self, *, ticket_id: int) -> tuple[TicketEventDetails, ...]:
         statement = (
@@ -142,9 +140,9 @@ class SqlAlchemyTicketEventRepository:
         result = await self.session.execute(statement)
         return tuple(
             TicketEventDetails(
-                event_type=cast(TicketEventType, row[0]),
-                payload_json=cast(dict[str, object] | None, row[1]),
-                created_at=cast(datetime, row[2]),
+                event_type=event_type,
+                payload_json=payload_json,
+                created_at=created_at,
             )
-            for row in result.all()
+            for event_type, payload_json, created_at in result.all()
         )

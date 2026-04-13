@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 from redis.asyncio import Redis
 
 from infrastructure.redis.contracts import TicketStreamConsumer, TicketStreamPublisher
@@ -27,7 +25,7 @@ class RedisTicketStreamPublisher(TicketStreamPublisher):
                 "subject": subject,
             },
         )
-        return cast(str, message_id)
+        return str(message_id)
 
 
 class RedisTicketStreamConsumer(TicketStreamConsumer):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import grpc
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -33,6 +34,7 @@ from bot.texts.operator import (
     build_analytics_export_ready_text,
     build_analytics_opened_text,
 )
+from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="operator_stats")
@@ -171,7 +173,15 @@ async def handle_stats_export_file(
                 format=export_format,
                 actor=build_request_actor(callback.from_user),
             )
-    except Exception:
+    except (
+        grpc.aio.AioRpcError,
+        InvalidTicketTransitionError,
+        PermissionError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        OSError,
+    ):
         logger.exception(
             "Analytics export failed operator_id=%s section=%s window=%s format=%s",
             callback.from_user.id,

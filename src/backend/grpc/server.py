@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
 import grpc
 
 from application.contracts.actors import RequestActor
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import AnalyticsWindow
 from application.use_cases.analytics.exports import AnalyticsExportFormat, AnalyticsSection
 from application.use_cases.tickets.exports import TicketReportFormat
@@ -46,6 +46,7 @@ from infrastructure.config.settings import BackendAuthConfig
 from infrastructure.runtime_context import bind_correlation_id, reset_correlation_id
 
 logger = logging.getLogger(__name__)
+_ServiceResultT = TypeVar("_ServiceResultT")
 
 
 @dataclass(slots=True)
@@ -90,6 +91,20 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
         finally:
             reset_correlation_id(correlation_token)
 
+    async def _invoke_helpdesk(
+        self,
+        context: grpc.aio.ServicerContext,
+        *,
+        method: str,
+        call: Callable[[HelpdeskService], Awaitable[_ServiceResultT]],
+    ) -> _ServiceResultT:
+        try:
+            async with self.helpdesk_service_factory() as helpdesk_service:
+                return await call(helpdesk_service)
+        except Exception as exc:
+            await _abort_for_exception(context, exc, method=method)
+        raise RuntimeError("unreachable")
+
     async def GetBackendStatus(
         self,
         request: helpdesk_pb2.Empty,
@@ -105,13 +120,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
         context: grpc.aio.ServicerContext,
     ) -> helpdesk_pb2.TicketSummary:
         async with self._rpc_scope(context, method="GetClientActiveTicket"):
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    ticket = await helpdesk_service.get_client_active_ticket(
-                        client_chat_id=request.client_chat_id
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="GetClientActiveTicket")
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="GetClientActiveTicket",
+                call=lambda helpdesk_service: helpdesk_service.get_client_active_ticket(
+                    client_chat_id=request.client_chat_id
+                ),
+            )
 
         if ticket is None:
             await context.abort(grpc.StatusCode.NOT_FOUND, "Активная заявка не найдена.")
@@ -125,11 +140,11 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
     ):
         del request
         async with self._rpc_scope(context, method="ListClientTicketCategories"):
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    categories = await helpdesk_service.list_client_ticket_categories()
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ListClientTicketCategories")
+            categories = await self._invoke_helpdesk(
+                context,
+                method="ListClientTicketCategories",
+                call=lambda helpdesk_service: helpdesk_service.list_client_ticket_categories(),
+            )
 
             for category in categories:
                 yield serialize_category(category)
@@ -140,13 +155,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
         context: grpc.aio.ServicerContext,
     ) -> helpdesk_pb2.TicketSummary:
         async with self._rpc_scope(context, method="CreateTicketFromClientMessage"):
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    result = await helpdesk_service.create_ticket_from_client_message(
-                        deserialize_client_ticket_message_command(request.command)
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="CreateTicketFromClientMessage")
+            result = await self._invoke_helpdesk(
+                context,
+                method="CreateTicketFromClientMessage",
+                call=lambda helpdesk_service: helpdesk_service.create_ticket_from_client_message(
+                    deserialize_client_ticket_message_command(request.command)
+                ),
+            )
 
             return serialize_ticket_summary(result)
 
@@ -156,13 +171,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
         context: grpc.aio.ServicerContext,
     ) -> helpdesk_pb2.TicketSummary:
         async with self._rpc_scope(context, method="CreateTicketFromClientIntake"):
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    result = await helpdesk_service.create_ticket_from_client_intake(
-                        deserialize_client_ticket_message_command(request.command)
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="CreateTicketFromClientIntake")
+            result = await self._invoke_helpdesk(
+                context,
+                method="CreateTicketFromClientIntake",
+                call=lambda helpdesk_service: helpdesk_service.create_ticket_from_client_intake(
+                    deserialize_client_ticket_message_command(request.command)
+                ),
+            )
 
             return serialize_ticket_summary(result)
 
@@ -176,14 +191,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="GetTicketDetails",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    details = await helpdesk_service.get_ticket_details(
-                        ticket_public_id=UUID(request.ticket_public_id),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="GetTicketDetails")
+            details = await self._invoke_helpdesk(
+                context,
+                method="GetTicketDetails",
+                call=lambda helpdesk_service: helpdesk_service.get_ticket_details(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    actor=request_context.actor,
+                ),
+            )
 
             if details is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -200,13 +215,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ListQueuedTickets",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    tickets = await helpdesk_service.list_queued_tickets(
-                        actor=request_context.actor
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ListQueuedTickets")
+            tickets = await self._invoke_helpdesk(
+                context,
+                method="ListQueuedTickets",
+                call=lambda helpdesk_service: helpdesk_service.list_queued_tickets(
+                    actor=request_context.actor
+                ),
+            )
 
             for ticket in tickets:
                 yield serialize_queued_ticket(ticket)
@@ -221,14 +236,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ListOperatorTickets",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    tickets = await helpdesk_service.list_operator_tickets(
-                        operator_telegram_user_id=request.operator_telegram_user_id,
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ListOperatorTickets")
+            tickets = await self._invoke_helpdesk(
+                context,
+                method="ListOperatorTickets",
+                call=lambda helpdesk_service: helpdesk_service.list_operator_tickets(
+                    operator_telegram_user_id=request.operator_telegram_user_id,
+                    actor=request_context.actor,
+                ),
+            )
 
             for ticket in tickets:
                 yield serialize_operator_ticket(ticket)
@@ -243,13 +258,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ListArchivedTickets",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    tickets = await helpdesk_service.list_archived_tickets(
-                        actor=request_context.actor
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ListArchivedTickets")
+            tickets = await self._invoke_helpdesk(
+                context,
+                method="ListArchivedTickets",
+                call=lambda helpdesk_service: helpdesk_service.list_archived_tickets(
+                    actor=request_context.actor
+                ),
+            )
 
             for ticket in tickets:
                 yield serialize_archived_ticket(ticket)
@@ -264,14 +279,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="AssignNextQueuedTicket",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    ticket = await helpdesk_service.assign_next_ticket_to_operator(
-                        deserialize_assign_next_command(request.command),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="AssignNextQueuedTicket")
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="AssignNextQueuedTicket",
+                call=lambda helpdesk_service: helpdesk_service.assign_next_ticket_to_operator(
+                    deserialize_assign_next_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
 
             if ticket is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -288,14 +303,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="AssignTicketToOperator",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    ticket = await helpdesk_service.assign_ticket_to_operator(
-                        deserialize_ticket_assignment_command(request.command),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="AssignTicketToOperator")
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="AssignTicketToOperator",
+                call=lambda helpdesk_service: helpdesk_service.assign_ticket_to_operator(
+                    deserialize_ticket_assignment_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
 
             if ticket is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -312,14 +327,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="CloseTicket",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    ticket = await helpdesk_service.close_ticket(
-                        ticket_public_id=UUID(request.ticket_public_id),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="CloseTicket")
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="CloseTicket",
+                call=lambda helpdesk_service: helpdesk_service.close_ticket(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    actor=request_context.actor,
+                ),
+            )
 
             if ticket is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -336,14 +351,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="CloseTicketAsOperator",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    ticket = await helpdesk_service.close_ticket_as_operator(
-                        ticket_public_id=UUID(request.ticket_public_id),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="CloseTicketAsOperator")
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="CloseTicketAsOperator",
+                call=lambda helpdesk_service: helpdesk_service.close_ticket_as_operator(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    actor=request_context.actor,
+                ),
+            )
 
             if ticket is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -360,14 +375,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ReplyToTicketAsOperator",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    result = await helpdesk_service.reply_to_ticket_as_operator(
-                        deserialize_operator_reply_command(request.command),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ReplyToTicketAsOperator")
+            result = await self._invoke_helpdesk(
+                context,
+                method="ReplyToTicketAsOperator",
+                call=lambda helpdesk_service: helpdesk_service.reply_to_ticket_as_operator(
+                    deserialize_operator_reply_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
 
             if result is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -384,11 +399,13 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ListMacros",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    macros = await helpdesk_service.list_macros(actor=request_context.actor)
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ListMacros")
+            macros = await self._invoke_helpdesk(
+                context,
+                method="ListMacros",
+                call=lambda helpdesk_service: helpdesk_service.list_macros(
+                    actor=request_context.actor
+                ),
+            )
 
             for macro in macros:
                 yield serialize_macro(macro)
@@ -403,14 +420,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ApplyMacroToTicket",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    result = await helpdesk_service.apply_macro_to_ticket(
-                        deserialize_apply_macro_command(request.command),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ApplyMacroToTicket")
+            result = await self._invoke_helpdesk(
+                context,
+                method="ApplyMacroToTicket",
+                call=lambda helpdesk_service: helpdesk_service.apply_macro_to_ticket(
+                    deserialize_apply_macro_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
 
             if result is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -427,15 +444,15 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="GetTicketAssistSnapshot",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    snapshot = await helpdesk_service.get_ticket_ai_assist_snapshot(
-                        ticket_public_id=UUID(request.ticket_public_id),
-                        refresh_summary=request.refresh_summary,
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="GetTicketAssistSnapshot")
+            snapshot = await self._invoke_helpdesk(
+                context,
+                method="GetTicketAssistSnapshot",
+                call=lambda helpdesk_service: helpdesk_service.get_ticket_ai_assist_snapshot(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    refresh_summary=request.refresh_summary,
+                    actor=request_context.actor,
+                ),
+            )
 
             if snapshot is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -452,14 +469,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="PredictTicketCategory",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    prediction = await helpdesk_service.predict_ticket_category(
-                        deserialize_predict_ticket_category_command(request.command),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="PredictTicketCategory")
+            prediction = await self._invoke_helpdesk(
+                context,
+                method="PredictTicketCategory",
+                call=lambda helpdesk_service: helpdesk_service.predict_ticket_category(
+                    deserialize_predict_ticket_category_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
 
             return serialize_ticket_category_prediction(prediction)
 
@@ -473,15 +490,15 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ExportTicketReport",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    export = await helpdesk_service.export_ticket_report(
-                        ticket_public_id=UUID(request.ticket_public_id),
-                        format=TicketReportFormat(request.format),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ExportTicketReport")
+            export = await self._invoke_helpdesk(
+                context,
+                method="ExportTicketReport",
+                call=lambda helpdesk_service: helpdesk_service.export_ticket_report(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    format=TicketReportFormat(request.format),
+                    actor=request_context.actor,
+                ),
+            )
 
             if export is None:
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
@@ -498,14 +515,14 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="GetAnalyticsSnapshot",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    snapshot = await helpdesk_service.get_analytics_snapshot(
-                        window=AnalyticsWindow(request.window),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="GetAnalyticsSnapshot")
+            snapshot = await self._invoke_helpdesk(
+                context,
+                method="GetAnalyticsSnapshot",
+                call=lambda helpdesk_service: helpdesk_service.get_analytics_snapshot(
+                    window=AnalyticsWindow(request.window),
+                    actor=request_context.actor,
+                ),
+            )
 
             return serialize_analytics_snapshot(snapshot)
 
@@ -519,16 +536,16 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             method="ExportAnalyticsSnapshot",
             fallback_actor=_request_actor(request),
         ) as request_context:
-            try:
-                async with self.helpdesk_service_factory() as helpdesk_service:
-                    export = await helpdesk_service.export_analytics_snapshot(
-                        window=AnalyticsWindow(request.window),
-                        section=AnalyticsSection(request.section),
-                        format=AnalyticsExportFormat(request.format),
-                        actor=request_context.actor,
-                    )
-            except Exception as exc:
-                await _abort_for_exception(context, exc, method="ExportAnalyticsSnapshot")
+            export = await self._invoke_helpdesk(
+                context,
+                method="ExportAnalyticsSnapshot",
+                call=lambda helpdesk_service: helpdesk_service.export_analytics_snapshot(
+                    window=AnalyticsWindow(request.window),
+                    section=AnalyticsSection(request.section),
+                    format=AnalyticsExportFormat(request.format),
+                    actor=request_context.actor,
+                ),
+            )
 
             return serialize_analytics_export(export)
 

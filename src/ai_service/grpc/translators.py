@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import cast
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
@@ -32,7 +31,7 @@ def serialize_timestamp(value: datetime) -> Timestamp:
 
 
 def deserialize_timestamp(value: Timestamp) -> datetime:
-    return cast(datetime, value.ToDatetime(tzinfo=UTC))
+    return datetime.fromtimestamp(value.ToMilliseconds() / 1000, tz=UTC)
 
 
 def serialize_attachment(

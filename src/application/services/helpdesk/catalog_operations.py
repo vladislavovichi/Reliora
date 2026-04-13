@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
 from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
@@ -20,7 +19,7 @@ from application.use_cases.tickets.summaries import (
 )
 
 
-class HelpdeskCatalogOperations:
+class HelpdeskCatalogOperations(HelpdeskSLASync):
     _components: HelpdeskComponents
     _audit: AuditTrail
     _require_permission_if_actor: Callable[..., Awaitable[None]]
@@ -251,9 +250,7 @@ class HelpdeskCatalogOperations:
         )
         result = await self._components.catalog.apply_macro(command)
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(
-                ticket_public_id=result.ticket.public_id
-            )
+            await self._sync_sla_deadline(ticket_public_id=result.ticket.public_id)
             await self._audit.write(
                 action="ticket.macro.apply",
                 entity_type="ticket",
@@ -307,9 +304,7 @@ class HelpdeskCatalogOperations:
             tag_name=tag_name,
         )
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(
-                ticket_public_id=result.ticket.public_id
-            )
+            await self._sync_sla_deadline(ticket_public_id=result.ticket.public_id)
             await self._audit.write(
                 action="ticket.tag.add",
                 entity_type="ticket",
@@ -336,9 +331,7 @@ class HelpdeskCatalogOperations:
             tag_name=tag_name,
         )
         if result is not None:
-            await cast(HelpdeskSLASync, self)._sync_sla_deadline(
-                ticket_public_id=result.ticket.public_id
-            )
+            await self._sync_sla_deadline(ticket_public_id=result.ticket.public_id)
             await self._audit.write(
                 action="ticket.tag.remove",
                 entity_type="ticket",
