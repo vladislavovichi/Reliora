@@ -277,10 +277,20 @@ def build_handler_class(
                 self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
             except TelegramMiniAppAuthError as exc:
                 logger.warning(
-                    "Mini App auth failed method=%s path=%s code=%s",
+                    (
+                        "Mini App auth failed method=%s path=%s code=%s source=%s "
+                        "client_source=%s telegram_webapp=%s telegram_user=%s "
+                        "attempted_sources=%s diagnostics=%s"
+                    ),
                     method,
                     path,
                     exc.code,
+                    getattr(self, "_request_launch_source", "<unresolved>"),
+                    getattr(self, "_request_client_source", "<unknown>"),
+                    getattr(self, "_request_telegram_webapp", "<unknown>"),
+                    getattr(self, "_request_telegram_user", "<unknown>"),
+                    getattr(self, "_request_attempted_sources", "<none>"),
+                    getattr(self, "_request_launch_diagnostics", "<none>"),
                 )
                 self._write_json(
                     HTTPStatus.UNAUTHORIZED,
@@ -342,21 +352,45 @@ def build_handler_class(
 
         def _resolve_launch(self) -> ResolvedMiniAppLaunch:
             launch = resolve_mini_app_launch(path=self.path, headers=self.headers)
+            self._request_launch_source = launch.source
+            self._request_client_source = launch.client_source or "<unknown>"
+            self._request_telegram_webapp = _format_presence(launch.is_telegram_webapp)
+            self._request_telegram_user = _format_presence(launch.has_telegram_user)
+            self._request_attempted_sources = ",".join(launch.attempted_sources) or "<none>"
+            self._request_launch_diagnostics = ",".join(launch.diagnostics) or "<none>"
             if launch.has_init_data:
                 logger.debug(
-                    "Mini App launch resolved source=%s client_source=%s path=%s diagnostics=%s",
+                    (
+                        "Mini App launch resolved source=%s client_source=%s path=%s "
+                        "telegram_webapp=%s telegram_user=%s platform=%s version=%s "
+                        "attempted_sources=%s diagnostics=%s"
+                    ),
                     launch.source,
                     launch.client_source or "<unknown>",
                     urlparse(self.path).path,
+                    _format_presence(launch.is_telegram_webapp),
+                    _format_presence(launch.has_telegram_user),
+                    launch.client_platform or "<unknown>",
+                    launch.client_version or "<unknown>",
+                    ",".join(launch.attempted_sources) or "<none>",
                     ",".join(launch.diagnostics) or "<none>",
                 )
                 return launch
 
             logger.warning(
-                "Mini App launch missing source=%s client_source=%s path=%s diagnostics=%s",
+                (
+                    "Mini App launch missing source=%s client_source=%s path=%s "
+                    "telegram_webapp=%s telegram_user=%s platform=%s version=%s "
+                    "attempted_sources=%s diagnostics=%s"
+                ),
                 launch.source,
                 launch.client_source or "<unknown>",
                 urlparse(self.path).path,
+                _format_presence(launch.is_telegram_webapp),
+                _format_presence(launch.has_telegram_user),
+                launch.client_platform or "<unknown>",
+                launch.client_version or "<unknown>",
+                ",".join(launch.attempted_sources) or "<none>",
                 ",".join(launch.diagnostics) or "<none>",
             )
             return launch
@@ -455,3 +489,11 @@ def _require_int(payload: dict[str, Any], key: str) -> int:
     if not isinstance(value, int):
         raise ValueError(f"Поле {key} должно быть числом.")
     return value
+
+
+def _format_presence(value: bool | None) -> str:
+    if value is True:
+        return "present"
+    if value is False:
+        return "missing"
+    return "unknown"

@@ -11,6 +11,11 @@ class ResolvedMiniAppLaunch:
     source: str
     client_source: str | None
     diagnostics: tuple[str, ...]
+    is_telegram_webapp: bool | None
+    has_telegram_user: bool | None
+    attempted_sources: tuple[str, ...]
+    client_platform: str | None
+    client_version: str | None
 
     @property
     def has_init_data(self) -> bool:
@@ -22,6 +27,13 @@ def resolve_mini_app_launch(*, path: str, headers: Mapping[str, str]) -> Resolve
     parsed = urlparse(path)
     query = parse_qs(parsed.query, keep_blank_values=True)
     client_source = _normalize_header_value(headers.get("X-Mini-App-Launch-Source"))
+    client_diagnostics = _split_csv_header(headers.get("X-Mini-App-Client-Diagnostics"))
+    attempted_sources = _split_csv_header(headers.get("X-Mini-App-Attempted-Sources"))
+    is_telegram_webapp = _parse_presence_header(headers.get("X-Mini-App-Telegram-WebApp"))
+    has_telegram_user = _parse_presence_header(headers.get("X-Mini-App-Telegram-User"))
+    client_platform = _normalize_header_value(headers.get("X-Mini-App-Telegram-Platform")) or None
+    client_version = _normalize_header_value(headers.get("X-Mini-App-Telegram-Version")) or None
+    diagnostics.extend(f"client:{item}" for item in client_diagnostics)
 
     header_init_data = _normalize_header_value(headers.get("X-Telegram-Init-Data"))
     if header_init_data:
@@ -31,6 +43,11 @@ def resolve_mini_app_launch(*, path: str, headers: Mapping[str, str]) -> Resolve
             source="header:x-telegram-init-data",
             client_source=client_source,
             diagnostics=tuple(diagnostics),
+            is_telegram_webapp=is_telegram_webapp,
+            has_telegram_user=has_telegram_user,
+            attempted_sources=attempted_sources,
+            client_platform=client_platform,
+            client_version=client_version,
         )
     if "X-Telegram-Init-Data" in headers:
         diagnostics.append("x-telegram-init-data-header-empty")
@@ -45,6 +62,11 @@ def resolve_mini_app_launch(*, path: str, headers: Mapping[str, str]) -> Resolve
                 source="header:authorization-tma",
                 client_source=client_source,
                 diagnostics=tuple(diagnostics),
+                is_telegram_webapp=is_telegram_webapp,
+                has_telegram_user=has_telegram_user,
+                attempted_sources=attempted_sources,
+                client_platform=client_platform,
+                client_version=client_version,
             )
         diagnostics.append("authorization-tma-empty")
 
@@ -57,6 +79,11 @@ def resolve_mini_app_launch(*, path: str, headers: Mapping[str, str]) -> Resolve
                 source=f"query:{key}",
                 client_source=client_source,
                 diagnostics=tuple(diagnostics),
+                is_telegram_webapp=is_telegram_webapp,
+                has_telegram_user=has_telegram_user,
+                attempted_sources=attempted_sources,
+                client_platform=client_platform,
+                client_version=client_version,
             )
         if key in query:
             diagnostics.append(f"query:{key}:empty")
@@ -70,6 +97,11 @@ def resolve_mini_app_launch(*, path: str, headers: Mapping[str, str]) -> Resolve
         source="missing",
         client_source=client_source,
         diagnostics=tuple(diagnostics),
+        is_telegram_webapp=is_telegram_webapp,
+        has_telegram_user=has_telegram_user,
+        attempted_sources=attempted_sources,
+        client_platform=client_platform,
+        client_version=client_version,
     )
 
 
@@ -97,3 +129,19 @@ def _decode_query_value(value: str) -> str:
             break
         normalized = decoded
     return normalized
+
+
+def _split_csv_header(value: str | None) -> tuple[str, ...]:
+    normalized = _normalize_header_value(value)
+    if not normalized:
+        return ()
+    return tuple(item for item in (part.strip() for part in normalized.split(",")) if item)
+
+
+def _parse_presence_header(value: str | None) -> bool | None:
+    normalized = _normalize_header_value(value).lower()
+    if normalized == "present":
+        return True
+    if normalized == "missing":
+        return False
+    return None

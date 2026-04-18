@@ -60,4 +60,4 @@ redis_data/
 .benchmarks/
 
 # Assets
-assets/
+/assets/
