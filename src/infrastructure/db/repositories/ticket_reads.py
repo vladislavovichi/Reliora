@@ -379,6 +379,8 @@ class SqlAlchemyTicketReadRepository:
                 created_at,
             ) in result.all()
         )
+
+
 def _first_client_message_scalar[T](
     column: TypedColumnsClauseRole[T] | SQLCoreOperations[T],
 ) -> ScalarSelect[T]:
