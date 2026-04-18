@@ -10,9 +10,6 @@ from sqlalchemy.sql.roles import TypedColumnsClauseRole
 from sqlalchemy.sql.selectable import ScalarSelect
 
 from domain.entities.ticket import (
-    Ticket as TicketEntity,
-)
-from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketDetails,
     TicketHistoryEntry,
@@ -41,11 +38,11 @@ from infrastructure.db.repositories.ticket_message_mapping import (
 class SqlAlchemyTicketReadRepository:
     session: AsyncSession
 
-    async def get_by_public_id(self, public_id: UUID) -> TicketEntity | None:
+    async def get_by_public_id(self, public_id: UUID) -> TicketModel | None:
         result = await self.session.execute(
             select(TicketModel).where(TicketModel.public_id == public_id)
         )
-        return _as_ticket_entity(result.scalar_one_or_none())
+        return result.scalar_one_or_none()
 
     async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
         ticket = await self.get_by_public_id(public_id)
@@ -97,7 +94,7 @@ class SqlAlchemyTicketReadRepository:
             internal_notes=internal_notes,
         )
 
-    async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketEntity | None:
+    async def get_active_by_client_chat_id(self, client_chat_id: int) -> TicketModel | None:
         statement = (
             select(TicketModel)
             .where(TicketModel.client_chat_id == client_chat_id)
@@ -106,26 +103,26 @@ class SqlAlchemyTicketReadRepository:
             .limit(1)
         )
         result = await self.session.execute(statement)
-        return _as_ticket_entity(result.scalar_one_or_none())
+        return result.scalar_one_or_none()
 
     async def get_next_queued_ticket(
         self,
         *,
         prioritize_priority: bool = False,
-    ) -> TicketEntity | None:
+    ) -> TicketModel | None:
         statement = apply_queue_ordering(
             select(TicketModel).where(TicketModel.status == TicketStatus.QUEUED).limit(1),
             prioritize_priority=prioritize_priority,
         )
         result = await self.session.execute(statement)
-        return _as_ticket_entity(result.scalar_one_or_none())
+        return result.scalar_one_or_none()
 
     async def list_queued_tickets(
         self,
         *,
         limit: int | None = None,
         prioritize_priority: bool = False,
-    ) -> Sequence[TicketEntity]:
+    ) -> tuple[TicketModel, ...]:
         statement = apply_queue_ordering(
             select(TicketModel).where(TicketModel.status == TicketStatus.QUEUED),
             prioritize_priority=prioritize_priority,
@@ -134,9 +131,9 @@ class SqlAlchemyTicketReadRepository:
             statement = statement.limit(limit)
 
         result = await self.session.execute(statement)
-        return _as_ticket_entities(result.scalars().all())
+        return tuple(result.scalars().all())
 
-    async def list_open_tickets(self, *, limit: int | None = None) -> Sequence[TicketEntity]:
+    async def list_open_tickets(self, *, limit: int | None = None) -> tuple[TicketModel, ...]:
         statement = (
             select(TicketModel)
             .where(TicketModel.status != TicketStatus.CLOSED)
@@ -146,14 +143,14 @@ class SqlAlchemyTicketReadRepository:
             statement = statement.limit(limit)
 
         result = await self.session.execute(statement)
-        return _as_ticket_entities(result.scalars().all())
+        return tuple(result.scalars().all())
 
     async def list_open_tickets_for_operator(
         self,
         *,
         operator_telegram_user_id: int,
         limit: int | None = None,
-    ) -> Sequence[TicketEntity]:
+    ) -> tuple[TicketModel, ...]:
         statement = (
             select(TicketModel)
             .join(Operator, TicketModel.assigned_operator_id == Operator.id)
@@ -165,7 +162,7 @@ class SqlAlchemyTicketReadRepository:
             statement = statement.limit(limit)
 
         result = await self.session.execute(statement)
-        return _as_ticket_entities(result.scalars().all())
+        return tuple(result.scalars().all())
 
     async def list_closed_tickets(
         self,
@@ -382,16 +379,6 @@ class SqlAlchemyTicketReadRepository:
                 created_at,
             ) in result.all()
         )
-
-
-def _as_ticket_entity(ticket: TicketModel | None) -> TicketEntity | None:
-    return ticket
-
-
-def _as_ticket_entities(tickets: Sequence[TicketModel]) -> tuple[TicketEntity, ...]:
-    return tuple(tickets)
-
-
 def _first_client_message_scalar[T](
     column: TypedColumnsClauseRole[T] | SQLCoreOperations[T],
 ) -> ScalarSelect[T]:

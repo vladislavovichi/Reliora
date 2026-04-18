@@ -22,7 +22,9 @@ from bot.keyboards.inline.operator_actions import (
 )
 from bot.texts.client import (
     build_ticket_created_text,
+    build_ticket_created_with_missing_follow_up_text,
     build_ticket_message_added_text,
+    build_ticket_message_added_with_missing_follow_up_text,
     build_ticket_message_recorded_text,
 )
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
@@ -200,13 +202,37 @@ async def process_client_intake_submission(
 ) -> None:
     del bot, operator_active_ticket_store
 
-    async with helpdesk_backend_client_factory() as helpdesk_backend:
-        ticket = await helpdesk_backend.create_ticket_from_client_intake(initial_command)
-        if follow_up_command is not None:
-            await helpdesk_backend.create_ticket_from_client_message(follow_up_command)
-        ticket_details = await helpdesk_backend.get_ticket_details(
-            ticket_public_id=ticket.public_id,
-        )
+    follow_up_recorded = follow_up_command is None
+    try:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            ticket = await helpdesk_backend.create_ticket_from_client_intake(initial_command)
+            if follow_up_command is not None:
+                try:
+                    await helpdesk_backend.create_ticket_from_client_message(follow_up_command)
+                    follow_up_recorded = True
+                except InvalidTicketTransitionError as exc:
+                    logger.warning(
+                        "Client intake follow-up rejected ticket=%s client_chat_id=%s error=%s",
+                        ticket.public_number,
+                        initial_command.client_chat_id,
+                        exc,
+                    )
+                except RuntimeError as exc:
+                    logger.warning(
+                        "Client intake follow-up failed ticket=%s client_chat_id=%s error=%s",
+                        ticket.public_number,
+                        initial_command.client_chat_id,
+                        exc,
+                    )
+            ticket_details = await helpdesk_backend.get_ticket_details(
+                ticket_public_id=ticket.public_id,
+            )
+    except InvalidTicketTransitionError as exc:
+        await response_message.answer(str(exc))
+        return
+    except RuntimeError:
+        await response_message.answer(SERVICE_UNAVAILABLE_TEXT)
+        return
 
     if ticket_details is None:
         await response_message.answer(SERVICE_UNAVAILABLE_TEXT)
@@ -221,12 +247,13 @@ async def process_client_intake_submission(
     logger.info(
         (
             "Client intake submission processed "
-            "client_chat_id=%s ticket=%s created=%s has_follow_up=%s"
+            "client_chat_id=%s ticket=%s created=%s has_follow_up=%s follow_up_recorded=%s"
         ),
         initial_command.client_chat_id,
         ticket.public_number,
         ticket.created,
         follow_up_command is not None,
+        follow_up_recorded,
     )
 
     if ticket.created:
@@ -236,15 +263,26 @@ async def process_client_intake_submission(
             subject=ticket_details.subject,
         )
         await response_message.answer(
-            build_ticket_created_text(ticket.public_number),
+            (
+                build_ticket_created_text(ticket.public_number)
+                if follow_up_recorded
+                else build_ticket_created_with_missing_follow_up_text(ticket.public_number)
+            ),
             reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
         )
         return
 
     await response_message.answer(
-        build_ticket_message_added_text(
-            ticket.public_number,
-            operator_connected=ticket_details.assigned_operator_telegram_user_id is not None,
+        (
+            build_ticket_message_added_text(
+                ticket.public_number,
+                operator_connected=ticket_details.assigned_operator_telegram_user_id is not None,
+            )
+            if follow_up_recorded
+            else build_ticket_message_added_with_missing_follow_up_text(
+                ticket.public_number,
+                operator_connected=ticket_details.assigned_operator_telegram_user_id is not None,
+            )
         ),
         reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
     )

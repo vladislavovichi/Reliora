@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from infrastructure.health import EXPECTED_HEALTH_FAILURES
+
 AsyncDependencyCheck = Callable[[], Awaitable[bool]]
 
 
@@ -130,7 +132,7 @@ class DiagnosticsService:
     ) -> DiagnosticsCheck:
         try:
             is_ready = await check()
-        except Exception as exc:
+        except EXPECTED_HEALTH_FAILURES as exc:
             return DiagnosticsCheck(
                 name=name,
                 category=category,

@@ -6,7 +6,12 @@ from collections.abc import Awaitable, Callable
 from ai_service.grpc.client import ping_ai_service
 from infrastructure.ai.provider import build_ai_provider
 from infrastructure.config.settings import get_settings
-from infrastructure.health import ProbeCheck, ProbeReport, ProbeStatus
+from infrastructure.health import (
+    EXPECTED_HEALTH_FAILURES,
+    ProbeCheck,
+    ProbeReport,
+    ProbeStatus,
+)
 from infrastructure.logging import configure_logging
 
 
@@ -72,7 +77,7 @@ async def _run_probe(
 ) -> ProbeCheck:
     try:
         ok = await probe()
-    except Exception as exc:
+    except EXPECTED_HEALTH_FAILURES as exc:
         return ProbeCheck(
             name=name,
             category=category,

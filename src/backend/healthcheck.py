@@ -7,7 +7,12 @@ from ai_service.grpc.client import ping_ai_service
 from backend.grpc.client import ping_helpdesk_backend
 from infrastructure.config.settings import get_settings
 from infrastructure.db.session import build_engine, dispose_engine, ping_database_engine
-from infrastructure.health import ProbeCheck, ProbeReport, ProbeStatus
+from infrastructure.health import (
+    EXPECTED_HEALTH_FAILURES,
+    ProbeCheck,
+    ProbeReport,
+    ProbeStatus,
+)
 from infrastructure.logging import configure_logging
 from infrastructure.redis.client import build_redis_client, close_redis_client, ping_redis_client
 
@@ -101,7 +106,7 @@ async def _run_probe(
 ) -> ProbeCheck:
     try:
         ok = await probe()
-    except Exception as exc:
+    except EXPECTED_HEALTH_FAILURES as exc:
         return ProbeCheck(
             name=name,
             category=category,

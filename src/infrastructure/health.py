@@ -3,6 +3,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+import grpc
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
+
+EXPECTED_HEALTH_FAILURES = (
+    TimeoutError,
+    OSError,
+    RuntimeError,
+    PermissionError,
+    ValueError,
+    SQLAlchemyError,
+    RedisError,
+    grpc.RpcError,
+)
+
 
 class ProbeStatus(StrEnum):
     OK = "OK"

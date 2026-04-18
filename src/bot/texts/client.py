@@ -7,12 +7,32 @@ def build_ticket_created_text(public_number: str) -> str:
     )
 
 
+def build_ticket_created_with_missing_follow_up_text(public_number: str) -> str:
+    return (
+        f"Заявка {public_number} создана. Первое вложение сохранено. "
+        "Текстовое уточнение не добавилось, "
+        "поэтому при необходимости отправьте его следующим сообщением."
+    )
+
+
 def build_ticket_message_added_text(public_number: str, *, operator_connected: bool) -> str:
     if operator_connected:
         return f"Сообщение по заявке {public_number} передано оператору."
     return (
         f"Сообщение добавлено в заявку {public_number}. "
         "Как только оператор подключится, продолжим здесь."
+    )
+
+
+def build_ticket_message_added_with_missing_follow_up_text(
+    public_number: str,
+    *,
+    operator_connected: bool,
+) -> str:
+    return (
+        f"{build_ticket_message_added_text(public_number, operator_connected=operator_connected)} "
+        "Текстовое уточнение не сохранилось, "
+        "поэтому при необходимости отправьте его следующим сообщением."
     )
 
 
