@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
@@ -39,6 +40,8 @@ from domain.enums.tickets import (
     TicketSignalConfidence,
 )
 from domain.tickets import InvalidTicketTransitionError, ensure_operator_replyable
+
+logger = logging.getLogger(__name__)
 
 
 class AddMessageToTicketUseCase:
@@ -237,7 +240,11 @@ class AddMessageToTicketUseCase:
                         ),
                     )
                 )
-        except Exception:
+        except (PermissionError, RuntimeError, ValueError) as exc:
+            logger.warning(
+                "Ticket sentiment analysis skipped due to ai-service failure: %s",
+                exc,
+            )
             return None
 
     def _apply_ticket_sentiment(

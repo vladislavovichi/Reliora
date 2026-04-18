@@ -92,6 +92,7 @@ class TicketHistoryEntry:
     category_code: str | None = None
     category_title: str | None = None
     first_client_message_text: str | None = None
+    first_client_message_attachment: TicketAttachmentDetails | None = None
 
 
 @dataclass(slots=True)

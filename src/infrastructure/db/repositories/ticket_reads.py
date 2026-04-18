@@ -16,7 +16,7 @@ from domain.entities.ticket import (
     TicketInternalNoteDetails,
     TicketMessageDetails,
 )
-from domain.enums.tickets import TicketAttachmentKind, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 from infrastructure.db.models.catalog import Tag, TicketCategory
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import (
@@ -28,6 +28,11 @@ from infrastructure.db.models.ticket import (
     TicketTag,
 )
 from infrastructure.db.repositories.base import apply_queue_ordering
+from infrastructure.db.repositories.ticket_message_mapping import (
+    build_attachment_details,
+    build_attachment_from_message,
+    build_ticket_message_details,
+)
 
 
 class SqlAlchemyTicketReadRepository:
@@ -165,14 +170,22 @@ class SqlAlchemyTicketReadRepository:
         limit: int | None = None,
         offset: int = 0,
     ) -> Sequence[TicketHistoryEntry]:
-        first_client_message_text = (
-            select(TicketMessage.text)
-            .where(TicketMessage.ticket_id == TicketModel.id)
-            .where(TicketMessage.sender_type == TicketMessageSenderType.CLIENT)
-            .where(TicketMessage.text.is_not(None))
-            .order_by(TicketMessage.created_at.asc(), TicketMessage.id.asc())
-            .limit(1)
-            .scalar_subquery()
+        first_client_message_text = _first_client_message_scalar(TicketMessage.text)
+        first_client_attachment_kind = _first_client_message_scalar(TicketMessage.attachment_kind)
+        first_client_attachment_file_id = _first_client_message_scalar(
+            TicketMessage.attachment_file_id
+        )
+        first_client_attachment_file_unique_id = _first_client_message_scalar(
+            TicketMessage.attachment_file_unique_id
+        )
+        first_client_attachment_filename = _first_client_message_scalar(
+            TicketMessage.attachment_filename
+        )
+        first_client_attachment_mime_type = _first_client_message_scalar(
+            TicketMessage.attachment_mime_type
+        )
+        first_client_attachment_storage_path = _first_client_message_scalar(
+            TicketMessage.attachment_storage_path
         )
         statement = (
             select(
@@ -185,6 +198,14 @@ class SqlAlchemyTicketReadRepository:
                 TicketCategory.code,
                 TicketCategory.title,
                 first_client_message_text.label("first_client_message_text"),
+                first_client_attachment_kind.label("first_client_attachment_kind"),
+                first_client_attachment_file_id.label("first_client_attachment_file_id"),
+                first_client_attachment_file_unique_id.label(
+                    "first_client_attachment_file_unique_id"
+                ),
+                first_client_attachment_filename.label("first_client_attachment_filename"),
+                first_client_attachment_mime_type.label("first_client_attachment_mime_type"),
+                first_client_attachment_storage_path.label("first_client_attachment_storage_path"),
             )
             .join(TicketCategory, TicketModel.category_id == TicketCategory.id, isouter=True)
             .where(TicketModel.status == TicketStatus.CLOSED)
@@ -210,6 +231,14 @@ class SqlAlchemyTicketReadRepository:
                 category_code=category_code,
                 category_title=category_title,
                 first_client_message_text=first_client_message_text,
+                first_client_message_attachment=build_attachment_details(
+                    kind=first_client_attachment_kind,
+                    file_id=first_client_attachment_file_id,
+                    file_unique_id=first_client_attachment_file_unique_id,
+                    filename=first_client_attachment_filename,
+                    mime_type=first_client_attachment_mime_type,
+                    storage_path=first_client_attachment_storage_path,
+                ),
             )
             for (
                 public_id,
@@ -221,6 +250,12 @@ class SqlAlchemyTicketReadRepository:
                 category_code,
                 category_title,
                 first_client_message_text,
+                first_client_attachment_kind,
+                first_client_attachment_file_id,
+                first_client_attachment_file_unique_id,
+                first_client_attachment_filename,
+                first_client_attachment_mime_type,
+                first_client_attachment_storage_path,
             ) in result.all()
         )
 
@@ -255,51 +290,19 @@ class SqlAlchemyTicketReadRepository:
         TicketAttachmentDetails | None,
     ]:
         statement = (
-            select(
-                TicketMessage.text,
-                TicketMessage.sender_type,
-                TicketMessage.attachment_kind,
-                TicketMessage.attachment_file_id,
-                TicketMessage.attachment_file_unique_id,
-                TicketMessage.attachment_filename,
-                TicketMessage.attachment_mime_type,
-                TicketMessage.attachment_storage_path,
-            )
+            select(TicketMessage)
             .where(TicketMessage.ticket_id == ticket_id)
             .order_by(desc(TicketMessage.created_at), desc(TicketMessage.id))
             .limit(1)
         )
         result = await self.session.execute(statement)
-        row = result.first()
-        if row is None:
+        message = result.scalar_one_or_none()
+        if message is None:
             return None, None, None
-        values = tuple(row)
-        if len(values) == 2:
-            last_message_text, last_message_sender_type = values
-            return last_message_text, last_message_sender_type, None
-        if len(values) != 8:
-            raise RuntimeError("Некорректная форма последнего сообщения заявки.")
-        (
-            last_message_text,
-            last_message_sender_type,
-            attachment_kind,
-            attachment_file_id,
-            attachment_file_unique_id,
-            attachment_filename,
-            attachment_mime_type,
-            attachment_storage_path,
-        ) = values
         return (
-            last_message_text,
-            last_message_sender_type,
-            _build_attachment_details(
-                kind=attachment_kind,
-                file_id=attachment_file_id,
-                file_unique_id=attachment_file_unique_id,
-                filename=attachment_filename,
-                mime_type=attachment_mime_type,
-                storage_path=attachment_storage_path,
-            ),
+            message.text,
+            message.sender_type,
+            build_attachment_from_message(message),
         )
 
     async def _get_category_details(self, category_id: int | None) -> tuple[str | None, str | None]:
@@ -329,120 +332,19 @@ class SqlAlchemyTicketReadRepository:
 
     async def _list_ticket_messages(self, ticket_id: int) -> tuple[TicketMessageDetails, ...]:
         statement = (
-            select(
-                TicketMessage.telegram_message_id,
-                TicketMessage.sender_type,
-                TicketMessage.sender_operator_id,
-                Operator.display_name,
-                TicketMessage.text,
-                TicketMessage.attachment_kind,
-                TicketMessage.attachment_file_id,
-                TicketMessage.attachment_file_unique_id,
-                TicketMessage.attachment_filename,
-                TicketMessage.attachment_mime_type,
-                TicketMessage.attachment_storage_path,
-                TicketMessage.sentiment,
-                TicketMessage.sentiment_confidence,
-                TicketMessage.sentiment_reason,
-                TicketMessage.duplicate_count,
-                TicketMessage.last_duplicate_at,
-                TicketMessage.created_at,
-            )
+            select(TicketMessage, Operator.display_name)
             .join(Operator, TicketMessage.sender_operator_id == Operator.id, isouter=True)
             .where(TicketMessage.ticket_id == ticket_id)
             .order_by(TicketMessage.created_at.asc(), TicketMessage.id.asc())
         )
         result = await self.session.execute(statement)
-        items: list[TicketMessageDetails] = []
-        for row in result.all():
-            values = tuple(row)
-            if len(values) == 6:
-                (
-                    telegram_message_id,
-                    sender_type,
-                    sender_operator_id,
-                    sender_operator_name,
-                    text,
-                    created_at,
-                ) = values
-                attachment_kind = None
-                attachment_file_id = None
-                attachment_file_unique_id = None
-                attachment_filename = None
-                attachment_mime_type = None
-                attachment_storage_path = None
-                sentiment = None
-                sentiment_confidence = None
-                sentiment_reason = None
-                duplicate_count = 0
-                last_duplicate_at = None
-            elif len(values) == 17:
-                (
-                    telegram_message_id,
-                    sender_type,
-                    sender_operator_id,
-                    sender_operator_name,
-                    text,
-                    attachment_kind,
-                    attachment_file_id,
-                    attachment_file_unique_id,
-                    attachment_filename,
-                    attachment_mime_type,
-                    attachment_storage_path,
-                    sentiment,
-                    sentiment_confidence,
-                    sentiment_reason,
-                    duplicate_count,
-                    last_duplicate_at,
-                    created_at,
-                ) = values
-            elif len(values) == 12:
-                (
-                    telegram_message_id,
-                    sender_type,
-                    sender_operator_id,
-                    sender_operator_name,
-                    text,
-                    attachment_kind,
-                    attachment_file_id,
-                    attachment_file_unique_id,
-                    attachment_filename,
-                    attachment_mime_type,
-                    attachment_storage_path,
-                    created_at,
-                ) = values
-                sentiment = None
-                sentiment_confidence = None
-                sentiment_reason = None
-                duplicate_count = 0
-                last_duplicate_at = None
-            else:
-                raise RuntimeError("Некорректная форма истории сообщений заявки.")
-
-            items.append(
-                TicketMessageDetails(
-                    telegram_message_id=telegram_message_id,
-                    sender_type=sender_type,
-                    sender_operator_id=sender_operator_id,
-                    sender_operator_name=sender_operator_name,
-                    text=text,
-                    attachment=_build_attachment_details(
-                        kind=attachment_kind,
-                        file_id=attachment_file_id,
-                        file_unique_id=attachment_file_unique_id,
-                        filename=attachment_filename,
-                        mime_type=attachment_mime_type,
-                        storage_path=attachment_storage_path,
-                    ),
-                    sentiment=sentiment,
-                    sentiment_confidence=sentiment_confidence,
-                    sentiment_reason=sentiment_reason,
-                    duplicate_count=duplicate_count,
-                    last_duplicate_at=last_duplicate_at,
-                    created_at=created_at,
-                )
+        return tuple(
+            build_ticket_message_details(
+                message,
+                sender_operator_name=sender_operator_name,
             )
-        return tuple(items)
+            for message, sender_operator_name in result.all()
+        )
 
     async def _list_ticket_internal_notes(
         self,
@@ -479,30 +381,20 @@ class SqlAlchemyTicketReadRepository:
         )
 
 
-def _build_attachment_details(
-    *,
-    kind: TicketAttachmentKind | None,
-    file_id: str | None,
-    file_unique_id: str | None,
-    filename: str | None,
-    mime_type: str | None,
-    storage_path: str | None,
-) -> TicketAttachmentDetails | None:
-    if kind is None or file_id is None:
-        return None
-    return TicketAttachmentDetails(
-        kind=kind,
-        telegram_file_id=file_id,
-        telegram_file_unique_id=file_unique_id,
-        filename=filename,
-        mime_type=mime_type,
-        storage_path=storage_path,
-    )
-
-
 def _as_ticket_entity(ticket: TicketModel | None) -> TicketEntity | None:
     return ticket
 
 
 def _as_ticket_entities(tickets: Sequence[TicketModel]) -> tuple[TicketEntity, ...]:
     return tuple(tickets)
+
+
+def _first_client_message_scalar(column: object) -> object:
+    return (
+        select(column)
+        .where(TicketMessage.ticket_id == TicketModel.id)
+        .where(TicketMessage.sender_type == TicketMessageSenderType.CLIENT)
+        .order_by(TicketMessage.created_at.asc(), TicketMessage.id.asc())
+        .limit(1)
+        .scalar_subquery()
+    )

@@ -39,8 +39,14 @@ from application.use_cases.tickets.summaries import (
     SLAAutoReassignmentTarget,
     TagSummary,
 )
-from domain.entities.ticket import TicketDetails, TicketHistoryEntry, TicketMessageDetails
+from domain.entities.ticket import (
+    TicketAttachmentDetails,
+    TicketDetails,
+    TicketHistoryEntry,
+    TicketMessageDetails,
+)
 from domain.enums.tickets import (
+    TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
@@ -1247,6 +1253,40 @@ async def test_create_ticket_from_first_client_message_creates_queues_and_logs_e
         TicketEventType.QUEUED,
         TicketEventType.CLIENT_MESSAGE_ADDED,
     ]
+
+
+async def test_create_ticket_from_first_media_message_builds_attachment_aware_subject() -> None:
+    public_id = uuid4()
+    created_ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.NEW)
+    ticket_repository = StubTicketRepository(created_ticket=created_ticket)
+    message_repository = build_message_repository_mock()
+    event_repository = build_event_repository_mock()
+    service = build_service(
+        ticket_repository=ticket_repository,
+        message_repository=message_repository,
+        event_repository=event_repository,
+    )
+
+    result = await service.create_ticket_from_client_message(
+        ClientTicketMessageCommand(
+            client_chat_id=555,
+            telegram_message_id=777,
+            text=None,
+            attachment=TicketAttachmentDetails(
+                kind=TicketAttachmentKind.PHOTO,
+                telegram_file_id="photo-1",
+                telegram_file_unique_id="photo-unique-1",
+                filename=None,
+                mime_type="image/jpeg",
+                storage_path="photo/photo-unique-1.jpg",
+            ),
+        )
+    )
+
+    assert result.public_id == public_id
+    assert ticket_repository.create_calls[0]["subject"] == "Фото"
+    assert message_repository.added_messages[0]["attachment"] is not None
+    assert message_repository.added_messages[0]["text"] is None
 
 
 async def test_follow_up_client_message_reuses_active_open_ticket() -> None:

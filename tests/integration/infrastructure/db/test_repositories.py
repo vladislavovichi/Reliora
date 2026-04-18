@@ -17,7 +17,7 @@ from domain.enums.tickets import (
 from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag, TicketCategory
 from infrastructure.db.models.feedback import TicketFeedback
 from infrastructure.db.models.operator import Operator
-from infrastructure.db.models.ticket import Ticket, TicketEvent, TicketTag
+from infrastructure.db.models.ticket import Ticket, TicketEvent, TicketMessage, TicketTag
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
     SqlAlchemySLAPolicyRepository,
@@ -500,30 +500,38 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
         category_id=9,
     )
     ticket.id = 1
+    latest_message = TicketMessage(
+        ticket_id=1,
+        telegram_message_id=13,
+        sender_type=TicketMessageSenderType.CLIENT,
+        text="Latest client message",
+    )
+    latest_message.created_at = datetime(2026, 4, 7, 9, 10, tzinfo=UTC)
+    first_message = TicketMessage(
+        ticket_id=1,
+        telegram_message_id=11,
+        sender_type=TicketMessageSenderType.CLIENT,
+        text="First client message",
+    )
+    first_message.created_at = datetime(2026, 4, 7, 9, 0, tzinfo=UTC)
+    operator_message = TicketMessage(
+        ticket_id=1,
+        telegram_message_id=12,
+        sender_type=TicketMessageSenderType.OPERATOR,
+        sender_operator_id=77,
+        text="Operator answer",
+    )
+    operator_message.created_at = datetime(2026, 4, 7, 9, 5, tzinfo=UTC)
     session = build_session(
         build_result(scalar=ticket),
         build_result(rows=[("Operator One", 1001, "operator_one")]),
         build_result(rows=[("access", "Доступ и вход")]),
-        build_result(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
+        build_result(scalar=latest_message),
         build_result(scalar_items=["billing", "vip"]),
         build_result(
             rows=[
-                (
-                    11,
-                    TicketMessageSenderType.CLIENT,
-                    None,
-                    None,
-                    "First client message",
-                    datetime(2026, 4, 7, 9, 0, tzinfo=UTC),
-                ),
-                (
-                    12,
-                    TicketMessageSenderType.OPERATOR,
-                    77,
-                    "Operator One",
-                    "Operator answer",
-                    datetime(2026, 4, 7, 9, 5, tzinfo=UTC),
-                ),
+                (first_message, None),
+                (operator_message, "Operator One"),
             ]
         ),
     )

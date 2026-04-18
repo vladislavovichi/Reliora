@@ -19,6 +19,7 @@ from domain.enums.tickets import (
     TicketSignalConfidence,
 )
 from infrastructure.db.models.ticket import TicketEvent, TicketInternalNote, TicketMessage
+from infrastructure.db.repositories.ticket_message_mapping import build_ticket_message_details
 from infrastructure.db.repositories.ticket_metrics import SqlAlchemyTicketMetricsRepository
 from infrastructure.db.repositories.ticket_reads import SqlAlchemyTicketReadRepository
 from infrastructure.db.repositories.ticket_writes import SqlAlchemyTicketWriteRepository
@@ -82,25 +83,7 @@ class SqlAlchemyTicketMessageRepository:
         from infrastructure.db.models.operator import Operator
 
         statement = (
-            select(
-                TicketMessage.telegram_message_id,
-                TicketMessage.sender_type,
-                TicketMessage.sender_operator_id,
-                Operator.display_name,
-                TicketMessage.text,
-                TicketMessage.attachment_kind,
-                TicketMessage.attachment_file_id,
-                TicketMessage.attachment_file_unique_id,
-                TicketMessage.attachment_filename,
-                TicketMessage.attachment_mime_type,
-                TicketMessage.attachment_storage_path,
-                TicketMessage.sentiment,
-                TicketMessage.sentiment_confidence,
-                TicketMessage.sentiment_reason,
-                TicketMessage.duplicate_count,
-                TicketMessage.last_duplicate_at,
-                TicketMessage.created_at,
-            )
+            select(TicketMessage, Operator.display_name)
             .join(Operator, TicketMessage.sender_operator_id == Operator.id, isouter=True)
             .where(TicketMessage.ticket_id == ticket_id)
             .order_by(desc(TicketMessage.created_at), desc(TicketMessage.id))
@@ -109,50 +92,11 @@ class SqlAlchemyTicketMessageRepository:
         result = await self.session.execute(statement)
         rows = list(reversed(result.all()))
         return tuple(
-            TicketMessageDetails(
-                telegram_message_id=telegram_message_id,
-                sender_type=sender_type,
-                sender_operator_id=sender_operator_id,
+            build_ticket_message_details(
+                message,
                 sender_operator_name=sender_operator_name,
-                text=text,
-                attachment=(
-                    TicketAttachmentDetails(
-                        kind=attachment_kind,
-                        telegram_file_id=attachment_file_id,
-                        telegram_file_unique_id=attachment_file_unique_id,
-                        filename=attachment_filename,
-                        mime_type=attachment_mime_type,
-                        storage_path=attachment_storage_path,
-                    )
-                    if attachment_kind is not None and attachment_file_id is not None
-                    else None
-                ),
-                sentiment=sentiment,
-                sentiment_confidence=sentiment_confidence,
-                sentiment_reason=sentiment_reason,
-                duplicate_count=duplicate_count,
-                last_duplicate_at=last_duplicate_at,
-                created_at=created_at,
             )
-            for (
-                telegram_message_id,
-                sender_type,
-                sender_operator_id,
-                sender_operator_name,
-                text,
-                attachment_kind,
-                attachment_file_id,
-                attachment_file_unique_id,
-                attachment_filename,
-                attachment_mime_type,
-                attachment_storage_path,
-                sentiment,
-                sentiment_confidence,
-                sentiment_reason,
-                duplicate_count,
-                last_duplicate_at,
-                created_at,
-            ) in rows
+            for message, sender_operator_name in rows
         )
 
     async def mark_duplicate(

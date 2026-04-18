@@ -6,6 +6,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
+from application.use_cases.tickets.message_content import build_ticket_mini_title
 from domain.contracts.repositories import OperatorRecord
 from domain.entities.ticket import (
     Ticket,
@@ -128,22 +129,15 @@ def build_historical_ticket_summary(ticket: TicketHistoryEntry) -> HistoricalTic
         status=ticket.status,
         created_at=ticket.created_at,
         closed_at=ticket.closed_at,
-        mini_title=_build_ticket_mini_title(
-            ticket.first_client_message_text,
+        mini_title=build_ticket_mini_title(
+            text=ticket.first_client_message_text,
+            attachment=ticket.first_client_message_attachment,
             fallback=ticket.subject,
         ),
         category_id=ticket.category_id,
         category_code=ticket.category_code,
         category_title=ticket.category_title,
     )
-
-
-def _build_ticket_mini_title(text: str | None, *, fallback: str) -> str:
-    normalized = " ".join((text or "").split())
-    if normalized:
-        return normalized
-    fallback_normalized = " ".join(fallback.split())
-    return fallback_normalized or "Без описания"
 
 
 @dataclass(slots=True)

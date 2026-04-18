@@ -4,6 +4,9 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
+from application.use_cases.tickets.message_content import (
+    build_ticket_subject as build_attachment_aware_ticket_subject,
+)
 from application.use_cases.tickets.summaries import TicketSummary
 from domain.entities.ticket import Ticket, TicketAttachmentDetails, TicketDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
@@ -13,11 +16,14 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def build_ticket_subject(message_text: str) -> str:
-    first_line = (
-        message_text.strip().splitlines()[0] if message_text.strip() else "Обращение клиента"
+def build_ticket_subject(
+    message_text: str | None,
+    attachment: TicketAttachmentDetails | None = None,
+) -> str:
+    return build_attachment_aware_ticket_subject(
+        text=message_text,
+        attachment=attachment,
     )
-    return first_line[:255]
 
 
 def build_ticket_summary(
