@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import Protocol
 from unittest.mock import ANY, AsyncMock, Mock
 from uuid import uuid4
 
-from tests.integration.bot.client_intake.conftest import (
-    BackendClientFactoryBuilder,
-    MessageHarnessBuilder,
-    TicketDetailsBuilder,
-    TicketSummaryBuilder,
-)
+from aiogram.types import Message
 
+from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.intake import handle_client_intake_message
 from bot.handlers.user.intake_draft import (
     PendingClientIntakeDraft,
@@ -22,6 +21,36 @@ from bot.texts.client import (
 )
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketAttachmentKind
+
+
+class MessageHarness(Protocol):
+    message: Message
+    answer: AsyncMock
+
+
+class MessageHarnessBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        text: str,
+        chat_id: int = 2002,
+        message_id: int = 15,
+    ) -> MessageHarness: ...
+
+
+class TicketDetailsBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        public_id: object,
+        subject: str,
+        category_id: int,
+        category_title: str,
+    ) -> TicketDetailsSummary: ...
+
+
+BackendClientFactoryBuilder = Callable[[object], HelpdeskBackendClientFactory]
+TicketSummaryBuilder = Callable[[object], TicketSummary]
 
 
 async def test_intake_message_creates_ticket_with_selected_category(
