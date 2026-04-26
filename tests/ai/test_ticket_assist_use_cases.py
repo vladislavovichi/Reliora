@@ -15,7 +15,9 @@ from application.contracts.ai import (
     AIServiceClientFactory,
     AISuggestedMacro,
     AnalyzedTicketSentimentResult,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
+    GenerateTicketReplyDraftCommand,
     PredictTicketCategoryCommand,
     SuggestedMacrosResult,
 )
@@ -69,6 +71,13 @@ class StubAIClient(AIServiceClient):
     async def suggest_macros(self, command: object) -> SuggestedMacrosResult:
         del command
         return self.macros_result
+
+    async def generate_ticket_reply_draft(
+        self,
+        command: GenerateTicketReplyDraftCommand,
+    ) -> GeneratedTicketReplyDraftResult:
+        del command
+        return GeneratedTicketReplyDraftResult(available=False, model_id="Qwen/Qwen3.5-4B")
 
     async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
         del command

@@ -8,6 +8,7 @@ from application.contracts.ai import (
     AIContextInternalNote,
     AIContextMessage,
     AIPredictTicketCategoryCommand,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     SuggestMacrosCommand,
 )
@@ -34,6 +35,20 @@ CATEGORY_INSTRUCTIONS = (
     "Выбирай только из переданного списка тем. "
     "Если уверенность низкая, верни отсутствие предсказания. "
     "Значения medium и high используй только при явных признаках."
+)
+REPLY_DRAFT_INSTRUCTIONS = (
+    "Ты готовишь черновик ответа клиенту для оператора helpdesk. "
+    "Верни только строго валидный JSON без пояснений и markdown вокруг. "
+    "Ответ должен быть на языке клиента, если язык можно определить. "
+    "Пиши кратко, вежливо и полезно. Не выдумывай факты. "
+    "Не обещай возвраты, компенсации, сроки доставки, действия с аккаунтом "
+    "или технические исправления, "
+    "если это явно не подтверждено в контексте. "
+    "Если данных не хватает, попроси нужную информацию вместо догадок. "
+    "Если нужна проверка оператором или администратором, скажи, что запрос проверят, "
+    "а не что вопрос уже решён. "
+    "Не упоминай внутренние заметки, AI, prompts, политики или backend. "
+    "Не раскрывай приватные или внутренние метаданные."
 )
 
 
@@ -92,6 +107,39 @@ def build_macro_suggestion_prompt(command: SuggestMacrosCommand) -> str:
     )
 
 
+def build_reply_draft_prompt(command: GenerateTicketReplyDraftCommand) -> str:
+    return "\n".join(
+        [
+            "Подготовь безопасный черновик ответа клиенту по заявке helpdesk.",
+            "Черновик будет только показан оператору и не будет отправлен автоматически.",
+            "Нужен JSON вида:",
+            (
+                '{"reply_text":"...","tone":"polite",'
+                '"confidence":0.73,"safety_note":"...",'
+                '"missing_information":["..."]}'
+            ),
+            "confidence должен быть числом от 0 до 1 или null.",
+            "missing_information верни null или массив коротких пунктов.",
+            "",
+            "Метаданные заявки:",
+            f"- public_id: {command.ticket_public_id}",
+            f"- subject: {command.subject}",
+            f"- status: {command.status.value}",
+            f"- category: {command.category_title or 'не указана'}",
+            f"- tags: {', '.join(command.tags) if command.tags else 'нет'}",
+            "",
+            "AI-сводка, если есть:",
+            format_reply_summary_context(command),
+            "",
+            "История сообщений:",
+            format_ticket_history(command.message_history),
+            "",
+            "Внутренние заметки (используй только для понимания; не раскрывай клиенту):",
+            format_internal_notes(command.internal_notes),
+        ]
+    )
+
+
 def build_category_prediction_prompt(command: AIPredictTicketCategoryCommand) -> str:
     category_lines = [
         f"- id={category.id}; code={category.code}; title={category.title}"
@@ -111,6 +159,20 @@ def build_category_prediction_prompt(command: AIPredictTicketCategoryCommand) ->
             "\n".join(category_lines),
         ]
     )
+
+
+def format_reply_summary_context(command: GenerateTicketReplyDraftCommand) -> str:
+    if command.summary is None:
+        return "Сводки нет."
+    lines = [
+        f"- short_summary: {normalize_inline(command.summary.short_summary, 280)}",
+        f"- user_goal: {normalize_inline(command.summary.user_goal, 280)}",
+        f"- actions_taken: {normalize_inline(command.summary.actions_taken, 280)}",
+        f"- current_status: {normalize_inline(command.summary.current_status, 280)}",
+    ]
+    if command.summary.status_note:
+        lines.append(f"- status_note: {normalize_inline(command.summary.status_note, 180)}")
+    return "\n".join(lines)
 
 
 def format_ticket_history(messages: Sequence[AIContextMessage]) -> str:

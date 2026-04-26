@@ -43,6 +43,36 @@ message GeneratedTicketSummary {
   string current_status = 4;
 }
 
+message ReplyDraftSummaryContext {
+  string short_summary = 1;
+  string user_goal = 2;
+  string actions_taken = 3;
+  string current_status = 4;
+  optional string status_note = 5;
+}
+
+message GenerateTicketReplyDraftCommand {
+  string ticket_public_id = 1;
+  string subject = 2;
+  string status = 3;
+  optional string category_title = 4;
+  repeated string tags = 5;
+  repeated AIContextMessage message_history = 6;
+  repeated AIContextInternalNote internal_notes = 7;
+  ReplyDraftSummaryContext summary = 8;
+}
+
+message GenerateTicketReplyDraftResponse {
+  bool available = 1;
+  optional string reply_text = 2;
+  optional string tone = 3;
+  optional double confidence = 4;
+  optional string safety_note = 5;
+  repeated string missing_information = 6;
+  optional string unavailable_reason = 7;
+  optional string model_id = 8;
+}
+
 message GenerateTicketSummaryResponse {
   bool available = 1;
   GeneratedTicketSummary summary = 2;
@@ -124,6 +154,7 @@ message AIServiceStatus {
 service HelpdeskAIService {
   rpc GetAIServiceStatus(Empty) returns (AIServiceStatus);
   rpc GenerateTicketSummary(GenerateTicketSummaryCommand) returns (GenerateTicketSummaryResponse);
+  rpc GenerateTicketReplyDraft(GenerateTicketReplyDraftCommand) returns (GenerateTicketReplyDraftResponse);
   rpc SuggestMacros(SuggestMacrosCommand) returns (SuggestMacrosResponse);
   rpc PredictCategory(PredictCategoryCommand) returns (PredictCategoryResponse);
   rpc AnalyzeTicketSentiment(AnalyzeTicketSentimentCommand) returns (AnalyzeTicketSentimentResponse);

@@ -51,3 +51,15 @@ class TicketCategoryPrediction:
     confidence: AIPredictionConfidence = AIPredictionConfidence.NONE
     reason: str | None = None
     model_id: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class TicketReplyDraft:
+    available: bool
+    reply_text: str | None = None
+    tone: str | None = None
+    confidence: float | None = None
+    safety_note: str | None = None
+    missing_information: tuple[str, ...] | None = None
+    unavailable_reason: str | None = None
+    model_id: str | None = None

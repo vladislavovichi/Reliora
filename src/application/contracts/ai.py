@@ -60,6 +60,27 @@ class GenerateTicketSummaryCommand:
 
 
 @dataclass(slots=True, frozen=True)
+class AIReplyDraftSummaryContext:
+    short_summary: str
+    user_goal: str
+    actions_taken: str
+    current_status: str
+    status_note: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class GenerateTicketReplyDraftCommand:
+    ticket_public_id: UUID
+    subject: str
+    status: TicketStatus
+    category_title: str | None
+    tags: tuple[str, ...] = ()
+    message_history: tuple[AIContextMessage, ...] = ()
+    internal_notes: tuple[AIContextInternalNote, ...] = ()
+    summary: AIReplyDraftSummaryContext | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class AIGeneratedTicketSummary:
     short_summary: str
     user_goal: str
@@ -71,6 +92,18 @@ class AIGeneratedTicketSummary:
 class GeneratedTicketSummaryResult:
     available: bool
     summary: AIGeneratedTicketSummary | None = None
+    unavailable_reason: str | None = None
+    model_id: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class GeneratedTicketReplyDraftResult:
+    available: bool
+    reply_text: str | None = None
+    tone: str | None = None
+    confidence: float | None = None
+    safety_note: str | None = None
+    missing_information: tuple[str, ...] | None = None
     unavailable_reason: str | None = None
     model_id: str | None = None
 
@@ -160,6 +193,11 @@ class AIServiceClient(Protocol):
         self,
         command: SuggestMacrosCommand,
     ) -> SuggestedMacrosResult: ...
+
+    async def generate_ticket_reply_draft(
+        self,
+        command: GenerateTicketReplyDraftCommand,
+    ) -> GeneratedTicketReplyDraftResult: ...
 
     async def predict_ticket_category(
         self,

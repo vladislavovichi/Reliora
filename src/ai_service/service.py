@@ -9,18 +9,22 @@ from ai_service.service_completion import complete_json
 from ai_service.service_prompts import (
     CATEGORY_INSTRUCTIONS,
     MACRO_INSTRUCTIONS,
+    REPLY_DRAFT_INSTRUCTIONS,
     SUMMARY_INSTRUCTIONS,
     build_category_prediction_prompt,
     build_macro_suggestion_prompt,
+    build_reply_draft_prompt,
     build_ticket_summary_prompt,
 )
 from ai_service.service_results import (
     build_category_prediction,
     build_generated_ticket_summary,
+    build_reply_draft,
     build_suggested_macros,
     has_prediction_signal,
     unavailable_category_result,
     unavailable_macros_result,
+    unavailable_reply_draft_result,
     unavailable_summary_result,
 )
 from application.ai.contracts import AIProvider
@@ -30,7 +34,9 @@ from application.contracts.ai import (
     AIPredictTicketCategoryCommand,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
     SuggestMacrosCommand,
@@ -43,6 +49,14 @@ class TicketSummaryPayload(BaseModel):
     user_goal: str = Field(min_length=4, max_length=280)
     actions_taken: str = Field(min_length=4, max_length=280)
     current_status: str = Field(min_length=4, max_length=280)
+
+
+class ReplyDraftPayload(BaseModel):
+    reply_text: str = Field(min_length=8, max_length=1400)
+    tone: str = Field(min_length=3, max_length=80)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    safety_note: str | None = Field(default=None, max_length=220)
+    missing_information: list[str] | None = Field(default=None, max_length=6)
 
 
 class MacroSuggestionItemPayload(BaseModel):
@@ -136,6 +150,43 @@ class AIApplicationService:
             suggestions=suggestions,
             model_id=self.provider.model_id,
         )
+
+    async def generate_ticket_reply_draft(
+        self,
+        command: GenerateTicketReplyDraftCommand,
+    ) -> GeneratedTicketReplyDraftResult:
+        if not self.provider.is_enabled:
+            return unavailable_reply_draft_result(self.provider.model_id)
+
+        payload = await complete_json(
+            provider=self.provider,
+            instructions=REPLY_DRAFT_INSTRUCTIONS,
+            prompt=build_reply_draft_prompt(command),
+            schema=ReplyDraftPayload,
+            max_output_tokens=self.config.summary_max_output_tokens,
+            temperature=self.config.summary_temperature,
+        )
+        if payload is None:
+            return GeneratedTicketReplyDraftResult(
+                available=False,
+                unavailable_reason="Не удалось подготовить черновик ответа.",
+                model_id=self.provider.model_id,
+            )
+        draft = build_reply_draft(
+            reply_text=payload.reply_text,
+            tone=payload.tone,
+            confidence=payload.confidence,
+            safety_note=payload.safety_note,
+            missing_information=payload.missing_information,
+            model_id=self.provider.model_id,
+        )
+        if draft is None:
+            return GeneratedTicketReplyDraftResult(
+                available=False,
+                unavailable_reason="Не удалось подготовить достаточно надёжный черновик.",
+                model_id=self.provider.model_id,
+            )
+        return draft
 
     async def predict_ticket_category(
         self,

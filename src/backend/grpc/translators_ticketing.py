@@ -9,6 +9,7 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketReplyDraft,
     TicketSummaryStatus,
 )
 from application.use_cases.tickets.exports import (
@@ -235,6 +236,40 @@ def deserialize_ticket_assist_snapshot(
             )
             for item in snapshot.macro_suggestions
         ),
+    )
+
+
+def serialize_ticket_reply_draft(draft: TicketReplyDraft) -> helpdesk_pb2.TicketReplyDraft:
+    message = helpdesk_pb2.TicketReplyDraft(available=draft.available)
+    if draft.reply_text is not None:
+        message.reply_text = draft.reply_text
+    if draft.tone is not None:
+        message.tone = draft.tone
+    if draft.confidence is not None:
+        message.confidence = draft.confidence
+    if draft.safety_note is not None:
+        message.safety_note = draft.safety_note
+    if draft.missing_information is not None:
+        message.missing_information.extend(draft.missing_information)
+    if draft.unavailable_reason is not None:
+        message.unavailable_reason = draft.unavailable_reason
+    if draft.model_id is not None:
+        message.model_id = draft.model_id
+    return message
+
+
+def deserialize_ticket_reply_draft(draft: helpdesk_pb2.TicketReplyDraft) -> TicketReplyDraft:
+    return TicketReplyDraft(
+        available=draft.available,
+        reply_text=draft.reply_text if _has(draft, "reply_text") else None,
+        tone=draft.tone if _has(draft, "tone") else None,
+        confidence=draft.confidence if _has(draft, "confidence") else None,
+        safety_note=draft.safety_note if _has(draft, "safety_note") else None,
+        missing_information=(
+            tuple(draft.missing_information) if draft.missing_information else None
+        ),
+        unavailable_reason=draft.unavailable_reason if _has(draft, "unavailable_reason") else None,
+        model_id=draft.model_id if _has(draft, "model_id") else None,
     )
 
 

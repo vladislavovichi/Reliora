@@ -44,6 +44,11 @@ class HelpdeskAIServiceStub(object):
                 request_serializer=ai__service__pb2.GenerateTicketSummaryCommand.SerializeToString,
                 response_deserializer=ai__service__pb2.GenerateTicketSummaryResponse.FromString,
                 _registered_method=True)
+        self.GenerateTicketReplyDraft = channel.unary_unary(
+                '/helpdesk.ai.v1.HelpdeskAIService/GenerateTicketReplyDraft',
+                request_serializer=ai__service__pb2.GenerateTicketReplyDraftCommand.SerializeToString,
+                response_deserializer=ai__service__pb2.GenerateTicketReplyDraftResponse.FromString,
+                _registered_method=True)
         self.SuggestMacros = channel.unary_unary(
                 '/helpdesk.ai.v1.HelpdeskAIService/SuggestMacros',
                 request_serializer=ai__service__pb2.SuggestMacrosCommand.SerializeToString,
@@ -71,6 +76,12 @@ class HelpdeskAIServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GenerateTicketSummary(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GenerateTicketReplyDraft(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -106,6 +117,11 @@ def add_HelpdeskAIServiceServicer_to_server(servicer, server):
                     servicer.GenerateTicketSummary,
                     request_deserializer=ai__service__pb2.GenerateTicketSummaryCommand.FromString,
                     response_serializer=ai__service__pb2.GenerateTicketSummaryResponse.SerializeToString,
+            ),
+            'GenerateTicketReplyDraft': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateTicketReplyDraft,
+                    request_deserializer=ai__service__pb2.GenerateTicketReplyDraftCommand.FromString,
+                    response_serializer=ai__service__pb2.GenerateTicketReplyDraftResponse.SerializeToString,
             ),
             'SuggestMacros': grpc.unary_unary_rpc_method_handler(
                     servicer.SuggestMacros,
@@ -177,6 +193,33 @@ class HelpdeskAIService(object):
             '/helpdesk.ai.v1.HelpdeskAIService/GenerateTicketSummary',
             ai__service__pb2.GenerateTicketSummaryCommand.SerializeToString,
             ai__service__pb2.GenerateTicketSummaryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateTicketReplyDraft(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.ai.v1.HelpdeskAIService/GenerateTicketReplyDraft',
+            ai__service__pb2.GenerateTicketReplyDraftCommand.SerializeToString,
+            ai__service__pb2.GenerateTicketReplyDraftResponse.FromString,
             options,
             channel_credentials,
             insecure,

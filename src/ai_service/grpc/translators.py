@@ -15,10 +15,13 @@ from application.contracts.ai import (
     AIGeneratedTicketSummary,
     AIPredictedCategoryResult,
     AIPredictTicketCategoryCommand,
+    AIReplyDraftSummaryContext,
     AISuggestedMacro,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
     SuggestMacrosCommand,
@@ -104,6 +107,109 @@ def deserialize_generate_ticket_summary_command(
         internal_notes=tuple(
             deserialize_context_internal_note(item) for item in command.internal_notes
         ),
+    )
+
+
+def serialize_generate_ticket_reply_draft_command(
+    command: GenerateTicketReplyDraftCommand,
+) -> ai_service_pb2.GenerateTicketReplyDraftCommand:
+    message = ai_service_pb2.GenerateTicketReplyDraftCommand(
+        ticket_public_id=str(command.ticket_public_id),
+        subject=command.subject,
+        status=command.status.value,
+        tags=command.tags,
+    )
+    if command.category_title is not None:
+        message.category_title = command.category_title
+    if command.summary is not None:
+        message.summary.CopyFrom(
+            ai_service_pb2.ReplyDraftSummaryContext(
+                short_summary=command.summary.short_summary,
+                user_goal=command.summary.user_goal,
+                actions_taken=command.summary.actions_taken,
+                current_status=command.summary.current_status,
+            )
+        )
+        if command.summary.status_note is not None:
+            message.summary.status_note = command.summary.status_note
+    message.message_history.extend(
+        serialize_context_message(item) for item in command.message_history
+    )
+    message.internal_notes.extend(
+        serialize_context_internal_note(item) for item in command.internal_notes
+    )
+    return message
+
+
+def deserialize_generate_ticket_reply_draft_command(
+    command: ai_service_pb2.GenerateTicketReplyDraftCommand,
+) -> GenerateTicketReplyDraftCommand:
+    from uuid import UUID
+
+    summary = None
+    if command.HasField("summary"):
+        summary = AIReplyDraftSummaryContext(
+            short_summary=command.summary.short_summary,
+            user_goal=command.summary.user_goal,
+            actions_taken=command.summary.actions_taken,
+            current_status=command.summary.current_status,
+            status_note=(
+                command.summary.status_note if command.summary.HasField("status_note") else None
+            ),
+        )
+    return GenerateTicketReplyDraftCommand(
+        ticket_public_id=UUID(command.ticket_public_id),
+        subject=command.subject,
+        status=TicketStatus(command.status),
+        category_title=command.category_title if command.HasField("category_title") else None,
+        tags=tuple(command.tags),
+        message_history=tuple(
+            deserialize_context_message(item) for item in command.message_history
+        ),
+        internal_notes=tuple(
+            deserialize_context_internal_note(item) for item in command.internal_notes
+        ),
+        summary=summary,
+    )
+
+
+def serialize_generated_ticket_reply_draft_result(
+    result: GeneratedTicketReplyDraftResult,
+) -> ai_service_pb2.GenerateTicketReplyDraftResponse:
+    message = ai_service_pb2.GenerateTicketReplyDraftResponse(available=result.available)
+    if result.reply_text is not None:
+        message.reply_text = result.reply_text
+    if result.tone is not None:
+        message.tone = result.tone
+    if result.confidence is not None:
+        message.confidence = result.confidence
+    if result.safety_note is not None:
+        message.safety_note = result.safety_note
+    if result.missing_information is not None:
+        message.missing_information.extend(result.missing_information)
+    if result.unavailable_reason is not None:
+        message.unavailable_reason = result.unavailable_reason
+    if result.model_id is not None:
+        message.model_id = result.model_id
+    return message
+
+
+def deserialize_generated_ticket_reply_draft_result(
+    result: ai_service_pb2.GenerateTicketReplyDraftResponse,
+) -> GeneratedTicketReplyDraftResult:
+    return GeneratedTicketReplyDraftResult(
+        available=result.available,
+        reply_text=result.reply_text if result.HasField("reply_text") else None,
+        tone=result.tone if result.HasField("tone") else None,
+        confidence=result.confidence if result.HasField("confidence") else None,
+        safety_note=result.safety_note if result.HasField("safety_note") else None,
+        missing_information=(
+            tuple(result.missing_information) if result.missing_information else None
+        ),
+        unavailable_reason=(
+            result.unavailable_reason if result.HasField("unavailable_reason") else None
+        ),
+        model_id=result.model_id if result.HasField("model_id") else None,
     )
 
 

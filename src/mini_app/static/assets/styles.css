@@ -892,6 +892,7 @@ select:focus-visible {
   box-shadow: 0 12px 28px rgba(53, 89, 75, 0.07);
 }
 
+.ai-reply-card,
 .ai-card {
   display: grid;
   gap: 18px;
@@ -950,6 +951,69 @@ select:focus-visible {
   background: rgba(255, 246, 230, 0.82);
   color: #76572c;
   line-height: 1.5;
+}
+
+.ai-reply-card {
+  border-color: rgba(31, 40, 52, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(242, 238, 232, 0.82));
+}
+
+.ai-reply-draft {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(30, 38, 46, 0.07);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.ai-reply-draft p {
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-reply-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-safety-note,
+.ai-missing-info {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(30, 38, 46, 0.07);
+  background: rgba(250, 246, 240, 0.8);
+  color: var(--muted-strong);
+  line-height: 1.55;
+}
+
+.ai-safety-note {
+  border-color: rgba(53, 89, 75, 0.14);
+  color: var(--success);
+}
+
+.ai-missing-info strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.ai-missing-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-missing-info li + li {
+  margin-top: 6px;
+}
+
+.copy-draft-button {
+  justify-self: start;
 }
 
 .invite-card {

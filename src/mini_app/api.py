@@ -27,6 +27,7 @@ from mini_app.serializers import (
     serialize_queue_ticket,
     serialize_ticket_ai_snapshot,
     serialize_ticket_details,
+    serialize_ticket_reply_draft,
 )
 
 
@@ -173,6 +174,25 @@ class MiniAppGateway:
         if ai_snapshot is None:
             raise LookupError("Заявка не найдена.")
         serialized = serialize_ticket_ai_snapshot(ai_snapshot)
+        if serialized is None:
+            raise LookupError("Заявка не найдена.")
+        return serialized
+
+    async def generate_ticket_reply_draft(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: UUID,
+    ) -> dict[str, Any]:
+        actor = RequestActor(telegram_user_id=user.telegram_user_id)
+        async with self.backend_client_factory() as client:
+            draft = await client.generate_ticket_reply_draft(
+                ticket_public_id=ticket_public_id,
+                actor=actor,
+            )
+        if draft is None:
+            raise LookupError("Заявка не найдена.")
+        serialized = serialize_ticket_reply_draft(draft)
         if serialized is None:
             raise LookupError("Заявка не найдена.")
         return serialized

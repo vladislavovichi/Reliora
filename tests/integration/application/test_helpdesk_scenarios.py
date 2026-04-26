@@ -18,7 +18,9 @@ from application.contracts.ai import (
     AIServiceClientFactory,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
     SuggestMacrosCommand,
@@ -83,6 +85,13 @@ class DisabledTestAIClient(AIServiceClient):
     async def suggest_macros(self, command: SuggestMacrosCommand) -> SuggestedMacrosResult:
         del command
         return SuggestedMacrosResult(available=False)
+
+    async def generate_ticket_reply_draft(
+        self,
+        command: GenerateTicketReplyDraftCommand,
+    ) -> GeneratedTicketReplyDraftResult:
+        del command
+        return GeneratedTicketReplyDraftResult(available=False)
 
     async def predict_ticket_category(
         self,

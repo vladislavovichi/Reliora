@@ -15,6 +15,7 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketReplyDraft,
     TicketSummaryStatus,
 )
 from application.contracts.actors import OperatorIdentity, RequestActor
@@ -51,6 +52,7 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
         get_access_context=_build_access_context_call(),
         create_ticket_from_client_intake=_capture_create_call(command_log, ticket_public_id),
         get_ticket_ai_assist_snapshot=_build_ticket_assist_call(),
+        generate_ticket_reply_draft=_build_reply_draft_call(),
         predict_ticket_category=_build_category_prediction_call(),
         get_analytics_snapshot=_build_analytics_call(),
         list_archived_tickets=_build_archived_tickets_call(ticket_public_id),
@@ -108,6 +110,10 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
                 refresh_summary=True,
                 actor=RequestActor(telegram_user_id=1001),
             )
+            reply_draft = await client.generate_ticket_reply_draft(
+                ticket_public_id=ticket_public_id,
+                actor=RequestActor(telegram_user_id=1001),
+            )
             category_prediction = await client.predict_ticket_category(
                 PredictTicketCategoryCommand(text="Не удаётся войти после смены пароля"),
                 actor=RequestActor(telegram_user_id=2002),
@@ -150,6 +156,9 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert ticket_assist.short_summary == "Клиент потерял доступ после смены пароля."
     assert ticket_assist.summary_status is TicketSummaryStatus.FRESH
     assert ticket_assist.macro_suggestions[0].macro_id == 11
+    assert reply_draft is not None
+    assert reply_draft.reply_text == "Здравствуйте! Проверим заявку и вернёмся с ответом."
+    assert reply_draft.confidence == 0.8
     assert category_prediction.category_id == 2
     assert category_prediction.confidence == AIPredictionConfidence.HIGH
     assert archived_tickets[0].public_id == ticket_public_id
@@ -307,6 +316,27 @@ def _build_ticket_assist_call() -> Any:
                 ),
             ),
             model_id="Qwen/Qwen3.5-4B",
+        )
+
+    return call
+
+
+def _build_reply_draft_call() -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        actor: RequestActor | None = None,
+    ) -> TicketReplyDraft:
+        assert actor == RequestActor(telegram_user_id=1001)
+        assert ticket_public_id is not None
+        return TicketReplyDraft(
+            available=True,
+            reply_text="Здравствуйте! Проверим заявку и вернёмся с ответом.",
+            tone="polite",
+            confidence=0.8,
+            safety_note="Без обещаний сроков.",
+            missing_information=("номер заказа",),
+            model_id="reply-model",
         )
 
     return call

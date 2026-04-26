@@ -5,7 +5,11 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
-from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPrediction
+from application.ai.summaries import (
+    TicketAssistSnapshot,
+    TicketCategoryPrediction,
+    TicketReplyDraft,
+)
 from application.contracts.actors import RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
@@ -164,6 +168,13 @@ class HelpdeskBackendClient(Protocol):
         refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot | None: ...
+
+    async def generate_ticket_reply_draft(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketReplyDraft | None: ...
 
     async def predict_ticket_category(
         self,

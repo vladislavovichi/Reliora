@@ -60,6 +60,7 @@ from backend.grpc.translators_ticketing import (
     deserialize_ticket_details,
     deserialize_ticket_message,
     deserialize_ticket_note,
+    deserialize_ticket_reply_draft,
     deserialize_ticket_summary,
     serialize_archived_ticket,
     serialize_category,
@@ -74,6 +75,7 @@ from backend.grpc.translators_ticketing import (
     serialize_ticket_details,
     serialize_ticket_message,
     serialize_ticket_note,
+    serialize_ticket_reply_draft,
     serialize_ticket_summary,
 )
 
@@ -110,6 +112,7 @@ __all__ = [
     "deserialize_ticket_details",
     "deserialize_ticket_message",
     "deserialize_ticket_note",
+    "deserialize_ticket_reply_draft",
     "deserialize_ticket_summary",
     "serialize_analytics_export",
     "serialize_analytics_snapshot",
@@ -143,5 +146,6 @@ __all__ = [
     "serialize_ticket_details",
     "serialize_ticket_message",
     "serialize_ticket_note",
+    "serialize_ticket_reply_draft",
     "serialize_ticket_summary",
 ]

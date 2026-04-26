@@ -213,6 +213,17 @@ message TicketAssistSnapshot {
   optional string status_note = 11;
 }
 
+message TicketReplyDraft {
+  bool available = 1;
+  optional string reply_text = 2;
+  optional string tone = 3;
+  optional double confidence = 4;
+  optional string safety_note = 5;
+  repeated string missing_information = 6;
+  optional string unavailable_reason = 7;
+  optional string model_id = 8;
+}
+
 message PredictTicketCategoryCommand {
   optional string text = 1;
   optional string attachment_kind = 2;
@@ -404,6 +415,11 @@ message GetTicketAssistSnapshotRequest {
   bool refresh_summary = 3;
 }
 
+message GenerateTicketReplyDraftRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
 message PredictTicketCategoryRequest {
   PredictTicketCategoryCommand command = 1;
   RequestActor actor = 2;
@@ -450,6 +466,7 @@ service HelpdeskBackendService {
   rpc ListMacros(ListMacrosRequest) returns (stream MacroSummary);
   rpc ApplyMacroToTicket(ApplyMacroToTicketRequest) returns (MacroApplicationResult);
   rpc GetTicketAssistSnapshot(GetTicketAssistSnapshotRequest) returns (TicketAssistSnapshot);
+  rpc GenerateTicketReplyDraft(GenerateTicketReplyDraftRequest) returns (TicketReplyDraft);
   rpc PredictTicketCategory(PredictTicketCategoryRequest) returns (TicketCategoryPrediction);
   rpc ExportTicketReport(ExportTicketReportRequest) returns (TicketReportExport);
   rpc GetAnalyticsSnapshot(GetAnalyticsSnapshotRequest) returns (HelpdeskAnalyticsSnapshot);

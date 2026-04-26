@@ -472,7 +472,7 @@ export function renderAdmin(data, invite) {
   `;
 }
 
-export function renderTicketWorkspace(data) {
+export function renderTicketWorkspace(data, replyDraftState = null) {
   const ticket = data.ticket;
   const ai = data.ai;
   const canReassign = data.operators.length > 0;
@@ -530,6 +530,8 @@ export function renderTicketWorkspace(data) {
         </article>
 
         ${renderTicketAiCard(ai)}
+
+        ${renderAiReplyCard(replyDraftState)}
 
         <article class="subsurface">
           <div class="subsurface-head">
@@ -902,6 +904,85 @@ function renderTicketAiCard(ai) {
   `;
 }
 
+function renderAiReplyCard(replyDraftState) {
+  const payload = replyDraftState?.payload ?? null;
+  const isLoading = Boolean(replyDraftState?.loading);
+  return `
+    <article class="subsurface ai-reply-card">
+      <div class="subsurface-head">
+        <div>
+          <h3>AI reply draft</h3>
+          <p class="subtitle">Черновик только для проверки оператором. Автоотправки нет.</p>
+        </div>
+        <button
+          class="action action-primary"
+          data-ticket-ai-reply-draft
+          type="button"
+          ${isLoading ? "disabled" : ""}
+        >
+          ${isLoading ? "Generating..." : "Generate AI reply"}
+        </button>
+      </div>
+      ${renderAiReplyDraft(payload, isLoading)}
+    </article>
+  `;
+}
+
+function renderAiReplyDraft(payload, isLoading) {
+  if (isLoading) {
+    return `<p class="empty-inline">Готовлю безопасный черновик по текущему контексту...</p>`;
+  }
+  if (!payload) {
+    return `<p class="empty-inline">Сгенерируйте черновик, когда нужен быстрый старт ответа клиенту.</p>`;
+  }
+  if (payload.available === false) {
+    return `
+      <div class="ai-warning">
+        ${escapeHtml(payload.unavailable_reason || "AI-черновик сейчас недоступен.")}
+      </div>
+    `;
+  }
+  return `
+    <div class="ai-reply-draft">
+      <p>${escapeHtml(payload.reply_text || "Черновик пуст.")}</p>
+      ${
+        payload.reply_text
+          ? `<button class="action action-subtle copy-draft-button" data-copy-draft type="button">Copy draft</button>`
+          : ""
+      }
+    </div>
+    <div class="ai-reply-meta">
+      ${payload.tone ? `<span class="soft-chip">Tone: ${escapeHtml(payload.tone)}</span>` : ""}
+      ${
+        payload.confidence !== null && payload.confidence !== undefined
+          ? `<span class="soft-chip">Confidence: ${escapeHtml(formatConfidence(payload.confidence))}</span>`
+          : ""
+      }
+      ${payload.model_id ? `<span class="soft-chip">Model: ${escapeHtml(payload.model_id)}</span>` : ""}
+    </div>
+    ${
+      payload.safety_note
+        ? `<div class="ai-safety-note">${escapeHtml(payload.safety_note)}</div>`
+        : ""
+    }
+    ${renderMissingInformation(payload.missing_information)}
+  `;
+}
+
+function renderMissingInformation(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return "";
+  }
+  return `
+    <div class="ai-missing-info">
+      <strong>Missing information</strong>
+      <ul>
+        ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function renderAiField(label, value) {
   return `
     <div class="ai-field">
@@ -909,6 +990,14 @@ function renderAiField(label, value) {
       <p>${value ? escapeHtml(value) : "—"}</p>
     </div>
   `;
+}
+
+function formatConfidence(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value);
+  }
+  return `${Math.round(numeric * 100)}%`;
 }
 
 function renderMacroList(macros, suggestions) {

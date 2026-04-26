@@ -47,6 +47,7 @@ const state = {
     admin: null,
     tickets: {},
   },
+  aiReplyDrafts: {},
   lastInvite: null,
 };
 
@@ -154,7 +155,10 @@ async function renderRoute() {
     }
 
     if (state.currentRoute === "ticket" && state.currentTicketId) {
-      content.innerHTML = renderTicketWorkspace(await loadTicket(state.currentTicketId));
+      content.innerHTML = renderTicketWorkspace(
+        await loadTicket(state.currentTicketId),
+        state.aiReplyDrafts[state.currentTicketId] ?? null,
+      );
       return;
     }
 
@@ -284,6 +288,13 @@ function bindGlobalEvents() {
       return;
     }
 
+    const copyDraftButton = event.target.closest("[data-copy-draft]");
+    if (copyDraftButton && state.currentTicketId) {
+      const draftText = state.aiReplyDrafts[state.currentTicketId]?.payload?.reply_text ?? "";
+      await handleCopy(draftText, "Черновик скопирован.");
+      return;
+    }
+
     const macroButton = event.target.closest("[data-apply-macro]");
     if (macroButton && state.currentTicketId) {
       await runMutation(async () => {
@@ -305,6 +316,27 @@ function bindGlobalEvents() {
       });
       if (refreshed) {
         showNotice("AI summary updated.", "success");
+      }
+      return;
+    }
+
+    const ticketAiReplyDraftButton = event.target.closest("[data-ticket-ai-reply-draft]");
+    if (ticketAiReplyDraftButton && state.currentTicketId) {
+      const ticketId = state.currentTicketId;
+      state.aiReplyDrafts[ticketId] = { loading: true, payload: null };
+      await renderRoute();
+      let generated = false;
+      await runMutation(async () => {
+        const payload = await state.api.generateTicketReplyDraft(ticketId);
+        state.aiReplyDrafts[ticketId] = { loading: false, payload };
+        generated = true;
+      });
+      if (!generated) {
+        state.aiReplyDrafts[ticketId] = { loading: false, payload: null };
+      }
+      await renderRoute();
+      if (generated) {
+        showNotice("AI reply draft generated.", "success");
       }
       return;
     }
@@ -413,10 +445,10 @@ async function runMutation(work) {
   }
 }
 
-async function handleCopy(value) {
+async function handleCopy(value, successMessage = "Код приглашения скопирован.") {
   try {
     await navigator.clipboard.writeText(value);
-    showNotice("Код приглашения скопирован.", "success");
+    showNotice(successMessage, "success");
     if (telegram?.HapticFeedback) {
       telegram.HapticFeedback.notificationOccurred("success");
     }
@@ -454,6 +486,7 @@ function invalidateTicketData(ticketId) {
   invalidateTicketCollections();
   if (ticketId) {
     delete state.cache.tickets[ticketId];
+    delete state.aiReplyDrafts[ticketId];
   }
 }
 

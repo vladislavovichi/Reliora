@@ -9,6 +9,7 @@ from application.ai.summaries import (
     TicketAssistSnapshot,
     TicketCategoryPrediction,
     TicketMacroSuggestion,
+    TicketReplyDraft,
     TicketSummaryStatus,
 )
 from application.contracts.ai import (
@@ -17,7 +18,9 @@ from application.contracts.ai import (
     AIContextInternalNote,
     AIContextMessage,
     AIPredictTicketCategoryCommand,
+    AIReplyDraftSummaryContext,
     AIServiceClientFactory,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     MacroCandidate,
     PredictTicketCategoryCommand,
@@ -178,6 +181,48 @@ class BuildTicketAssistSnapshotUseCase:
         )
 
 
+class GenerateTicketReplyDraftUseCase:
+    def __init__(
+        self,
+        *,
+        ticket_repository: TicketRepository,
+        ticket_ai_summary_repository: TicketAISummaryRepository,
+        ai_client_factory: AIServiceClientFactory,
+    ) -> None:
+        self.ticket_repository = ticket_repository
+        self.ticket_ai_summary_repository = ticket_ai_summary_repository
+        self.ai_client_factory = ai_client_factory
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+    ) -> TicketReplyDraft | None:
+        ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        if ticket is None:
+            return None
+        stored_summary = await self.ticket_ai_summary_repository.get_by_ticket_id(
+            ticket_id=ticket.id
+        )
+        async with self.ai_client_factory() as ai_client:
+            result = await ai_client.generate_ticket_reply_draft(
+                _build_generate_ticket_reply_draft_command(
+                    ticket=ticket,
+                    stored_summary=stored_summary,
+                )
+            )
+        return TicketReplyDraft(
+            available=result.available,
+            reply_text=result.reply_text,
+            tone=result.tone,
+            confidence=result.confidence,
+            safety_note=result.safety_note,
+            missing_information=result.missing_information,
+            unavailable_reason=result.unavailable_reason,
+            model_id=result.model_id,
+        )
+
+
 class PredictTicketCategoryUseCase:
     def __init__(
         self,
@@ -276,6 +321,42 @@ def _build_generate_ticket_summary_command(
             )
             for note in ticket.internal_notes
         ),
+    )
+
+
+def _build_generate_ticket_reply_draft_command(
+    *,
+    ticket: TicketDetails,
+    stored_summary: TicketAISummaryDetails | None,
+) -> GenerateTicketReplyDraftCommand:
+    summary = None
+    if stored_summary is not None:
+        freshness = _resolve_summary_freshness(ticket=ticket, stored_summary=stored_summary)
+        summary = AIReplyDraftSummaryContext(
+            short_summary=stored_summary.short_summary,
+            user_goal=stored_summary.user_goal,
+            actions_taken=stored_summary.actions_taken,
+            current_status=stored_summary.current_status,
+            status_note=freshness.note,
+        )
+    return GenerateTicketReplyDraftCommand(
+        ticket_public_id=ticket.public_id,
+        subject=ticket.subject,
+        status=ticket.status,
+        category_title=ticket.category_title,
+        tags=ticket.tags,
+        message_history=tuple(
+            _build_message_context(message) for message in ticket.message_history
+        ),
+        internal_notes=tuple(
+            AIContextInternalNote(
+                author_name=note.author_operator_name,
+                text=note.text,
+                created_at=note.created_at,
+            )
+            for note in ticket.internal_notes
+        ),
+        summary=summary,
     )
 
 

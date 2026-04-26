@@ -17,6 +17,7 @@ from backend.grpc.translators import (
     serialize_operator_summary,
     serialize_ticket_assist_snapshot,
     serialize_ticket_category_prediction,
+    serialize_ticket_reply_draft,
 )
 
 
@@ -126,6 +127,29 @@ class HelpdeskBackendOperationsGrpcMixin(HelpdeskBackendGrpcServiceBase):
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
             assert snapshot is not None
             return serialize_ticket_assist_snapshot(snapshot)
+
+    async def GenerateTicketReplyDraft(
+        self,
+        request: helpdesk_pb2.GenerateTicketReplyDraftRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.TicketReplyDraft:
+        async with self._rpc_scope(
+            context,
+            method="GenerateTicketReplyDraft",
+            fallback_actor=self._request_actor(request),
+        ) as request_context:
+            draft = await self._invoke_helpdesk(
+                context,
+                method="GenerateTicketReplyDraft",
+                call=lambda helpdesk_service: helpdesk_service.generate_ticket_reply_draft(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    actor=request_context.actor,
+                ),
+            )
+            if draft is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
+            assert draft is not None
+            return serialize_ticket_reply_draft(draft)
 
     async def PredictTicketCategory(
         self,

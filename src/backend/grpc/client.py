@@ -11,7 +11,11 @@ from uuid import UUID
 
 import grpc
 
-from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPrediction
+from application.ai.summaries import (
+    TicketAssistSnapshot,
+    TicketCategoryPrediction,
+    TicketReplyDraft,
+)
 from application.contracts.actors import RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
@@ -63,6 +67,7 @@ from backend.grpc.translators import (
     deserialize_ticket_assist_snapshot,
     deserialize_ticket_category_prediction,
     deserialize_ticket_details,
+    deserialize_ticket_reply_draft,
     deserialize_ticket_summary,
     serialize_add_internal_note_command,
     serialize_apply_macro_command,
@@ -479,6 +484,27 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             _raise_optional_rpc_error(exc)
             return None
         return deserialize_ticket_assist_snapshot(result)
+
+    async def generate_ticket_reply_draft(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketReplyDraft | None:
+        request = helpdesk_pb2.GenerateTicketReplyDraftRequest(
+            ticket_public_id=str(ticket_public_id),
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.GenerateTicketReplyDraft,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_reply_draft(result)
 
     async def predict_ticket_category(
         self,

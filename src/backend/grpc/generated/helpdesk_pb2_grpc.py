@@ -144,6 +144,11 @@ class HelpdeskBackendServiceStub(object):
                 request_serializer=helpdesk__pb2.GetTicketAssistSnapshotRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.TicketAssistSnapshot.FromString,
                 _registered_method=True)
+        self.GenerateTicketReplyDraft = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/GenerateTicketReplyDraft',
+                request_serializer=helpdesk__pb2.GenerateTicketReplyDraftRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketReplyDraft.FromString,
+                _registered_method=True)
         self.PredictTicketCategory = channel.unary_unary(
                 '/helpdesk.backend.v1.HelpdeskBackendService/PredictTicketCategory',
                 request_serializer=helpdesk__pb2.PredictTicketCategoryRequest.SerializeToString,
@@ -301,6 +306,12 @@ class HelpdeskBackendServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GenerateTicketReplyDraft(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def PredictTicketCategory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -437,6 +448,11 @@ def add_HelpdeskBackendServiceServicer_to_server(servicer, server):
                     servicer.GetTicketAssistSnapshot,
                     request_deserializer=helpdesk__pb2.GetTicketAssistSnapshotRequest.FromString,
                     response_serializer=helpdesk__pb2.TicketAssistSnapshot.SerializeToString,
+            ),
+            'GenerateTicketReplyDraft': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateTicketReplyDraft,
+                    request_deserializer=helpdesk__pb2.GenerateTicketReplyDraftRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketReplyDraft.SerializeToString,
             ),
             'PredictTicketCategory': grpc.unary_unary_rpc_method_handler(
                     servicer.PredictTicketCategory,
@@ -1053,6 +1069,33 @@ class HelpdeskBackendService(object):
             '/helpdesk.backend.v1.HelpdeskBackendService/GetTicketAssistSnapshot',
             helpdesk__pb2.GetTicketAssistSnapshotRequest.SerializeToString,
             helpdesk__pb2.TicketAssistSnapshot.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateTicketReplyDraft(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/GenerateTicketReplyDraft',
+            helpdesk__pb2.GenerateTicketReplyDraftRequest.SerializeToString,
+            helpdesk__pb2.TicketReplyDraft.FromString,
             options,
             channel_credentials,
             insecure,

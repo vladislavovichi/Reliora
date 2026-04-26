@@ -7,6 +7,7 @@ from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
 from application.use_cases.ai.assist import (
     BuildTicketAssistSnapshotUseCase,
+    GenerateTicketReplyDraftUseCase,
     PredictTicketCategoryUseCase,
 )
 from application.use_cases.analytics.exports import (
@@ -171,6 +172,7 @@ class HelpdeskSLAUseCases:
 @dataclass(slots=True, frozen=True)
 class HelpdeskAIUseCases:
     build_ticket_assist_snapshot: BuildTicketAssistSnapshotUseCase
+    generate_ticket_reply_draft: GenerateTicketReplyDraftUseCase
     predict_ticket_category: PredictTicketCategoryUseCase
 
 
@@ -389,6 +391,11 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_ai_summary_repository=ticket_ai_summary_repository,
                 macro_repository=macro_repository,
+                ai_client_factory=ai_client_factory,
+            ),
+            generate_ticket_reply_draft=GenerateTicketReplyDraftUseCase(
+                ticket_repository=ticket_repository,
+                ticket_ai_summary_repository=ticket_ai_summary_repository,
                 ai_client_factory=ai_client_factory,
             ),
             predict_ticket_category=PredictTicketCategoryUseCase(

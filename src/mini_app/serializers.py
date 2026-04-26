@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from application.ai.summaries import TicketAssistSnapshot
+from application.ai.summaries import TicketAssistSnapshot, TicketReplyDraft
 from application.services.stats import HelpdeskAnalyticsSnapshot
 from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
 from application.use_cases.tickets.summaries import (
@@ -160,6 +160,23 @@ def serialize_ticket_ai_snapshot(snapshot: TicketAssistSnapshot | None) -> dict[
             }
             for item in snapshot.macro_suggestions
         ],
+    }
+
+
+def serialize_ticket_reply_draft(draft: TicketReplyDraft | None) -> dict[str, Any] | None:
+    if draft is None:
+        return None
+    return {
+        "available": draft.available,
+        "reply_text": draft.reply_text,
+        "tone": draft.tone,
+        "confidence": draft.confidence,
+        "safety_note": draft.safety_note,
+        "missing_information": (
+            list(draft.missing_information) if draft.missing_information is not None else None
+        ),
+        "unavailable_reason": draft.unavailable_reason,
+        "model_id": draft.model_id,
     }
 
 

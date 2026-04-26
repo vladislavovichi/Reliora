@@ -6,6 +6,7 @@ from application.contracts.ai import (
     AIPredictedCategoryResult,
     AIPredictTicketCategoryCommand,
     AISuggestedMacro,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
     SuggestedMacrosResult,
 )
@@ -81,6 +82,32 @@ def build_suggested_macros(
     return tuple(suggestions)
 
 
+def build_reply_draft(
+    *,
+    reply_text: str,
+    tone: str,
+    confidence: float | None,
+    safety_note: str | None,
+    missing_information: list[str] | None,
+    model_id: str | None,
+) -> GeneratedTicketReplyDraftResult | None:
+    normalized_reply_text = normalize_ai_text(reply_text, limit=1400)
+    normalized_tone = normalize_ai_text(tone, limit=80)
+    if normalized_reply_text is None or normalized_tone is None:
+        return None
+    normalized_safety_note = normalize_ai_reason(safety_note)
+    normalized_missing_information = _normalize_missing_information(missing_information)
+    return GeneratedTicketReplyDraftResult(
+        available=True,
+        reply_text=normalized_reply_text,
+        tone=normalized_tone,
+        confidence=confidence,
+        safety_note=normalized_safety_note,
+        missing_information=normalized_missing_information,
+        model_id=model_id,
+    )
+
+
 def build_category_prediction(
     *,
     category_id: int | None,
@@ -127,6 +154,14 @@ def has_prediction_signal(command: AIPredictTicketCategoryCommand) -> bool:
     return bool((command.text and command.text.strip()) or command.attachment is not None)
 
 
+def unavailable_reply_draft_result(model_id: str | None) -> GeneratedTicketReplyDraftResult:
+    return GeneratedTicketReplyDraftResult(
+        available=False,
+        unavailable_reason="AI-провайдер не настроен.",
+        model_id=model_id,
+    )
+
+
 def unavailable_summary_result(model_id: str | None) -> GeneratedTicketSummaryResult:
     return GeneratedTicketSummaryResult(
         available=False,
@@ -149,3 +184,20 @@ def unavailable_category_result(model_id: str | None) -> AIPredictedCategoryResu
         unavailable_reason="AI-провайдер не настроен.",
         model_id=model_id,
     )
+
+
+def _normalize_missing_information(values: list[str] | None) -> tuple[str, ...] | None:
+    if values is None:
+        return None
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        item = normalize_ai_text(value, limit=120)
+        if item is None:
+            continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(item)
+    return tuple(normalized) if normalized else None

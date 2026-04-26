@@ -14,10 +14,12 @@ from ai_service.grpc.auth import build_call_metadata
 from ai_service.grpc.generated import ai_service_pb2, ai_service_pb2_grpc
 from ai_service.grpc.translators import (
     deserialize_analyzed_ticket_sentiment_result,
+    deserialize_generated_ticket_reply_draft_result,
     deserialize_generated_ticket_summary_result,
     deserialize_predicted_category_result,
     deserialize_suggested_macros_result,
     serialize_analyze_ticket_sentiment_command,
+    serialize_generate_ticket_reply_draft_command,
     serialize_generate_ticket_summary_command,
     serialize_predict_category_command,
     serialize_suggest_macros_command,
@@ -29,7 +31,9 @@ from application.contracts.ai import (
     AIServiceClientFactory,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
+    GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
+    GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
     SuggestMacrosCommand,
@@ -80,6 +84,16 @@ class GrpcAIServiceClient(AIServiceClient):
             retryable=True,
         )
         return deserialize_suggested_macros_result(response)
+
+    async def generate_ticket_reply_draft(
+        self,
+        command: GenerateTicketReplyDraftCommand,
+    ) -> GeneratedTicketReplyDraftResult:
+        response = await self._invoke_unary(
+            self.stub.GenerateTicketReplyDraft,
+            serialize_generate_ticket_reply_draft_command(command),
+        )
+        return deserialize_generated_ticket_reply_draft_result(response)
 
     async def predict_ticket_category(
         self,
