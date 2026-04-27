@@ -1,69 +1,129 @@
 # Backend
 
-`backend` — это внутренний gRPC-сервис, через который проходит основная работа helpdesk. Он не дублирует Telegram-слой и не сводится к прокси между ботом и базой. Здесь собраны транспортная граница, проверки доступа, продуктовые сценарии и аудит чувствительных действий.
+`backend` - внутренний gRPC-сервис и основная точка принятия продуктовых решений. Bot и Mini App вызывают его вместо прямой работы с базой.
 
-## Что делает `backend`
-
-Через него проходят:
+## Что backend владеет
 
 - создание и чтение заявок;
-- очередь и личные списки операторов;
-- архив закрытых дел;
-- ответы, назначения, закрытие, теги, макросы, заметки;
-- выгрузки по заявке;
-- аналитика и её экспорт;
-- обращения к `ai-service`.
+- очередь, назначение, переназначение, закрытие и эскалация;
+- роли, operator context и `super_admin` операции;
+- темы, теги, макросы и operator invites;
+- обратная связь после закрытия;
+- аналитика и `HTML`/`CSV` экспорты;
+- аудит чувствительных действий;
+- вызовы `ai-service` и обработка недоступности AI.
 
-Именно `backend` решает, что считать допустимым действием и какой результат вернуть наружу.
+## Жизненный цикл запроса
 
-## Как проходит запрос
+1. `src/backend/grpc/server*.py` принимает gRPC request.
+2. `auth.py` проверяет internal metadata и собирает `BackendRequestContext`.
+3. Translators переводят protobuf в application contracts.
+4. `HelpdeskService` вызывает нужную группу операций.
+5. Use case работает с репозиториями и доменными правилами.
+6. Результат переводится обратно в protobuf.
 
-Обычный путь выглядит так:
+Главное правило: protobuf остаётся в `src/backend/grpc`, продуктовая логика живёт в `application`.
 
-1. gRPC server принимает запрос и служебные метаданные;
-2. транспортный слой переводит protobuf во внутреннюю модель;
-3. `HelpdeskService` вызывает нужный сценарий из `application`;
-4. результат возвращается обратно в protobuf-форме.
+## gRPC-граница и metadata
 
-Это важно по одной простой причине: protobuf и aiogram не должны просачиваться в бизнес-логику.
+Backend ожидает служебные заголовки:
 
-## Где смотреть код
+| Header | Назначение |
+| --- | --- |
+| `x-helpdesk-internal-token` | внутренний токен `BACKEND_AUTH__TOKEN` |
+| `x-helpdesk-caller` | имя вызывающей стороны, обычно `telegram-bot` |
+| `x-correlation-id` | correlation id для логов и аудита |
+| `x-helpdesk-actor-telegram-user-id` | Telegram user id действующего пользователя |
 
-- `src/backend/proto` — контракты gRPC;
-- `src/backend/grpc` — server, client, auth, translators;
-- `src/backend/main.py` — вход в процесс `backend`;
-- `src/application/services/helpdesk` — композиция продуктовых операций;
-- `src/ai_service/grpc/client.py` — вызовы `backend -> ai-service`.
+Если token не совпадает, запрос отклоняется до входа в use case.
 
-## Внутренняя авторизация
+## Карта кода
 
-Во внутреннем gRPC-трафике используются служебные метаданные:
+- `src/backend/proto/helpdesk.proto` - контракт backend gRPC.
+- `src/backend/grpc/server.py` и `server_*` - реализация методов.
+- `src/backend/grpc/client.py` - клиент, которым пользуются bot и Mini App.
+- `src/backend/grpc/translators*.py` - перевод protobuf <-> application summaries.
+- `src/application/services/helpdesk` - фасад операций, authorization guard, audit.
+- `src/application/use_cases/tickets` - сценарии заявок.
+- `src/application/use_cases/analytics` - экспорт аналитики.
+- `src/infrastructure/db/repositories` - PostgreSQL-репозитории.
+- `src/infrastructure/exports` - рендереры `HTML` и `CSV`.
 
-- `x-helpdesk-internal-token`;
-- `x-helpdesk-caller`;
-- `x-correlation-id`;
-- `x-helpdesk-actor-telegram-user-id`, когда нужен контекст действия.
+## Авторизация и actor context
 
-Для связи `backend -> ai-service` используется тот же подход, но со своим токеном `AI_SERVICE_AUTH__TOKEN`.
+Роль пользователя вычисляется через `AuthorizationService`: `super_admin` берётся из `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`, оператор - из operator repository, остальные получают `user`.
 
-Неавторизованный вызов не должен доходить до продуктового сценария. Это проверяется на транспортной границе.
+Для действий оператора backend использует actor из metadata или request. Если actor в metadata и protobuf не совпадает, запрос считается некорректным.
 
-## AI-контур
+## AI orchestration
 
-`backend` не хостит AI-провайдер внутри себя. Он собирает бизнес-контекст, вызывает `ai-service`, получает структурированный ответ и решает, как встроить его в продуктовый сценарий.
+Backend не вызывает внешний AI API напрямую. Он:
 
-Если AI недоступен, `backend` должен отработать штатно там, где возможна деградация без потери основной функции. Для оператора это означает отсутствие AI-подсказки, а не падение основного контура.
+1. собирает историю заявки, заметки, макросы или список тем;
+2. строит структурированную команду;
+3. вызывает `ai-service` через gRPC с `AI_SERVICE_AUTH__TOKEN`;
+4. получает validated result;
+5. возвращает UI понятное состояние: подсказка доступна или недоступна.
 
-## Аудит
+Недоступный провайдер не должен ломать основную работу с заявкой.
 
-`backend` пишет структурные записи по операциям, которые важны с точки зрения эксплуатации и разборов:
+## Exports
 
-- изменения по заявке;
-- выгрузки;
-- управление операторами, темами и макросами;
-- выпуск и погашение инвайт-кодов.
+Backend отдаёт:
 
-См. также:
+- ticket report: `TicketReportFormat.HTML` и `TicketReportFormat.CSV`;
+- analytics export: секции `overview`, `operators`, `topics`, `quality`, `sla` в `HTML` или `CSV`.
 
-- [Архитектура](../architecture/README.md)
-- [Эксплуатация](../operations/README.md)
+Внутренние заметки в ticket report зависят от `EXPORTS__INCLUDE_INTERNAL_NOTES_IN_TICKET_REPORTS`.
+
+## Audit
+
+Audit пишется через `AuditTrail` в таблицу `audit_logs`. Записи содержат action, entity type, outcome, actor id, entity id/public id, correlation id и JSON metadata.
+
+Аудируются операции управления операторами, инвайтами, темами, макросами, заявками, тегами, обратной связью и экспортами.
+
+## Типовые изменения
+
+### Добавить действие по заявке
+
+1. Добавьте use case или метод в `src/application/use_cases/tickets`.
+2. Подключите его в `src/application/services/helpdesk/components.py`.
+3. Добавьте метод фасада в `src/application/services/helpdesk/*_operations.py`.
+4. Если действие вызывается снаружи, расширьте `helpdesk.proto`, server, client и translators.
+5. Добавьте audit, если действие меняет состояние или важно для разбора инцидентов.
+
+### Добавить поле в Mini App ticket workspace
+
+1. Проверьте, есть ли поле в `TicketDetailsSummary`.
+2. Если нет - протащите его из repository -> summary -> protobuf -> translator.
+3. Добавьте сериализацию в `src/mini_app/serializers.py`.
+4. Обновите renderer в `src/mini_app/static/assets/renderers.js`.
+
+### Добавить поле в export
+
+1. Расширьте report dataclass в `src/application/use_cases/tickets/exports.py` или analytics snapshot.
+2. Передайте данные из repository/use case.
+3. Обновите нужные рендереры в `src/infrastructure/exports`.
+4. Добавьте тест на формат, если поле влияет на безопасность CSV/HTML.
+
+### Добавить AI-assisted operation
+
+1. Опишите команду и результат в application contracts.
+2. Добавьте gRPC метод в `src/ai_service/proto/ai_service.proto`.
+3. Реализуйте prompt/result validation в `src/ai_service`.
+4. Добавьте backend orchestration и degradation path.
+5. Обновите UI только после появления устойчивого backend-контракта.
+
+## Проверки
+
+Для backend-изменений обычно нужны:
+
+```bash
+make lint
+make typecheck
+make test
+make proto-check
+make migration-check
+```
+
+Если менялись только тексты UI без backend-контракта, `proto-check` не обязателен. Если менялись модели или репозитории, `migration-check` обязателен.

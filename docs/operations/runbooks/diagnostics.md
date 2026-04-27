@@ -1,94 +1,171 @@
-# Диагностика и типовые сбои
+# Диагностика
 
-## С чего начать
-
-Если стек ведёт себя не так, как ожидается, обычно достаточно пройти один и тот же короткий маршрут:
+## Начните отсюда
 
 ```bash
 make ps
 make health
-make logs-backend
 make smoke
+make logs-backend
 ```
 
-Этого хватает, чтобы отделить проблему контейнера от проблемы конфигурации и от проблемы внутри самой службы.
+Если проблема явно в UI, добавьте:
 
-## Где смотреть
+```bash
+make logs-bot
+make logs-mini-app
+curl http://127.0.0.1:8088/healthz
+```
 
-- `make logs-backend` — миграции, PostgreSQL, Redis, доступность `ai-service`, внутренняя авторизация;
-- `make logs-ai` — состояние AI-провайдера, ошибки внешнего API, внутренний gRPC;
-- `make logs-bot` — запуск Telegram-слоя, связь с `backend`, ошибки polling;
-- `make logs-mini-app` — запуск Mini App gateway, состояние `MINI_APP__PUBLIC_URL`, ошибки HTTP;
-- `make health-backend` — прикладная проверка `backend`;
-- `make health-ai` — прикладная проверка `ai-service`;
-- `make health-bot` — внутренняя диагностика bot-процесса.
-- `curl http://127.0.0.1:8088/healthz` — локальная проверка Mini App endpoint.
+## Backend недоступен
 
-## Если недоступен `backend`
-
-Проверьте:
+Команды:
 
 ```bash
 make logs-backend
 make health-backend
 ```
 
-Чаще всего причина одна из этих:
+Вероятные причины:
 
-- неверные `DATABASE__*`;
-- Redis не отвечает;
-- `ai-service` недоступен по gRPC;
-- токен `AI_SERVICE_AUTH__TOKEN` не совпадает;
-- миграция завершилась ошибкой.
+- PostgreSQL недоступен или неверные `DATABASE__*`;
+- Redis недоступен или неверные `REDIS__*`;
+- `ai-service` не отвечает по `AI_SERVICE__HOST`/`AI_SERVICE__PORT`;
+- не совпадает `AI_SERVICE_AUTH__TOKEN`;
+- Alembic migration завершилась ошибкой.
 
-## Если недоступен `ai-service`
+Следующие проверки:
 
-Проверьте:
+```bash
+make logs-ai
+make ps
+make migration-check
+```
+
+## AI-service недоступен
+
+Команды:
 
 ```bash
 make logs-ai
 make health-ai
 ```
 
-Здесь важно различать две ситуации.
+Разделяйте два случая:
 
-Первая: служба жива, но провайдер отключён или не настроен. Тогда основной контур продолжает работать без AI-подсказок.
+- `ai-service` жив, но provider disabled или без token - основной helpdesk работает без AI-подсказок;
+- `ai-service` не отвечает по gRPC - backend не проходит готовность.
 
-Вторая: сама служба недоступна по gRPC. Тогда `backend` не сможет выйти в готовность, и это уже влияет на весь стек.
+Проверьте:
 
-## Если проблема в PostgreSQL
+- `AI_SERVICE__HOST`;
+- `AI_SERVICE__PORT`;
+- `AI_SERVICE_AUTH__TOKEN`;
+- `AI__PROVIDER`;
+- `AI__MODEL_ID`;
+- `AI__API_TOKEN`.
 
-Характерные признаки:
+## Bot недоступен
 
-- `backend` не проходит проверку зависимости `postgresql`;
-- `smoke` падает в самом начале;
-- в логах видны `SQLAlchemyError`, timeout или connection refused.
+Команды:
 
-Что проверить:
+```bash
+make logs-bot
+make health-bot
+```
 
-1. состояние контейнера `postgres`;
-2. значения `DATABASE__HOST`, `DATABASE__PORT`, `DATABASE__USER`, `DATABASE__PASSWORD`, `DATABASE__DATABASE`;
-3. состояние volume с данными.
+Вероятные причины:
 
-## Если проблема в Redis
+- `APP__DRY_RUN=false`, но `BOT__TOKEN` пустой или неверный;
+- backend недоступен;
+- Redis/PostgreSQL недоступны для runtime diagnostics;
+- Telegram polling конфликтует с другим запущенным экземпляром бота.
 
-Обычно это проявляется так:
+Если нужен локальный режим без polling:
 
-- `bot` не поднимает свои рабочие поверхности;
-- `backend` или `bot` падают на startup dependency check `redis`;
-- часть интерактивных сценариев ведёт себя так, будто контекст потерян.
+```dotenv
+APP__DRY_RUN=true
+```
 
-Redis в проекте нужен для координации во время работы, но не является долговременным источником данных. После его восстановления стоит сразу прогнать `make health` и `make smoke`.
+## Mini App недоступен
 
-## Если не видно кнопку Mini App
+Команды:
 
-Проверьте три вещи по порядку:
+```bash
+make logs-mini-app
+make health-mini-app
+curl http://127.0.0.1:8088/healthz
+```
 
-1. `MINI_APP__PUBLIC_URL` задан и это публичный `HTTPS` адрес.
-2. В логах `bot` или `mini-app` нет предупреждения про невалидный Mini App URL.
-3. Сам HTTP endpoint Mini App отвечает локально.
+Вероятные причины:
 
-Быстрый маршрут:
+- `mini-app` не может дойти до backend;
+- внешний порт отличается от ожидаемого `MINI_APP_EXPOSE_PORT`;
+- `MINI_APP__PUBLIC_URL` невалиден для Telegram launch;
+- frontend открыт не из Telegram и init data отсутствует.
+
+Важно: `/healthz` может отвечать локально, даже если Telegram launch button не работает из-за публичного URL.
+
+## Проблема PostgreSQL
+
+Признаки:
+
+- `backend` падает на startup check `postgresql`;
+- `make smoke` падает на проверке базы;
+- в логах есть connection refused, timeout или SQLAlchemy exception.
+
+Проверьте:
+
+```bash
+make ps
+make logs-backend
+docker compose -f ops/docker/compose.yml -f ops/docker/compose.dev.yml logs postgres
+```
+
+Параметры:
+
+- `DATABASE__HOST`;
+- `DATABASE__PORT`;
+- `DATABASE__USER`;
+- `DATABASE__PASSWORD`;
+- `DATABASE__DATABASE`;
+- `POSTGRES_EXPOSE_PORT`.
+
+## Проблема Redis
+
+Признаки:
+
+- bot или backend падает на startup check `redis`;
+- теряется FSM-контекст;
+- operator presence или блокировки работают нестабильно.
+
+Проверьте:
+
+```bash
+make ps
+make logs-backend
+make logs-bot
+docker compose -f ops/docker/compose.yml -f ops/docker/compose.dev.yml logs redis
+```
+
+Параметры:
+
+- `REDIS__HOST`;
+- `REDIS__PORT`;
+- `REDIS__DB`;
+- `REDIS__PASSWORD`;
+- `REDIS_EXPOSE_PORT`.
+
+После восстановления Redis прогоните:
+
+```bash
+make health
+make smoke
+```
+
+## Mini App button missing
+
+Проверьте:
 
 ```bash
 make logs-bot
@@ -97,25 +174,69 @@ make health-bot
 curl http://127.0.0.1:8088/healthz
 ```
 
-Что считать проблемой конфигурации:
+Частые причины:
 
-- URL пустой;
-- используется `http://`;
+- `MINI_APP__PUBLIC_URL` пустой;
+- URL начинается с `http://`;
 - указан `localhost`, приватный IP или локальный домен;
-- `mini-app` поднят, но `GET /healthz` не отвечает.
+- после изменения `.env` не перезапущены `bot` и `mini-app`;
+- `cloudflared` tunnel сменил адрес, а `.env` ещё содержит старый.
 
-В `bot /health` Mini App показывается отдельными проверками:
+Для временного публичного URL:
 
-- `mini_app_url` — сконфигурирован ли Telegram-валидный launch URL;
-- `mini_app_http` — отвечает ли сам Mini App endpoint.
+```bash
+make full-cloudflared
+```
 
-## Как читать startup checks
+## AI настроен, но не работает
 
-В логах startup dependency checks есть классификация ошибки:
+Команды:
 
-- `auth_issue` — проблема во внутренней авторизации;
-- `config_issue` — неправильная или неполная конфигурация;
-- `dependency_issue` — сеть, порт, контейнер или внешняя зависимость;
-- `runtime_issue` — сбой уже внутри кода.
+```bash
+make logs-ai
+make logs-backend
+make smoke
+```
 
-Этого обычно достаточно, чтобы быстро понять, с какой стороны подступаться к проблеме.
+Проверьте:
+
+- `AI__PROVIDER=huggingface`;
+- `AI__MODEL_ID` задан;
+- `AI__API_TOKEN` задан;
+- `AI__BASE_URL` доступен;
+- `AI_SERVICE_AUTH__TOKEN` одинаковый для backend и `ai-service`;
+- runtime AI settings в Mini App admin не отключают нужную функцию.
+
+Если provider возвращает ошибку, `ai-service` должен показать её в логах операции, а UI - недоступность конкретной подсказки.
+
+## Экспорты падают
+
+Команды:
+
+```bash
+make logs-backend
+make smoke
+```
+
+Проверьте:
+
+- существует ли заявка;
+- есть ли доступ у actor;
+- корректен ли `format`: `html` или `csv`;
+- для analytics корректны `section` и `window`;
+- не ломает ли новое поле renderer в `src/infrastructure/exports`.
+
+Если экспорт падает только в Mini App, дополнительно смотрите:
+
+```bash
+make logs-mini-app
+```
+
+## Классификация startup checks
+
+В логах startup checks используются категории:
+
+- `auth_issue` - internal token или actor metadata;
+- `config_issue` - неполная или неверная конфигурация;
+- `dependency_issue` - сеть, порт, контейнер или внешний сервис;
+- `runtime_issue` - ошибка внутри процесса после чтения конфигурации.

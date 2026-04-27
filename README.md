@@ -1,104 +1,113 @@
 # Reliora
 
-`Reliora` — внутренний helpdesk в Telegram. Клиент пишет в чат, оператор работает там же.
+Reliora - helpdesk в Telegram: клиент пишет в бот, оператор работает в Mini App, backend хранит процесс и историю.
 
-## Что внутри
+## Что делает Reliora
 
-Контур состоит из шести служб:
+Reliora закрывает базовый контур поддержки внутри Telegram:
 
-- `bot` — Telegram-слой: тексты, клавиатуры, маршрутизация, доставка сообщений;
-- `backend` — внутренний gRPC-сервис с продуктовой логикой;
-- `mini-app` — операторский Telegram Mini App поверх backend API;
-- `ai-service` — отдельная служба для AI-задач;
-- `postgres` — основное хранилище;
-- `redis` — состояние диалогов, блокировки, presence, потоки и координация SLA.
+- принимает обращения клиентов и сохраняет историю переписки;
+- ведёт очередь заявок и личный список оператора;
+- даёт оператору рабочее место в Telegram Mini App;
+- хранит архив закрытых заявок;
+- показывает операционную аналитику;
+- отдаёт `HTML` и `CSV` выгрузки по заявкам и аналитике;
+- помогает оператору через AI: сводка, черновик ответа, подсказки макросов, рекомендация темы;
+- поддерживает роли `user`, `operator`, `super_admin` и одноразовые инвайты операторов.
 
-Граница остаётся прямой и читаемой:
+## Схема системы
 
 ```text
-bot -> gRPC -> backend -> gRPC -> ai-service
-mini-app -> HTTP -> gRPC -> backend -> gRPC -> ai-service
+bot      -> gRPC -> backend -> gRPC    -> ai-service
+mini-app -> HTTP -> gRPC    -> backend -> gRPC -> ai-service
 ```
 
-## Что уже есть
-
-- приём обращения с выбором темы;
-- живой диалог клиента и оператора;
-- очередь, личные заявки и активный контекст оператора;
-- архив закрытых дел;
-- HTML- и CSV-экспорт по заявке;
-- HTML- и CSV-экспорт аналитики;
-- роли `user`, `operator`, `super_admin`;
-- одноразовые инвайт-коды для операторов;
-- вложения, внутренние заметки, теги, макросы, обратная связь;
-- Redis-backed FSM и отдельный gRPC `backend`;
-- AI-помощь через `ai-service`: сводка по делу, подсказки по макросам и рекомендация темы.
-- Telegram Mini App для операторов и суперадминистраторов: обзор, очередь, архив, аналитика, экспорт и ticket workspace.
+- `bot` - Telegram-интерфейс: команды, тексты, клавиатуры, доставка сообщений и вложений.
+- `mini-app` - HTTP gateway и статический frontend для операторского рабочего места.
+- `backend` - внутренний gRPC-сервис с правилами helpdesk, доступами, аудитом и экспортами.
+- `ai-service` - отдельный gRPC-сервис для AI-операций.
+- `postgres` - долговременное состояние: заявки, сообщения, операторы, справочники, аудит.
+- `redis` - runtime-состояние: FSM, блокировки, presence, rate limits, SLA-координация.
 
 ## Быстрый старт
 
 ```bash
 cp .env.example .env
 make full
+make health
+make smoke
 ```
 
-Если нужен полный локальный стек сразу с публичным HTTPS URL для Telegram Mini App:
+`make full` собирает Docker-образы, поднимает стек и ждёт готовности служб. Если нужно только поднять Compose-стек без полного сценария проверки, используйте:
 
 ```bash
-make full-cloudflared
+make up
 ```
 
-Если нужен локальный запуск без реального polling Telegram, оставьте в `.env`:
+Для локального старта без реального Telegram polling оставьте:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-Для более аккуратной сборки окружения можно брать значения из шаблонов в [ops/env/README.md](ops/env/README.md).
+В этом режиме бот и зависимости инициализируются, но polling Telegram не запускается. Для настоящего бота нужен рабочий `BOT__TOKEN` и `APP__DRY_RUN=false`.
 
-## Mini App
+## Telegram Mini App
 
-Для кнопки `Рабочее место` в Telegram нужен реальный публичный `HTTPS` адрес:
+Кнопка меню `Панель` появляется только при валидном:
 
 ```dotenv
 MINI_APP__PUBLIC_URL=https://mini-app.example.com
 ```
 
-Важно:
+Telegram требует публичный `HTTPS` URL. Не подходят `localhost`, приватные IP, локальные домены и `http://`.
 
-- пустой `MINI_APP__PUBLIC_URL` отключает кнопку Mini App;
-- `http://`, `localhost`, приватные IP и локальные домены Telegram не подходят;
-- текущее состояние Mini App видно в логах запуска, `bot /health` и `GET /healthz` у `mini-app`.
+Для локальной проверки с временным публичным адресом есть сценарий через `cloudflared`:
 
-## AI-контур
+```bash
+make full-cloudflared
+```
 
-Минимально для AI нужны:
+Команда поднимает стек, открывает tunnel к Mini App, обновляет `MINI_APP__PUBLIC_URL` в `.env` и перезапускает потребителей URL.
+
+## AI
+
+AI-контур работает через `ai-service`. Минимальный набор:
 
 ```dotenv
-AI_SERVICE__HOST=localhost
-AI_SERVICE__PORT=50081
 AI_SERVICE_AUTH__TOKEN=change-me-ai-in-prod
-
 AI__PROVIDER=huggingface
 AI__MODEL_ID=Qwen/Qwen3.5-4B
 AI__API_TOKEN=hf_xxx
 ```
 
-## Основные команды
+Если провайдер не настроен, основной helpdesk продолжает работать. AI-операции возвращают состояние недоступности: оператор не получает сводку, черновик или рекомендацию, но заявка и переписка не ломаются.
 
-- `make up` — поднять стек в Docker Compose;
-- `make health` — посмотреть состояние контейнеров;
-- `make smoke` — прогнать прикладную smoke проверку;
-- `make logs` — смотреть логи `ai-service`, `backend` и `bot`;
-- `make run-mini-app` — поднять Mini App gateway локально;
-- `make backup-db` — сделать логическую резервную копию PostgreSQL.
+## Полезные команды
 
-## Документация
+| Команда | Назначение |
+| --- | --- |
+| `make full` | собрать, запустить и проверить полный Docker-стек |
+| `make up` / `make down` | поднять или остановить Compose-стек |
+| `make ps` | показать состояние сервисов |
+| `make health` | проверить health контейнеров |
+| `make smoke` | проверить связи PostgreSQL, Redis, backend, ai-service и bot runtime |
+| `make logs` | смотреть логи `ai-service`, `backend`, `bot`, `mini-app` |
+| `make run-mini-app` | запустить Mini App gateway локально |
+| `make backup-db` | создать логический backup PostgreSQL |
+| `make check` | `lint`, `typecheck`, `test` |
+| `make ci` | `check`, `proto-check`, `migration-check` |
 
-- [Продукт](docs/product/README.md)
-- [Архитектура](docs/architecture/README.md)
-- [Backend](docs/backend/README.md)
-- [Bot](docs/bot/README.md)
-- [Разработка](docs/development/README.md)
-- [Эксплуатация](docs/operations/README.md)
-- [Безопасность](docs/security/README.md)
+## Карта документации
+
+- [Продукт](docs/product/README.md) - роли, жизненный цикл заявки, операторские поверхности и ограничения.
+- [Архитектура](docs/architecture/README.md) - границы сервисов, потоки запросов и куда класть изменения.
+- [Backend](docs/backend/README.md) - gRPC-граница, actor context, оркестрация AI, экспорт и аудит.
+- [Bot](docs/bot/README.md) - Telegram UX, handlers, тексты, клавиатуры и вложения.
+- [Mini App](docs/mini-app/README.md) - маршруты, Telegram init data, файлы frontend и типовые сбои.
+- [AI](docs/ai/README.md) - AI-возможности, настройки провайдера, деградация и правила безопасности.
+- [Exports](docs/exports/README.md) - состав `HTML` и `CSV` выгрузок и код рендереров.
+- [Разработка](docs/development/README.md) - локальный запуск, проверки, миграции, proto и рабочие сценарии.
+- [Эксплуатация](docs/operations/README.md) - порядок старта, health checks, логи, backup и runbooks.
+- [Переменные окружения](ops/env/README.md) - структура `.env`, минимальные настройки и частые ошибки.
+- [Безопасность](docs/security/README.md) - threat model, internal auth, инвайты, вложения, экспорты и AI-граница.

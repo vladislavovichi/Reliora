@@ -1,82 +1,137 @@
 # Архитектура
 
-Reliora держит Telegram-слой отдельно от продуктовой логики. Это сделано не ради красоты схемы, а чтобы проект оставался управляемым по мере роста: интерфейс можно менять отдельно, транспортные контуры — отдельно, бизнес-правила — отдельно.
+Документ описывает рабочие границы Reliora: какой сервис за что отвечает, как идут запросы и куда вносить изменения.
 
-Базовый маршрут запроса выглядит так:
+## Общая схема
 
 ```text
-Telegram -> bot -> gRPC -> backend -> gRPC -> ai-service
+Telegram
+  |
+  v
+bot --------------------.
+  | gRPC                |
+  v                     |
+backend <--- gRPC --- mini-app HTTP gateway + static frontend
+  |
+  | gRPC
+  v
+ai-service
+
+postgres - durable state
+redis    - runtime coordination
 ```
 
-Ниже транспортного слоя находятся `application`, `domain` и `infrastructure`.
+## Ответственность сервисов
+
+| Сервис | Ответственность |
+| --- | --- |
+| `bot` | Telegram update handling, тексты, клавиатуры, форматирование, доставка сообщений и файлов |
+| `mini-app` | проверка Telegram init data, HTTP API для frontend, статические файлы Mini App |
+| `backend` | бизнес-операции helpdesk, авторизация ролей, аудит, экспорт, оркестрация AI |
+| `ai-service` | структурированные AI-операции: summary, reply draft, macros, category, sentiment |
+| `postgres` | заявки, сообщения, операторы, инвайты, справочники, обратная связь, аудит, AI-сводки |
+| `redis` | FSM, блокировки, presence, rate limits, streams, SLA runtime-состояние |
+
+## Слои в коде
+
+- `application` - сценарии и сервисы приложения. Здесь принимаются продуктовые решения.
+- `domain` - статусы, роли, сущности, инварианты и контракты репозиториев.
+- `infrastructure` - PostgreSQL, Redis, assets, exports, logging, settings, AI provider.
+- Transport adapters - `src/bot`, `src/backend/grpc`, `src/mini_app`, `src/ai_service/grpc`.
+
+Транспортные объекты не должны протекать в `application`: protobuf, aiogram `Message` и HTTP request остаются на краях системы.
+
+## Потоки запросов
+
+### Сообщение клиента
+
+```text
+Telegram update
+-> bot handler
+-> backend gRPC CreateTicketFromClientMessage/CreateTicketFromClientIntake
+-> application ticket use case
+-> postgres event/message/ticket rows
+-> optional ai-service category/sentiment
+```
+
+Bot нормализует Telegram-ввод и вложения. Backend создаёт или обновляет заявку и пишет события.
+
+### Действие оператора в боте
+
+```text
+callback/message
+-> bot handler
+-> backend gRPC
+-> HelpdeskService
+-> application use case
+-> postgres/audit
+-> bot delivery to client/operator
+```
+
+Пример: взять заявку, ответить, закрыть, добавить заметку, применить макрос.
+
+### Действие в Mini App
+
+```text
+frontend fetch
+-> mini-app HTTP
+-> Telegram init data validation
+-> backend gRPC with actor metadata
+-> application use case
+-> JSON or file response
+```
+
+Mini App не ходит в базу напрямую. Он проверяет запуск Telegram и передаёт действие в backend.
+
+### AI-запрос
+
+```text
+backend
+-> builds structured command
+-> ai-service gRPC
+-> provider or local sentiment logic
+-> validated structured result
+-> backend product response
+```
+
+`ai-service` возвращает подсказки. Решение о том, как показать их оператору, остаётся в backend и UI.
+
+### Генерация экспорта
+
+```text
+bot or mini-app
+-> backend ExportTicketReport/ExportAnalyticsSnapshot
+-> application export use case
+-> infrastructure renderer
+-> HTML/CSV bytes
+```
+
+Рендереры лежат в `src/infrastructure/exports`.
 
 ## Границы
 
-### `bot`
+- `bot` не владеет продуктовыми правилами. Он показывает экран, принимает ввод и вызывает backend.
+- `mini-app` не обращается к PostgreSQL или Redis напрямую.
+- `backend` владеет бизнес-решениями, доступами, аудитом и контрактом данных наружу.
+- `ai-service` возвращает структурированные предложения, а не меняет состояние helpdesk.
+- `postgres` - источник долговременной правды.
+- `redis` - координация во время работы, не архив и не backup-источник.
 
-`bot` отвечает за всё, что связано с Telegram:
+## Куда класть изменения
 
-- тексты;
-- клавиатуры;
-- форматирование экранов;
-- маршрутизацию handler-ов;
-- доставку сообщений клиенту и оператору;
-- локальный контекст взаимодействия.
+| Изменение | Директория |
+| --- | --- |
+| новое правило заявки | `src/application/use_cases/tickets` или `src/application/services/helpdesk` |
+| новый gRPC метод backend | `src/backend/proto`, `src/backend/grpc`, `src/backend/grpc/translators*` |
+| новая Telegram-кнопка или экран | `src/bot/texts`, `src/bot/keyboards`, `src/bot/formatters`, `src/bot/handlers` |
+| новый экран Mini App | `src/mini_app/static/assets`, при необходимости `src/mini_app/api.py` и `src/mini_app/http.py` |
+| новое поле экспорта | `src/application/use_cases/*/exports.py` и `src/infrastructure/exports` |
+| новая AI-операция | `src/ai_service/proto`, `src/ai_service/service.py`, `src/application/use_cases/ai` |
+| новая таблица | `src/infrastructure/db/models`, `src/infrastructure/db/repositories`, `migrations/versions` |
 
-`bot` не должен хранить у себя продуктовые решения. Его задача — показать экран, принять действие и передать его дальше.
+## Известные компромиссы
 
-### `backend`
-
-`backend` — основной внутренний сервис. Он принимает gRPC-запросы, проверяет служебные метаданные, вызывает продуктовые сценарии и возвращает собранный результат.
-
-Здесь живут:
-
-- работа с заявками;
-- очередь и архив;
-- роли, операторы и инвайт-коды;
-- аналитика и выгрузки;
-- оркестрация AI-вызовов;
-- аудит чувствительных действий.
-
-### `ai-service`
-
-`ai-service` — отдельная служба с узкой зоной ответственности. Она не знает о Telegram-экранах и не управляет сценариями работы helpdesk. Её задача — принять структурированный запрос, обратиться к провайдеру и вернуть результат в заранее согласованной форме.
-
-Через неё проходят:
-
-- сводка по заявке;
-- подбор макросов;
-- рекомендация темы при новом обращении.
-
-### `application`, `domain`, `infrastructure`
-
-- `application` описывает сценарии и правила работы;
-- `domain` держит сущности, инварианты и контракты репозиториев;
-- `infrastructure` соединяет код с PostgreSQL, Redis, файловым хранилищем, конфигурацией, логированием и экспортами.
-
-## Карта каталога `src`
-
-- `src/app` — сборка и запуск bot-процесса;
-- `src/bot` — Telegram-слой;
-- `src/backend` — protobuf, gRPC server/client, транспортная граница;
-- `src/ai_service` — AI-служба и её gRPC-контур;
-- `src/application` — продуктовые сценарии и сервисы;
-- `src/domain` — модель предметной области;
-- `src/infrastructure` — внешние зависимости и системные адаптеры.
-
-## Почему это разделение полезно
-
-У проекта довольно плотный операторский интерфейс: очередь, активный контекст, архив, аналитика, выгрузки, заметки, вложения, макросы, теги. Если держать всё это внутри handler-ов, код быстро превращается в набор связанных между собой исключений.
-
-Текущее разделение решает ровно эту проблему:
-
-- `bot` остаётся интерфейсным слоем;
-- `backend` становится точкой правды для продуктового поведения;
-- AI можно развивать и обслуживать отдельно;
-- PostgreSQL остаётся источником долговременной правды;
-- Redis отвечает только за координацию во время работы системы.
-
-См. также:
-
-- [Backend](../backend/README.md)
-- [Bot](../bot/README.md)
+- Сервисов больше, чем в одном bot script. Это повышает стоимость локальной сборки, но отделяет Telegram UX от правил helpdesk.
+- Внутренний gRPC добавляет protobuf и генерацию stubs. Зато контракт между `bot`, `mini-app`, `backend` и `ai-service` явный.
+- Mini App имеет отдельный HTTP gateway. Он не самый короткий путь к данным, но сохраняет единую backend-авторизацию и аудит.
+- Redis хранит runtime-состояние. После потери Redis возможна потеря FSM-контекста, но история заявок остаётся в PostgreSQL.

@@ -1,62 +1,70 @@
 # Эксплуатация
 
-Этот раздел нужен для повседневной работы со стеком: поднять, проверить, посмотреть состояние, снять резервную копию, понять, где искать причину сбоя.
+Этот раздел нужен для запуска, проверки и разбора сбоев работающего стека.
 
-## Состав стека
+## Компоненты
 
-- `postgres` — основное постоянное хранилище;
-- `redis` — состояние диалогов, блокировки, presence, потоки и координация SLA;
-- `ai-service` — внутренняя служба для AI-задач;
-- `backend` — продуктовый gRPC-сервис;
-- `bot` — Telegram-слой.
-
-## Основные команды
-
-```bash
-make up
-make ps
-make health
-make smoke
-make logs
-make logs-backend
-make logs-ai
-make backup-db
-make down
-```
-
-`make health` показывает состояние контейнеров Compose.  
-`make health-bot`, `make health-backend` и `make health-ai` запускают прикладные проверки самих служб.
+- `postgres` - основная база данных.
+- `redis` - FSM, блокировки, presence, rate limits, streams, SLA runtime state.
+- `ai-service` - внутренний gRPC-сервис AI-операций.
+- `backend` - продуктовый gRPC-сервис.
+- `bot` - Telegram runtime.
+- `mini-app` - HTTP gateway и статический frontend Mini App.
 
 ## Нормальный порядок старта
 
-Рабочий старт выглядит так:
+1. `postgres` проходит `pg_isready`.
+2. `redis` отвечает на `PING`.
+3. `ai-service` поднимает gRPC endpoint.
+4. `backend` применяет Alembic migrations и проверяет PostgreSQL, Redis, `ai-service`.
+5. `bot` проверяет backend и runtime-зависимости.
+6. `mini-app` проверяет связь с backend и отдаёт `/healthz`.
 
-1. `postgres` и `redis` становятся `healthy`;
-2. `ai-service` начинает отвечать на внутреннюю gRPC-проверку статуса;
-3. `backend` применяет миграции, проверяет зависимости и выходит в готовность;
-4. `bot` проверяет `backend`, Redis и PostgreSQL, после чего считается готовым.
+В Compose эти зависимости описаны через health checks. `backend` запускает миграции, `bot` и `mini-app` миграции не запускают.
 
-Если одна из критичных зависимостей недоступна, процесс должен завершиться явно. Состояние «процесс жив, но система не работает» здесь считается ошибкой.
+## Проверки health
 
-## Что означают проверки
+```bash
+make ps
+make health
+make smoke
+```
 
-- для `postgres` готовность — это успешный `pg_isready`;
-- для `redis` — успешный `PING`;
-- для `ai-service` — живой gRPC endpoint и корректная внутренняя авторизация;
-- для `backend` — доступные PostgreSQL, Redis, `ai-service` и собственный gRPC status;
-- для `bot` — успешная внутренняя диагностика зависимостей и рабочих поверхностей.
+`make health` по умолчанию проверяет `postgres`, `redis`, `ai-service`, `backend`, `bot`. Mini App проверяйте отдельной командой ниже или через `STACK_SERVICES`.
 
-У `ai-service` есть отдельное промежуточное состояние: служба жива, но AI-провайдер отключён или не настроен. В этом случае основной контур остаётся рабочим, просто без AI-подсказок.
+Дополнительные проверки процессов:
 
-## Runbook-и
+```bash
+make health-backend
+make health-ai
+make health-bot
+make health-mini-app
+curl http://127.0.0.1:8088/healthz
+```
+
+`make smoke` проверяет PostgreSQL, Redis, видимость AI-провайдера, gRPC `ai-service`, gRPC `backend`, функциональный backend call и bot runtime diagnostics.
+
+## Логи
+
+```bash
+make logs
+make logs-backend
+make logs-ai
+make logs-bot
+make logs-mini-app
+```
+
+Первый лог для большинства проблем - `make logs-backend`: там видны миграции, startup checks, связь с Redis/PostgreSQL/AI и ошибки internal auth.
+
+## Backup, деплой и диагностика
 
 - [Деплой и обновление](runbooks/deploy.md)
 - [Диагностика и типовые сбои](runbooks/diagnostics.md)
-- [Резервная копия и восстановление PostgreSQL](runbooks/backup-restore.md)
+- [Backup и restore PostgreSQL](runbooks/backup-restore.md)
 
-## Что полезно помнить
+## Что помнить
 
-- `/health` в Telegram остаётся быстрым срезом состояния для операторов;
-- аудит чувствительных действий пишет `backend`;
-- Redis не считается источником долговременной правды;
-- `smoke` не заменяет тесты, а подтверждает, что стек действительно поднялся и основные связи работают.
+- Redis можно восстановить как runtime-зависимость, но потерянный FSM-контекст не восстанавливается из backup.
+- Backup базы не включает `ASSETS__PATH`, `.env` и Docker volumes вне PostgreSQL dump.
+- Отключённый AI provider - degraded mode; недоступный `ai-service` ломает готовность backend.
+- Пустой или невалидный `MINI_APP__PUBLIC_URL` отключает Telegram launch button, но не ломает bot.
