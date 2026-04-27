@@ -15,7 +15,7 @@ from application.ai.summaries import (
 )
 from application.contracts.actors import RequestActor
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
-from mini_app.api import MiniAppGateway
+from mini_app.api import MiniAppAIRateLimiter, MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.serializers import serialize_ticket_ai_snapshot, serialize_ticket_reply_draft
 
@@ -140,6 +140,54 @@ async def test_gateway_generate_ticket_reply_draft_calls_backend_with_actor() ->
     assert result["available"] is True
     assert result["reply_text"] == "Здравствуйте! Проверим заявку и вернёмся с ответом."
     assert client.draft_calls == [(ticket_public_id, RequestActor(telegram_user_id=1001))]
+
+
+async def test_rate_limited_ai_summary_refresh_returns_clear_unavailable_response() -> None:
+    ticket_public_id = uuid4()
+    client = StubBackendClient(_build_snapshot())
+    gateway = MiniAppGateway(
+        backend_client_factory=build_backend_factory(client),
+        ai_rate_limiter=MiniAppAIRateLimiter(summary_limit=0),
+    )
+
+    result = await gateway.refresh_ticket_ai_summary(
+        user=TelegramMiniAppUser(
+            telegram_user_id=1001,
+            first_name="Anna",
+            last_name=None,
+            username="anna",
+            language_code="ru",
+        ),
+        ticket_public_id=ticket_public_id,
+    )
+
+    assert result["available"] is False
+    assert result["unavailable_reason"] == "rate_limited"
+    assert client.calls == []
+
+
+async def test_rate_limited_reply_draft_returns_clear_unavailable_response() -> None:
+    ticket_public_id = uuid4()
+    client = StubBackendClient(_build_snapshot())
+    gateway = MiniAppGateway(
+        backend_client_factory=build_backend_factory(client),
+        ai_rate_limiter=MiniAppAIRateLimiter(reply_draft_limit=0),
+    )
+
+    result = await gateway.generate_ticket_reply_draft(
+        user=TelegramMiniAppUser(
+            telegram_user_id=1001,
+            first_name="Anna",
+            last_name=None,
+            username="anna",
+            language_code="ru",
+        ),
+        ticket_public_id=ticket_public_id,
+    )
+
+    assert result["available"] is False
+    assert result["unavailable_reason"] == "rate_limited"
+    assert client.draft_calls == []
 
 
 def test_serialize_ticket_reply_draft_contains_expected_fields() -> None:

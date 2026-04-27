@@ -318,6 +318,9 @@ class MiniAppConfig(BaseModel):
     port: int = 8080
     public_url: str = ""
     init_data_ttl_seconds: int = 3600
+    ai_rate_limit_window_seconds: int = 60
+    ai_summary_rate_limit: int = 3
+    ai_reply_draft_rate_limit: int = 5
 
     @field_validator("public_url", mode="before")
     @classmethod

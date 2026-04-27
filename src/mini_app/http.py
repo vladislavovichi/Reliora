@@ -129,13 +129,16 @@ def build_handler_class(
                     HTTPStatus.UNAUTHORIZED,
                     {
                         "error": str(exc),
-                        "code": exc.code,
+                        "code": "unauthorized" if _is_ai_route(path) else exc.code,
                     },
                 )
             except PermissionError as exc:
                 self._write_json(
                     HTTPStatus.FORBIDDEN,
-                    {"error": str(exc), "code": "access_denied"},
+                    {
+                        "error": str(exc),
+                        "code": "forbidden" if _is_ai_route(path) else "access_denied",
+                    },
                 )
             except LookupError as exc:
                 self._write_json(
@@ -145,7 +148,10 @@ def build_handler_class(
             except ValueError as exc:
                 self._write_json(
                     HTTPStatus.BAD_REQUEST,
-                    {"error": str(exc), "code": "invalid_request"},
+                    {
+                        "error": str(exc),
+                        "code": "validation_error" if _is_ai_route(path) else "invalid_request",
+                    },
                 )
             except (ConnectionError, OSError, RuntimeError, TimeoutError) as exc:
                 logger.warning(
@@ -158,7 +164,9 @@ def build_handler_class(
                     HTTPStatus.SERVICE_UNAVAILABLE,
                     {
                         "error": "Mini App временно недоступен. Попробуйте ещё раз чуть позже.",
-                        "code": "backend_unavailable",
+                        "code": (
+                            "ai_unavailable" if _is_ai_route(path) else "backend_unavailable"
+                        ),
                     },
                 )
             except Exception:  # noqa: BLE001
@@ -230,7 +238,12 @@ def build_handler_class(
             if session["access"]["role"] == UserRole.USER.value:
                 self._write_json(
                     HTTPStatus.FORBIDDEN,
-                    {"error": ("Рабочее место доступно только операторам и суперадминистраторам.")},
+                    {
+                        "error": (
+                            "Рабочее место доступно только операторам и суперадминистраторам."
+                        ),
+                        "code": "forbidden" if _is_ai_route(path) else "access_denied",
+                    },
                 )
                 return
 
@@ -598,3 +611,10 @@ def _format_presence(value: bool | None) -> str:
     if value is False:
         return "missing"
     return "unknown"
+
+
+def _is_ai_route(path: str) -> bool:
+    return (
+        _TICKET_AI_SUMMARY_ROUTE.fullmatch(path) is not None
+        or _TICKET_AI_REPLY_DRAFT_ROUTE.fullmatch(path) is not None
+    )

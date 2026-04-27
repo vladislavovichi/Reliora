@@ -16,6 +16,17 @@ class AIMessage:
 class AIProviderError(RuntimeError):
     """Raised when the configured AI provider cannot complete a request."""
 
+    def __init__(self, message: str, *, failure_category: str = "provider_unavailable") -> None:
+        super().__init__(message)
+        self.failure_category = failure_category
+
+
+class AIProviderTimeoutError(AIProviderError):
+    """Raised when the configured AI provider request times out."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, failure_category="timeout")
+
 
 class AIProvider(Protocol):
     @property

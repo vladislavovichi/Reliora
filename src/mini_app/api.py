@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from time import monotonic
+from typing import Any, cast
 from uuid import UUID
 
 from application.ai.summaries import TicketReplyDraft
@@ -49,6 +50,44 @@ from mini_app.serializers import (
 )
 
 
+@dataclass(slots=True)
+class MiniAppAIRateLimiter:
+    summary_limit: int = 3
+    reply_draft_limit: int = 5
+    window_seconds: int = 60
+    _buckets: dict[tuple[str, int, UUID], tuple[float, int]] = field(default_factory=dict)
+
+    async def allow(
+        self,
+        *,
+        operation: str,
+        operator_telegram_user_id: int,
+        ticket_public_id: UUID,
+    ) -> bool:
+        limit = self.summary_limit if operation == "summary" else self.reply_draft_limit
+        if limit <= 0:
+            return False
+        now = monotonic()
+        key = (operation, operator_telegram_user_id, ticket_public_id)
+        window_started_at, count = self._buckets.get(key, (now, 0))
+        if now - window_started_at >= self.window_seconds:
+            window_started_at = now
+            count = 0
+        count += 1
+        self._buckets[key] = (window_started_at, count)
+        self._prune(now)
+        return count <= limit
+
+    def _prune(self, now: float) -> None:
+        expired = [
+            key
+            for key, (window_started_at, _count) in self._buckets.items()
+            if now - window_started_at >= self.window_seconds
+        ]
+        for key in expired:
+            self._buckets.pop(key, None)
+
+
 @dataclass(slots=True, frozen=True)
 class BinaryPayload:
     filename: str
@@ -62,6 +101,7 @@ class MiniAppGateway:
     ai_settings_repository: AISettingsRepository = field(
         default_factory=InMemoryAISettingsRepository
     )
+    ai_rate_limiter: MiniAppAIRateLimiter = field(default_factory=MiniAppAIRateLimiter)
 
     async def get_session(self, *, user: TelegramMiniAppUser) -> dict[str, Any]:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
@@ -215,6 +255,12 @@ class MiniAppGateway:
     ) -> dict[str, Any]:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
         settings = self.ai_settings_repository.get()
+        if settings.ai_summaries_enabled and not await self.ai_rate_limiter.allow(
+            operation="summary",
+            operator_telegram_user_id=user.telegram_user_id,
+            ticket_public_id=ticket_public_id,
+        ):
+            return _rate_limited_ai_summary_payload(model_id=settings.default_model_id)
         async with self.backend_client_factory() as client:
             ai_snapshot = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
@@ -241,6 +287,18 @@ class MiniAppGateway:
                 TicketReplyDraft(
                     available=False,
                     unavailable_reason="AI reply drafts are disabled by admin settings.",
+                    model_id=settings.default_model_id,
+                )
+            ) or {}
+        if not await self.ai_rate_limiter.allow(
+            operation="reply_draft",
+            operator_telegram_user_id=user.telegram_user_id,
+            ticket_public_id=ticket_public_id,
+        ):
+            return serialize_ticket_reply_draft(
+                TicketReplyDraft(
+                    available=False,
+                    unavailable_reason="rate_limited",
                     model_id=settings.default_model_id,
                 )
             ) or {}
@@ -540,7 +598,10 @@ class MiniAppGateway:
         ticket_public_id: UUID,
     ) -> TicketDetailsSummary | None:
         try:
-            return await client.get_ticket_details(ticket_public_id=ticket_public_id, actor=actor)
+            return cast(
+                TicketDetailsSummary | None,
+                await client.get_ticket_details(ticket_public_id=ticket_public_id, actor=actor),
+            )
         except Exception:  # noqa: BLE001
             return None
 
@@ -655,6 +716,22 @@ class MiniAppGateway:
                 "queue": ["unassigned_open_tickets", "tickets_without_category"],
             },
         }
+
+
+def _rate_limited_ai_summary_payload(*, model_id: str | None) -> dict[str, Any]:
+    return {
+        "available": False,
+        "unavailable_reason": "rate_limited",
+        "model_id": model_id,
+        "short_summary": None,
+        "user_goal": None,
+        "actions_taken": None,
+        "current_status": None,
+        "summary_status": "missing",
+        "summary_generated_at": None,
+        "status_note": None,
+        "macro_suggestions": [],
+    }
 
 
 def _deduplicate_dashboard_tickets(tickets: list[Any]) -> list[Any]:

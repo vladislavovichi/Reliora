@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
 
-from application.ai.contracts import AIMessage, AIProvider, AIProviderError
+from application.ai.contracts import AIMessage, AIProvider, AIProviderError, AIProviderTimeoutError
 from infrastructure.config.settings import AIConfig
 
 _DEFAULT_HUGGINGFACE_URL = "https://router.huggingface.co/v1/chat/completions"
@@ -86,9 +86,11 @@ class HuggingFaceAIProvider:
             detail = exc.read().decode("utf-8", errors="ignore")
             raise AIProviderError(f"Hugging Face request failed: {detail or exc.reason}") from exc
         except error.URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise AIProviderTimeoutError("Hugging Face request timed out.") from exc
             raise AIProviderError(f"Hugging Face request failed: {exc.reason}") from exc
         except TimeoutError as exc:
-            raise AIProviderError("Hugging Face request timed out.") from exc
+            raise AIProviderTimeoutError("Hugging Face request timed out.") from exc
 
         choices = raw.get("choices")
         if not isinstance(choices, list) or not choices:

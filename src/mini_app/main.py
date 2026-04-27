@@ -10,7 +10,7 @@ from infrastructure.config.ai_settings import (
 )
 from infrastructure.config.settings import Settings, get_settings
 from infrastructure.logging import configure_logging
-from mini_app.api import MiniAppGateway
+from mini_app.api import MiniAppAIRateLimiter, MiniAppGateway
 from mini_app.http import MiniAppHttpServer
 
 
@@ -58,6 +58,11 @@ def main() -> None:
         ai_settings_repository=JsonAISettingsRepository(
             path=settings.ai_runtime_settings.path,
             defaults=build_runtime_ai_settings_defaults(settings.ai.model_id),
+        ),
+        ai_rate_limiter=MiniAppAIRateLimiter(
+            summary_limit=settings.mini_app.ai_summary_rate_limit,
+            reply_draft_limit=settings.mini_app.ai_reply_draft_rate_limit,
+            window_seconds=settings.mini_app.ai_rate_limit_window_seconds,
         ),
     )
     server = MiniAppHttpServer(

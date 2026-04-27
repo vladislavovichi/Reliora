@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 from ai_service.grpc.client import ping_ai_service
 from infrastructure.ai.provider import build_ai_provider
-from infrastructure.config.settings import get_settings
+from infrastructure.config.settings import AIConfig, get_settings
 from infrastructure.health import (
     EXPECTED_HEALTH_FAILURES,
     ProbeCheck,
@@ -45,10 +45,11 @@ async def run() -> int:
                 name="ai_provider",
                 category="operations",
                 status=ProbeStatus.OK if provider.is_enabled else ProbeStatus.WARN,
-                detail=(
-                    f"{settings.ai.normalized_provider}:{provider.model_id}"
-                    if provider.is_enabled
-                    else getattr(provider, "disabled_reason", "AI provider is disabled.")
+                detail=build_ai_provider_visibility_detail(
+                    settings.ai,
+                    provider_enabled=provider.is_enabled,
+                    model_id=provider.model_id,
+                    disabled_reason=getattr(provider, "disabled_reason", None),
                 ),
                 affects_readiness=False,
             ),
@@ -98,6 +99,27 @@ async def _run_probe(
         category=category,
         status=ProbeStatus.FAIL,
         detail="проверка вернула отрицательный результат",
+    )
+
+
+def build_ai_provider_visibility_detail(
+    config: AIConfig,
+    *,
+    provider_enabled: bool,
+    model_id: str | None,
+    disabled_reason: str | None = None,
+) -> str:
+    provider_configured = config.normalized_provider != "disabled" and bool(config.model_id)
+    if provider_enabled:
+        return (
+            f"provider_configured=yes provider={config.normalized_provider} "
+            f"model_id={model_id or '<none>'} timeout_seconds={config.timeout_seconds}"
+        )
+    reason = disabled_reason or "AI provider is disabled."
+    return (
+        f"provider_configured={'yes' if provider_configured else 'no'} "
+        f"provider={config.normalized_provider} model_id={config.model_id or '<none>'} "
+        f"status=disabled reason={reason}"
     )
 
 
