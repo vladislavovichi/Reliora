@@ -38,437 +38,66 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дело {escape(report.public_number)}</title>
+  <title>Ticket case file · {escape(report.public_number)}</title>
   <style>
-    :root {{
-      color-scheme: light;
-      --bg: #f4efe8;
-      --paper: rgba(255, 252, 247, 0.94);
-      --paper-strong: #fffdf9;
-      --line: rgba(78, 65, 53, 0.12);
-      --line-strong: rgba(78, 65, 53, 0.20);
-      --text: #1f2328;
-      --muted: #6a6f78;
-      --accent: #2d5a63;
-      --accent-soft: rgba(45, 90, 99, 0.10);
-      --client-soft: rgba(138, 101, 73, 0.10);
-      --note-soft: rgba(85, 100, 75, 0.10);
-      --success: #4f6b57;
-      --warning: #8c6647;
-      --shadow: 0 22px 60px rgba(31, 35, 40, 0.08);
-      --radius-xl: 32px;
-      --radius-lg: 24px;
-      --radius-md: 18px;
-      --radius-sm: 14px;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(45, 90, 99, 0.09), transparent 30%),
-        linear-gradient(180deg, #faf7f2 0%, var(--bg) 100%);
-      color: var(--text);
-      font-family: "SF Pro Text", "Segoe UI", sans-serif;
-      line-height: 1.6;
-      padding: 32px 16px 56px;
-    }}
-    .page {{ max-width: 1160px; margin: 0 auto; }}
-    .hero {{
-      background: linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(248, 242, 234, 0.98));
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      padding: 34px 34px 28px;
-      margin-bottom: 18px;
-    }}
-    .hero-grid {{
-      display: grid;
-      grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
-      gap: 22px;
-      align-items: start;
-    }}
-    .eyebrow {{
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 12px;
-      margin-bottom: 12px;
-    }}
-    h1, h2, h3 {{
-      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }}
-    h1 {{
-      margin: 0 0 10px;
-      font-size: 40px;
-      line-height: 1.04;
-    }}
-    .hero-subtitle {{
-      max-width: 760px;
-      font-size: 18px;
-      color: rgba(31, 35, 40, 0.88);
-    }}
-    .pill-row {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 20px;
-    }}
-    .pill {{
-      display: inline-flex;
-      align-items: center;
-      padding: 9px 14px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 14px;
-      font-weight: 600;
-    }}
-    .pill.status-closed {{ background: rgba(79, 107, 87, 0.12); color: var(--success); }}
-    .pill.status-escalated {{ background: rgba(140, 102, 71, 0.12); color: var(--warning); }}
-    .hero-aside {{
-      background: rgba(255, 255, 255, 0.62);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      padding: 18px 18px 14px;
-    }}
-    .hero-aside-title {{
-      margin: 0 0 12px;
-      font-size: 18px;
-    }}
-    .hero-aside-list {{
-      display: grid;
-      gap: 12px;
-    }}
-    .meta-label {{
-      color: var(--muted);
-      font-size: 12px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }}
-    .meta-value {{
-      font-size: 15px;
-      word-break: break-word;
-    }}
-    .meta-value a {{
-      color: var(--accent);
-      text-decoration: none;
-    }}
-    .section {{
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 10px 26px rgba(31, 35, 40, 0.05);
-      padding: 26px;
-      margin-bottom: 16px;
-    }}
-    .section h2 {{
-      margin: 0 0 14px;
-      font-size: 24px;
-    }}
-    .section-intro {{
-      color: var(--muted);
-      margin-bottom: 16px;
-    }}
-    .stats-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }}
-    .stat-card {{
-      background: rgba(255, 255, 255, 0.78);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      padding: 18px;
-    }}
-    .stat-label {{
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
-    }}
-    .stat-value {{
-      font-size: 26px;
-      font-weight: 700;
-      line-height: 1.1;
-      margin-bottom: 6px;
-    }}
-    .stat-note {{
-      color: var(--muted);
-      font-size: 14px;
-    }}
-    .split {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 14px;
-    }}
-    .panel {{
-      background: rgba(255, 255, 255, 0.76);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      padding: 18px;
-    }}
-    .panel h3 {{
-      margin: 0 0 12px;
-      font-size: 18px;
-    }}
-    .list {{
-      display: grid;
-      gap: 12px;
-    }}
-    .list-item {{
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }}
-    .list-item:first-child {{
-      padding-top: 0;
-      border-top: 0;
-    }}
-    .timeline {{
-      display: grid;
-      gap: 12px;
-    }}
-    .timeline-item {{
-      position: relative;
-      padding: 2px 0 0 18px;
-      border-left: 2px solid rgba(45, 90, 99, 0.16);
-    }}
-    .timeline-item::before {{
-      content: "";
-      position: absolute;
-      left: -6px;
-      top: 10px;
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: #fff;
-      border: 2px solid rgba(45, 90, 99, 0.24);
-    }}
-    .timeline-title {{
-      font-weight: 700;
-      margin-bottom: 2px;
-    }}
-    .timeline-time {{
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 6px;
-    }}
-    .timeline-detail {{
-      white-space: pre-wrap;
-      word-break: break-word;
-    }}
-    .gallery {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 14px;
-    }}
-    .asset-card {{
-      background: rgba(255, 255, 255, 0.78);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      min-height: 100%;
-      display: grid;
-      grid-template-rows: auto 1fr;
-    }}
-    .asset-media {{
-      display: grid;
-      place-items: center;
-      padding: 14px;
-      min-height: 220px;
-      background:
-        radial-gradient(circle at top left, rgba(45, 90, 99, 0.10), transparent 42%),
-        linear-gradient(180deg, rgba(244, 239, 232, 0.92), rgba(255, 253, 249, 0.98));
-    }}
-    .asset-image {{
-      display: block;
-      width: 100%;
-      max-height: 420px;
-      object-fit: contain;
-      background: #efe7de;
-      border-radius: 16px;
-    }}
-    .asset-body {{
-      padding: 16px;
-    }}
-    .asset-title {{
-      font-weight: 700;
-      margin-bottom: 6px;
-    }}
-    .asset-meta {{
-      color: var(--muted);
-      font-size: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }}
-    .transcript {{
-      display: grid;
-      gap: 12px;
-    }}
-    .message {{
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      padding: 18px;
-      background: rgba(255, 255, 255, 0.78);
-    }}
-    .message.client {{ background: rgba(255, 252, 247, 0.82); }}
-    .message.operator {{ background: rgba(248, 252, 252, 0.84); }}
-    .message.system {{ background: rgba(249, 248, 245, 0.84); }}
-    .message-head {{
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }}
-    .message-role {{
-      font-weight: 700;
-    }}
-    .message-time {{
-      color: var(--muted);
-      font-size: 13px;
-    }}
-    .message-body {{
-      white-space: pre-wrap;
-      word-break: break-word;
-    }}
-    .message-attachment {{
-      margin-top: 14px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-      overflow: hidden;
-      background: rgba(250, 247, 242, 0.78);
-      display: grid;
-      gap: 12px;
-    }}
-    .message-attachment .asset-body {{
-      padding: 14px;
-    }}
-    .notes {{
-      display: grid;
-      gap: 12px;
-    }}
-    .note {{
-      background: rgba(250, 252, 248, 0.84);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      padding: 18px;
-    }}
-    .muted {{ color: var(--muted); }}
-    @media (max-width: 780px) {{
-      body {{ padding: 18px 12px 32px; }}
-      .hero {{ padding: 24px 22px; }}
-      .hero-grid {{ grid-template-columns: 1fr; }}
-      h1 {{ font-size: 32px; }}
-      .section {{ padding: 20px; }}
-      .asset-media {{ min-height: 180px; padding: 12px; }}
-      .asset-image {{ max-height: 320px; }}
-    }}
+{_document_css()}
   </style>
 </head>
 <body>
   <div class="page">
-    {_render_hero(report, generated_at)}
-    <section class="stats-grid">
-      {_stat_card("Статус", _status_label(report.status), _status_hint(report.status))}
-      {_stat_card("Сообщения", str(len(report.messages)), "Полная лента переписки по делу")}
-      {_stat_card("Вложения", str(attachment_count), "Фото и файлы, сохранённые в материалах")}
-      {
-        _stat_card(
-            "Повторы",
-            str(duplicate_count),
-            "Сколько повторов клиента было аккуратно объединено",
-        )
-    }
-      {
-        _stat_card(
-            "Заметки",
-            str(len(report.internal_notes)),
-            "Внутренний handoff и рабочий контекст",
-        )
-    }
-    </section>
-    <section class="section">
-      <h2>Сводка дела</h2>
-      <div class="section-intro">
-        Короткий обзор обращения, итогов и клиентской обратной связи.
-      </div>
-      <div class="split">
-        <div class="panel">
-          <h3>Обращение</h3>
-          <div class="list">
-            {_list_item("Суть", _first_client_message(report.messages) or report.subject)}
-            {
-        _list_item(
-            "Последний шаг",
-            _message_summary(report.messages[-1] if report.messages else None),
-        )
-    }
-            {_list_item("Итог", _closure_summary(report))}
-          </div>
+    {_render_hero(report, generated_at, attachment_count, duplicate_count)}
+    {_render_executive_summary(report, attachment_count, duplicate_count)}
+    {_render_customer_context(report)}
+    <section class="report-section" aria-labelledby="conversation-timeline-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Conversation timeline</p>
+          <h2 id="conversation-timeline-title">Переписка</h2>
         </div>
-        <div class="panel">
-          <h3>Качество</h3>
-          {_render_feedback_summary(report)}
-        </div>
-      </div>
-    </section>
-    <section class="section">
-      <h2>Карточка</h2>
-      <div class="split">
-        <div class="panel">
-          <h3>Реквизиты</h3>
-          <div class="list">
-            {_list_item("Публичный ID", str(report.public_id))}
-            {_list_item("Клиент", f"Telegram chat ID {report.client_chat_id}")}
-            {_list_item("Категория", report.category_title or "Не указана")}
-            {_list_item("Код категории", report.category_code or "Не указан")}
-            {_list_item_html("Ответственный", _operator_identity_html(report))}
-            {_list_item("Теги", ", ".join(report.tags) if report.tags else "Нет")}
-            {_list_item("Сигнал клиента", _ticket_sentiment_text(report))}
-          </div>
-        </div>
-        <div class="panel">
-          <h3>Время</h3>
-          <div class="list">
-            {_list_item("Создана", _format_timestamp(report.created_at))}
-            {_list_item("Обновлена", _format_timestamp(report.updated_at))}
-            {_list_item("Первый ответ", _format_timestamp(report.first_response_at))}
-            {_list_item("До первого ответа", _format_duration(report.first_response_seconds))}
-            {_list_item("Закрыта", _format_timestamp(report.closed_at))}
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="section">
-      <h2>Ход заявки</h2>
-      <div class="section-intro">Ключевые продуктовые события по жизненному циклу дела.</div>
-      {_render_timeline(report.events)}
-    </section>
-    <section class="section">
-      <h2>Материалы дела</h2>
-      <div class="section-intro">
-        Фотографии встраиваются прямо в отчёт. Остальные вложения сохраняются как
-        структурированные ссылки на материалы.
-      </div>
-      {_render_attachment_gallery(report.messages)}
-    </section>
-    <section class="section">
-      <h2>Переписка</h2>
-      <div class="section-intro">
-        Полная последовательность сообщений клиента, оператора и системных
-        событий.
+        <span class="chip">{escape(str(len(report.messages)))} сообщений</span>
       </div>
       {_render_transcript(report.messages)}
     </section>
-    <section class="section">
-      <h2>Внутренние заметки</h2>
-      <div class="section-intro">Рабочие комментарии команды, включённые в выгрузку.</div>
+    <section class="report-section" aria-labelledby="materials-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Evidence</p>
+          <h2 id="materials-title">Материалы дела</h2>
+        </div>
+        <span class="chip">{escape(str(attachment_count))} вложений</span>
+      </div>
+      <p class="section-copy">
+        Фотографии встраиваются прямо в отчёт. Остальные вложения показаны как
+        структурированные карточки материалов.
+      </p>
+      {_render_attachment_gallery(report.messages)}
+    </section>
+    <section class="report-section internal-section" aria-labelledby="internal-notes-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Internal</p>
+          <h2 id="internal-notes-title">Внутренние заметки</h2>
+        </div>
+        <span class="chip chip-internal">{escape(str(len(report.internal_notes)))} заметок</span>
+      </div>
       {_render_internal_notes(report.internal_notes)}
     </section>
+    <section class="report-section" aria-labelledby="events-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Event history</p>
+          <h2 id="events-title">Ход заявки</h2>
+        </div>
+        <span class="chip">{escape(str(len(report.events)))} событий</span>
+      </div>
+      {_render_timeline(report.events)}
+    </section>
+    <footer class="report-footer">
+      <span>Generated by Reliora</span>
+      <span>{escape(generated_at)}</span>
+      <span>{escape(report.public_number)}</span>
+      <span>Static export file</span>
+    </footer>
   </div>
 </body>
 </html>
@@ -476,30 +105,399 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
     return html.encode("utf-8")
 
 
-def _render_hero(report: TicketReport, generated_at: str) -> str:
+def _document_css() -> str:
+    return """
+    :root {
+      color-scheme: light;
+      --bg: #f3eee7;
+      --paper: rgba(255, 255, 255, 0.86);
+      --paper-strong: #fffdf9;
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-muted: rgba(248, 243, 237, 0.82);
+      --line: rgba(38, 45, 53, 0.09);
+      --line-strong: rgba(38, 45, 53, 0.16);
+      --text: #1b222b;
+      --muted: #66727d;
+      --accent: #1f2834;
+      --accent-soft: rgba(31, 40, 52, 0.07);
+      --success: #315b4b;
+      --warning: #8a6229;
+      --danger: #8c3f3f;
+      --info: #405d73;
+      --shadow-sm: 0 8px 18px rgba(26, 33, 41, 0.05);
+      --shadow-md: 0 18px 42px rgba(26, 33, 41, 0.08);
+      --shadow-lg: 0 32px 84px rgba(26, 33, 41, 0.12);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+      --radius-xl: 34px;
+    }
+    * { box-sizing: border-box; }
+    html { background: #e5dbcf; }
+    body {
+      margin: 0;
+      min-width: 0;
+      background:
+        radial-gradient(circle at 10% -6%, rgba(180, 151, 110, 0.24), transparent 34%),
+        radial-gradient(circle at 94% 2%, rgba(64, 93, 115, 0.14), transparent 30%),
+        radial-gradient(circle at 50% 104%, rgba(255, 255, 255, 0.88), transparent 40%),
+        linear-gradient(180deg, #fbf8f3 0%, var(--bg) 54%, #e5dbcf 100%);
+      color: var(--text);
+      font-family: "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+      line-height: 1.62;
+      padding: 32px 16px 54px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:focus-visible {
+      outline: 3px solid rgba(31, 40, 52, 0.18);
+      outline-offset: 3px;
+      border-radius: 8px;
+    }
+    .page { width: min(1160px, 100%); margin: 0 auto; }
+    .cover, .report-section, .summary-card, .context-card, .message, .asset-card, .note, .event {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      box-shadow: var(--shadow-sm);
+    }
+    .cover {
+      position: relative;
+      overflow: hidden;
+      border-color: rgba(255, 255, 255, 0.74);
+      border-radius: var(--radius-xl);
+      background:
+        radial-gradient(circle at top right, rgba(31, 40, 52, 0.08), transparent 38%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(243, 235, 225, 0.82));
+      box-shadow: var(--shadow-lg);
+      padding: 34px;
+      margin-bottom: 18px;
+    }
+    .cover-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
+      gap: 28px;
+      align-items: start;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #756249;
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      color: var(--text);
+      font-weight: 680;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    h1 { font-size: clamp(34px, 5vw, 56px); }
+    h2 { font-size: 25px; }
+    h3 { font-size: 17px; }
+    .subject {
+      max-width: 780px;
+      margin: 14px 0 0;
+      color: #3c4652;
+      font-size: 18px;
+      line-height: 1.56;
+      overflow-wrap: anywhere;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .chip, .status-chip, .priority-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 7px 12px;
+      border: 1px solid rgba(38, 45, 53, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.62);
+      color: #4b5662;
+      font-size: 13px;
+      font-weight: 680;
+      overflow-wrap: anywhere;
+    }
+    .status-closed { color: var(--success); background: rgba(49, 91, 75, 0.12); }
+    .status-escalated { color: var(--danger); background: rgba(140, 63, 63, 0.12); }
+    .status-assigned { color: var(--success); background: rgba(49, 91, 75, 0.10); }
+    .status-queued { color: #756249; background: rgba(122, 99, 72, 0.11); }
+    .status-new { color: var(--info); background: rgba(64, 93, 115, 0.11); }
+    .priority-high, .priority-urgent { color: var(--warning); background: rgba(138, 98, 41, 0.13); }
+    .priority-urgent { color: var(--danger); background: rgba(140, 63, 63, 0.12); }
+    .cover-aside {
+      display: grid;
+      gap: 12px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.58);
+    }
+    .meta-grid, .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .meta-item, .summary-card, .context-card {
+      min-width: 0;
+      padding: 15px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.66);
+    }
+    .meta-label, .summary-label {
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      text-transform: uppercase;
+    }
+    .meta-value, .summary-value {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .summary-note { margin-top: 4px; color: var(--muted); font-size: 13px; }
+    .report-section {
+      border-radius: var(--radius-xl);
+      padding: 28px;
+      margin-bottom: 16px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .section-copy {
+      margin: -4px 0 18px;
+      color: var(--muted);
+      max-width: 760px;
+    }
+    .context-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .context-card h3 { margin-bottom: 9px; }
+    .context-card p {
+      margin: 0;
+      color: #4b5662;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .transcript, .notes, .event-timeline, .gallery {
+      display: grid;
+      gap: 14px;
+    }
+    .message {
+      position: relative;
+      padding: 18px 18px 18px 22px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.74);
+    }
+    .message::before, .event::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      bottom: 18px;
+      left: 0;
+      width: 3px;
+      border-radius: 0 999px 999px 0;
+      background: rgba(31, 40, 52, 0.16);
+    }
+    .message-customer::before { background: var(--info); }
+    .message-operator::before { background: var(--success); }
+    .message-system::before { background: var(--muted); }
+    .message-head, .note-head, .event-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .message-role, .note-role, .event-title { font-weight: 760; }
+    .message-time, .note-time, .event-time, .asset-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .message-body, .note-body, .event-detail {
+      color: #3f4a55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .message-flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .flag {
+      display: inline-flex;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(138, 98, 41, 0.12);
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .gallery {
+      grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+    }
+    .asset-card {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.72);
+    }
+    .asset-media {
+      display: grid;
+      place-items: center;
+      min-height: 220px;
+      padding: 14px;
+      background:
+        radial-gradient(circle at top left, rgba(64, 93, 115, 0.10), transparent 42%),
+        linear-gradient(180deg, rgba(244, 239, 232, 0.92), rgba(255, 253, 249, 0.98));
+    }
+    .asset-image {
+      display: block;
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      border-radius: var(--radius-md);
+      background: #efe7de;
+    }
+    .asset-body { padding: 16px; }
+    .asset-title {
+      margin-bottom: 6px;
+      font-weight: 760;
+      overflow-wrap: anywhere;
+    }
+    .asset-meta {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .message-attachment {
+      margin-top: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(250, 247, 242, 0.78);
+    }
+    .note {
+      padding: 18px;
+      border-color: rgba(138, 98, 41, 0.15);
+      border-radius: var(--radius-lg);
+      background: rgba(250, 246, 240, 0.82);
+    }
+    .chip-internal { color: #756249; background: rgba(122, 99, 72, 0.11); }
+    .event {
+      position: relative;
+      padding: 16px 16px 16px 22px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.66);
+    }
+    .event-created::before { background: var(--info); }
+    .event-assignment::before { background: var(--success); }
+    .event-escalation::before, .event-sla::before { background: var(--danger); }
+    .event-tag::before { background: #756249; }
+    .event-closed::before { background: var(--accent); }
+    .event-sentiment::before, .event-duplicate::before { background: var(--warning); }
+    .empty-state {
+      padding: 18px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface-muted);
+      color: var(--muted);
+    }
+    .report-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px 18px;
+      padding: 18px 4px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 760px) {
+      body { padding: 18px 12px 34px; }
+      .cover, .report-section { padding: 22px; border-radius: 24px; }
+      .cover-grid, .section-head { grid-template-columns: 1fr; flex-direction: column; }
+      .cover-grid { display: grid; }
+      h1 { font-size: 32px; }
+      h2 { font-size: 22px; }
+      .subject { font-size: 16px; }
+      .summary-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+      .asset-media { min-height: 180px; padding: 12px; }
+      .asset-image { max-height: 320px; }
+    }
+    @media (max-width: 390px) {
+      body { padding-inline: 10px; }
+      .cover, .report-section { padding: 18px; }
+      .summary-grid, .meta-grid, .context-grid, .gallery { grid-template-columns: 1fr; }
+      .chip, .status-chip, .priority-chip { white-space: normal; }
+    }
+    @page { margin: 16mm; }
+    @media print {
+      html, body { background: #fff !important; }
+      body { padding: 0; color: #111827; font-size: 11pt; }
+      .cover, .report-section, .summary-card, .context-card, .message, .asset-card, .note, .event {
+        box-shadow: none !important;
+        background: #fff !important;
+        border-color: #d6d3ce !important;
+      }
+      .cover, .report-section { page-break-inside: avoid; break-inside: avoid; }
+      .message, .asset-card, .note, .event, .summary-card {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .asset-image { max-height: 95mm; }
+      .report-footer { border-top: 1px solid #d6d3ce; margin-top: 10mm; }
+    }
+    """
+
+
+def _render_hero(
+    report: TicketReport,
+    generated_at: str,
+    attachment_count: int,
+    duplicate_count: int,
+) -> str:
     return (
-        '<section class="hero">'
-        '<div class="hero-grid">'
+        '<section class="cover">'
+        '<div class="cover-grid">'
         "<div>"
-        '<div class="eyebrow">Case File</div>'
+        '<p class="eyebrow">Ticket case file</p>'
         f"<h1>{escape(report.public_number)}</h1>"
-        f'<div class="hero-subtitle">{escape(report.subject)}</div>'
-        '<div class="pill-row">'
-        f'<span class="pill {_status_css(report.status)}">'
+        f'<p class="subject">{escape(report.subject)}</p>'
+        '<div class="chip-row">'
+        f'<span class="status-chip {_status_css(report.status)}">'
         f"{escape(_status_label(report.status))}</span>"
-        f'<span class="pill">Приоритет: {escape(_priority_label(report.priority))}</span>'
-        f'<span class="pill">Экспорт: HTML</span>'
-        f'<span class="pill">Подготовлен: {escape(generated_at)}</span>'
+        f'<span class="priority-chip priority-{escape(report.priority)}">'
+        f"Priority: {escape(_priority_label(report.priority))}</span>"
+        f'<span class="chip">Generated: {escape(generated_at)}</span>'
+        f'<span class="chip">Messages: {escape(str(len(report.messages)))}</span>'
+        f'<span class="chip">Attachments: {escape(str(attachment_count))}</span>'
+        f'<span class="chip">Duplicates: {escape(str(duplicate_count))}</span>'
         "</div>"
         "</div>"
-        '<aside class="hero-aside">'
-        '<h3 class="hero-aside-title">Навигация по делу</h3>'
-        '<div class="hero-aside-list">'
-        f"{_hero_meta_item('Категория', report.category_title or 'Не указана')}"
-        f"{_hero_meta_item('Ответственный', _plain_operator_identity(report))}"
-        f"{_hero_meta_item('Сигнал клиента', _ticket_sentiment_text(report))}"
-        f"{_hero_meta_item('Первый ответ', _format_duration(report.first_response_seconds))}"
-        f"{_hero_meta_item('Закрыта', _format_timestamp(report.closed_at))}"
+        '<aside class="cover-aside">'
+        '<div class="meta-grid">'
+        f"{_meta_item('Client chat id', str(report.client_chat_id))}"
+        f"{_meta_item_html('Assigned operator', _operator_identity_html(report))}"
+        f"{_meta_item('Created', _format_timestamp(report.created_at))}"
+        f"{_meta_item('Updated', _format_timestamp(report.updated_at))}"
+        f"{_meta_item('Closed', _format_timestamp(report.closed_at))}"
+        f"{_meta_item('Category', _category_text(report))}"
+        f"{_meta_item('Tags', _tags_text(report))}"
+        f"{_meta_item('Sentiment', _ticket_sentiment_text(report))}"
+        f"{_meta_item('First response', _format_duration(report.first_response_seconds))}"
+        f"{_meta_item('Closure summary', _closure_summary(report))}"
         "</div>"
         "</aside>"
         "</div>"
@@ -507,55 +505,100 @@ def _render_hero(report: TicketReport, generated_at: str) -> str:
     )
 
 
-def _hero_meta_item(label: str, value: str) -> str:
+def _render_executive_summary(
+    report: TicketReport,
+    attachment_count: int,
+    duplicate_count: int,
+) -> str:
+    cards = (
+        _summary_card("Current status", _status_label(report.status), _status_hint(report.status)),
+        _summary_card(
+            "Category",
+            _category_text(report),
+            report.category_code or "No category code",
+        ),
+        _summary_card(
+            "Priority",
+            _priority_label(report.priority),
+            "Ticket priority at export time",
+        ),
+        _summary_card("Sentiment", _ticket_sentiment_text(report), "Customer tone signal"),
+        _summary_card(
+            "First response",
+            _format_duration(report.first_response_seconds),
+            "Time to first operator reply",
+        ),
+        _summary_card("Messages", str(len(report.messages)), "Conversation items"),
+        _summary_card("Attachments", str(attachment_count), "Photos and files"),
+        _summary_card("Duplicates", str(duplicate_count), "Collapsed repeats"),
+        _summary_card("Internal notes", str(len(report.internal_notes)), "Included operator notes"),
+        _summary_card("Events", str(len(report.events)), "Lifecycle events"),
+        _summary_card("Feedback", _feedback_rating(report), "Customer rating when available"),
+    )
     return (
-        "<div>"
-        f'<div class="meta-label">{escape(label)}</div>'
-        f'<div class="meta-value">{escape(value)}</div>'
-        "</div>"
+        '<section class="report-section" aria-labelledby="executive-summary-title">'
+        '<div class="section-head"><div>'
+        '<p class="eyebrow">Executive summary</p>'
+        '<h2 id="executive-summary-title">Краткий обзор</h2>'
+        "</div></div>"
+        f'<div class="summary-grid">{"".join(cards)}</div>'
+        "</section>"
     )
 
 
-def _stat_card(label: str, value: str, note: str) -> str:
+def _render_customer_context(report: TicketReport) -> str:
+    first_message = (
+        _first_client_message(report.messages) or "Клиентское сообщение не зафиксировано."
+    )
+    feedback = _feedback_text(report)
+    sentiment_reason = report.sentiment_reason or "Отдельная причина не зафиксирована."
     return (
-        '<article class="stat-card">'
-        f'<div class="stat-label">{escape(label)}</div>'
-        f'<div class="stat-value">{escape(value)}</div>'
-        f'<div class="stat-note">{escape(note)}</div>'
+        '<section class="report-section" aria-labelledby="customer-context-title">'
+        '<div class="section-head"><div>'
+        '<p class="eyebrow">Customer context</p>'
+        '<h2 id="customer-context-title">Контекст клиента</h2>'
+        "</div></div>"
+        '<div class="context-grid">'
+        f"{_context_card('Первое сообщение', first_message)}"
+        f"{_context_card('Клиент', f'Telegram chat ID {report.client_chat_id}')}"
+        f"{_context_card('Причина сигнала', sentiment_reason)}"
+        f"{_context_card('Обратная связь', feedback)}"
+        "</div>"
+        "</section>"
+    )
+
+
+def _summary_card(label: str, value: str, note: str) -> str:
+    return (
+        '<article class="summary-card">'
+        f'<div class="summary-label">{escape(label)}</div>'
+        f'<div class="summary-value">{escape(value)}</div>'
+        f'<div class="summary-note">{escape(note)}</div>'
         "</article>"
     )
 
 
-def _render_feedback_summary(report: TicketReport) -> str:
-    if report.feedback is None:
-        return (
-            '<div class="list">'
-            f"{_list_item('Оценка', 'Не получена')}"
-            f"{_list_item('Комментарий', 'Клиент не оставил комментарий.')}"
-            f"{_list_item('Фиксация', 'Дело закрыто без отдельной оценки.')}"
-            "</div>"
-        )
+def _context_card(title: str, text: str) -> str:
     return (
-        '<div class="list">'
-        f"{_list_item('Оценка', f'{report.feedback.rating} / 5')}"
-        f"{_list_item('Комментарий', report.feedback.comment or 'Без комментария')}"
-        f"{_list_item('Получена', _format_timestamp(report.feedback.submitted_at))}"
-        "</div>"
+        '<article class="context-card">'
+        f"<h3>{escape(title)}</h3>"
+        f"<p>{escape(text)}</p>"
+        "</article>"
     )
 
 
-def _list_item(label: str, value: str) -> str:
+def _meta_item(label: str, value: str) -> str:
     return (
-        '<div class="list-item">'
+        '<div class="meta-item">'
         f'<div class="meta-label">{escape(label)}</div>'
         f'<div class="meta-value">{escape(value)}</div>'
         "</div>"
     )
 
 
-def _list_item_html(label: str, value_html: str) -> str:
+def _meta_item_html(label: str, value_html: str) -> str:
     return (
-        '<div class="list-item">'
+        '<div class="meta-item">'
         f'<div class="meta-label">{escape(label)}</div>'
         f'<div class="meta-value">{value_html}</div>'
         "</div>"
@@ -564,22 +607,24 @@ def _list_item_html(label: str, value_html: str) -> str:
 
 def _render_timeline(events: tuple[TicketReportEvent, ...]) -> str:
     if not events:
-        return '<div class="muted">Значимых событий по делу не найдено.</div>'
+        return '<div class="empty-state">Значимых событий по делу не найдено.</div>'
 
-    items = []
-    for event in events:
+    items: list[str] = []
+    for event in sorted(events, key=lambda item: item.created_at):
         detail = _event_detail(event)
         detail_html = (
-            f'<div class="timeline-detail">{escape(detail)}</div>' if detail is not None else ""
+            f'<div class="event-detail">{escape(detail)}</div>' if detail is not None else ""
         )
         items.append(
-            '<article class="timeline-item">'
-            f'<div class="timeline-title">{escape(_event_title(event.event_type))}</div>'
-            f'<div class="timeline-time">{escape(_format_timestamp(event.created_at))}</div>'
+            f'<article class="event {_event_css(event.event_type)}">'
+            '<div class="event-head">'
+            f'<div class="event-title">{escape(_event_title(event.event_type))}</div>'
+            f'<div class="event-time">{escape(_format_timestamp(event.created_at))}</div>'
+            "</div>"
             f"{detail_html}"
             "</article>"
         )
-    return f'<div class="timeline">{"".join(items)}</div>'
+    return f'<div class="event-timeline">{"".join(items)}</div>'
 
 
 def _render_attachment_gallery(messages: Iterable[TicketReportMessage]) -> str:
@@ -589,48 +634,29 @@ def _render_attachment_gallery(messages: Iterable[TicketReportMessage]) -> str:
         if message.attachment is not None
     ]
     if not attachments:
-        return '<div class="muted">Вложений в деле нет.</div>'
+        return '<div class="empty-state">Вложений в деле нет.</div>'
 
     cards: list[str] = []
     for index, created_at, attachment in attachments:
         assert attachment is not None
-        embedded_photo = (
-            _load_embedded_photo(attachment)
-            if attachment.kind == TicketAttachmentKind.PHOTO
-            else None
-        )
-        image_html = (
-            (
-                '<div class="asset-media">'
-                f'<img class="asset-image" src="{embedded_photo}" '
-                f'alt="{escape(_attachment_label(attachment))}">'
-                "</div>"
-            )
-            if embedded_photo is not None
-            else ""
-        )
         cards.append(
-            '<article class="asset-card">'
-            f"{image_html}"
-            '<div class="asset-body">'
-            f'<div class="asset-title">{escape(f"{index}. {_attachment_label(attachment)}")}</div>'
-            f'<div class="asset-meta">{escape(_format_timestamp(created_at))}</div>'
-            f'<div class="asset-meta">{escape(_attachment_meta_text(attachment))}</div>'
-            "</div>"
-            "</article>"
+            _render_attachment_card(
+                attachment,
+                title=f"{index}. {_attachment_label(attachment)}",
+                timestamp=created_at,
+                embedded=True,
+            )
         )
     return f'<div class="gallery">{"".join(cards)}</div>'
 
 
 def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
     if not messages:
-        return '<div class="muted">Сообщений в переписке нет.</div>'
+        return '<div class="empty-state">Сообщений в переписке нет.</div>'
 
     items = []
     for message in messages:
-        attachment_html = _render_message_attachment(message.attachment)
         body = escape(message.text) if message.text else '<span class="muted">Без текста</span>'
-        meta_html = _render_message_meta(message)
         items.append(
             f'<article class="message {_message_css(message.sender_type)}">'
             '<div class="message-head">'
@@ -638,8 +664,8 @@ def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
             f'<div class="message-time">{escape(_format_timestamp(message.created_at))}</div>'
             "</div>"
             f'<div class="message-body">{body}</div>'
-            f"{meta_html}"
-            f"{attachment_html}"
+            f"{_render_message_flags(message)}"
+            f"{_render_message_attachment(message.attachment)}"
             "</article>"
         )
     return f'<div class="transcript">{"".join(items)}</div>'
@@ -648,9 +674,24 @@ def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
 def _render_message_attachment(attachment: TicketReportAttachment | None) -> str:
     if attachment is None:
         return ""
+    return (
+        '<div class="message-attachment">'
+        f"{_render_attachment_card(attachment, title=_attachment_label(attachment), embedded=True)}"
+        "</div>"
+    )
 
+
+def _render_attachment_card(
+    attachment: TicketReportAttachment,
+    *,
+    title: str,
+    timestamp: datetime | None = None,
+    embedded: bool,
+) -> str:
     embedded_photo = (
-        _load_embedded_photo(attachment) if attachment.kind == TicketAttachmentKind.PHOTO else None
+        _load_embedded_photo(attachment)
+        if embedded and attachment.kind == TicketAttachmentKind.PHOTO
+        else None
     )
     image_html = (
         (
@@ -662,30 +703,36 @@ def _render_message_attachment(attachment: TicketReportAttachment | None) -> str
         if embedded_photo is not None
         else ""
     )
+    timestamp_html = (
+        f'<div class="asset-meta">{escape(_format_timestamp(timestamp))}</div>'
+        if timestamp is not None
+        else ""
+    )
     return (
-        '<div class="message-attachment">'
+        '<article class="asset-card">'
         f"{image_html}"
         '<div class="asset-body">'
-        f'<div class="asset-title">{escape(_attachment_label(attachment))}</div>'
+        f'<div class="asset-title">{escape(title)}</div>'
+        f"{timestamp_html}"
         f'<div class="asset-meta">{escape(_attachment_meta_text(attachment))}</div>'
         "</div>"
-        "</div>"
+        "</article>"
     )
 
 
 def _render_internal_notes(notes: tuple[TicketReportInternalNote, ...]) -> str:
     if not notes:
-        return '<div class="muted">Выгрузка внутренних заметок пуста.</div>'
+        return '<div class="empty-state">Выгрузка внутренних заметок пуста.</div>'
 
     items = []
     for note in notes:
         items.append(
             '<article class="note">'
-            '<div class="message-head">'
-            f'<div class="message-role">{escape(_internal_note_author(note))}</div>'
-            f'<div class="message-time">{escape(_format_timestamp(note.created_at))}</div>'
+            '<div class="note-head">'
+            f'<div class="note-role">{escape(_internal_note_author(note))}</div>'
+            f'<div class="note-time">{escape(_format_timestamp(note.created_at))}</div>'
             "</div>"
-            f'<div class="message-body">{escape(note.text)}</div>'
+            f'<div class="note-body">{escape(note.text)}</div>'
             "</article>"
         )
     return f'<div class="notes">{"".join(items)}</div>'
@@ -709,7 +756,7 @@ def _plain_operator_identity(report: TicketReport) -> str:
 
 def _build_operator_link(report: TicketReport) -> str | None:
     if report.assigned_operator_username:
-        return f"https://t.me/{quote(report.assigned_operator_username)}"
+        return f"https://t.me/{quote(report.assigned_operator_username, safe='')}"
     if report.assigned_operator_telegram_user_id is not None:
         return f"tg://user?id={report.assigned_operator_telegram_user_id}"
     return None
@@ -718,19 +765,19 @@ def _build_operator_link(report: TicketReport) -> str | None:
 def _message_sender_label(message: TicketReportMessage) -> str:
     if message.sender_type == TicketMessageSenderType.CLIENT:
         return "Клиент"
-    if message.sender_operator_name:
-        return f"Оператор · {message.sender_operator_name}"
     if message.sender_type == TicketMessageSenderType.SYSTEM:
         return "Система"
+    if message.sender_operator_name:
+        return f"Оператор · {message.sender_operator_name}"
     return "Оператор"
 
 
 def _message_css(sender_type: TicketMessageSenderType) -> str:
     if sender_type == TicketMessageSenderType.CLIENT:
-        return "client"
+        return "message-customer"
     if sender_type == TicketMessageSenderType.SYSTEM:
-        return "system"
-    return "operator"
+        return "message-system"
+    return "message-operator"
 
 
 def _message_summary(message: TicketReportMessage | None) -> str:
@@ -748,11 +795,13 @@ def _message_summary(message: TicketReportMessage | None) -> str:
 
 def _attachment_label(attachment: TicketReportAttachment) -> str:
     if attachment.kind == TicketAttachmentKind.PHOTO:
-        return "Фото"
+        return f"Фото · {attachment.filename}" if attachment.filename else "Фото"
     if attachment.kind == TicketAttachmentKind.VOICE:
+        if attachment.filename:
+            return f"Голосовое сообщение · {attachment.filename}"
         return "Голосовое сообщение"
     if attachment.kind == TicketAttachmentKind.VIDEO:
-        return "Видео"
+        return f"Видео · {attachment.filename}" if attachment.filename else "Видео"
     if attachment.filename:
         return f"Файл · {attachment.filename}"
     return "Файл"
@@ -764,9 +813,20 @@ def _attachment_meta_text(attachment: TicketReportAttachment) -> str:
         parts.append(f"Имя: {attachment.filename}")
     if attachment.mime_type:
         parts.append(f"MIME: {attachment.mime_type}")
-    if attachment.storage_path:
-        parts.append(f"Материал: {attachment.storage_path}")
+    safe_storage_path = _safe_storage_path_text(attachment.storage_path)
+    if safe_storage_path:
+        parts.append(f"Материал: {safe_storage_path}")
+    elif attachment.storage_path:
+        parts.append("Материал: путь недоступен")
     return " · ".join(parts)
+
+
+def _safe_storage_path_text(storage_path: str | None) -> str | None:
+    if not storage_path:
+        return None
+    if _resolve_asset_path(storage_path) is None:
+        return None
+    return storage_path
 
 
 def _internal_note_author(note: TicketReportInternalNote) -> str:
@@ -793,6 +853,34 @@ def _event_title(event_type: TicketEventType) -> str:
         TicketEventType.CLOSED: "Заявка закрыта",
     }
     return mapping.get(event_type, event_type.value)
+
+
+def _event_css(event_type: TicketEventType) -> str:
+    if event_type == TicketEventType.CREATED:
+        return "event-created"
+    if event_type in {
+        TicketEventType.ASSIGNED,
+        TicketEventType.REASSIGNED,
+        TicketEventType.AUTO_REASSIGNED,
+        TicketEventType.QUEUED,
+    }:
+        return "event-assignment"
+    if event_type in {TicketEventType.ESCALATED, TicketEventType.AUTO_ESCALATED}:
+        return "event-escalation"
+    if event_type in {
+        TicketEventType.SLA_BREACHED_FIRST_RESPONSE,
+        TicketEventType.SLA_BREACHED_RESOLUTION,
+    }:
+        return "event-sla"
+    if event_type in {TicketEventType.TAG_ADDED, TicketEventType.TAG_REMOVED}:
+        return "event-tag"
+    if event_type == TicketEventType.CLOSED:
+        return "event-closed"
+    if event_type == TicketEventType.CLIENT_SENTIMENT_FLAGGED:
+        return "event-sentiment"
+    if event_type == TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED:
+        return "event-duplicate"
+    return ""
 
 
 def _event_detail(event: TicketReportEvent) -> str | None:
@@ -858,10 +946,10 @@ def _status_css(status: TicketStatus) -> str:
 
 def _priority_label(priority: str) -> str:
     return {
-        "low": "низкий",
-        "normal": "обычный",
-        "high": "высокий",
-        "urgent": "срочный",
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent",
     }.get(priority, priority)
 
 
@@ -872,6 +960,32 @@ def _ticket_sentiment_text(report: TicketReport) -> str:
     if report.sentiment_reason:
         return f"{label} · {report.sentiment_reason}"
     return label
+
+
+def _category_text(report: TicketReport) -> str:
+    if report.category_title and report.category_code:
+        return f"{report.category_title} · {report.category_code}"
+    return report.category_title or report.category_code or "Не указана"
+
+
+def _tags_text(report: TicketReport) -> str:
+    return ", ".join(report.tags) if report.tags else "Нет"
+
+
+def _feedback_rating(report: TicketReport) -> str:
+    if report.feedback is None:
+        return "Нет"
+    return f"{report.feedback.rating} / 5"
+
+
+def _feedback_text(report: TicketReport) -> str:
+    if report.feedback is None:
+        return "Клиент не оставил оценку."
+    comment = report.feedback.comment or "Без комментария."
+    return (
+        f"{report.feedback.rating} / 5 · {comment} · "
+        f"{_format_timestamp(report.feedback.submitted_at)}"
+    )
 
 
 def _format_timestamp(value: datetime | None) -> str:
@@ -901,22 +1015,24 @@ def _closure_summary(report: TicketReport) -> str:
     )
 
 
-def _render_message_meta(message: TicketReportMessage) -> str:
-    parts: list[str] = []
+def _render_message_flags(message: TicketReportMessage) -> str:
+    flags: list[str] = []
     if (
         message.sender_type == TicketMessageSenderType.CLIENT
         and message.sentiment is not None
         and message.sentiment != TicketSentiment.CALM
     ):
-        parts.append(f"Тон клиента: {_sentiment_label(message.sentiment.value)}")
+        flags.append(f"Тон клиента: {_sentiment_label(message.sentiment.value)}")
     if message.duplicate_count > 0:
-        parts.append(
+        flags.append(
             f"Повторено ещё {message.duplicate_count} раз"
             f" · {_format_timestamp(message.last_duplicate_at)}"
         )
-    if not parts:
+    if not flags:
         return ""
-    return f'<div class="asset-meta">{" · ".join(escape(part) for part in parts)}</div>'
+    return '<div class="message-flags">' + "".join(
+        f'<span class="flag">{escape(flag)}</span>' for flag in flags
+    ) + "</div>"
 
 
 def _sentiment_label(value: str) -> str:

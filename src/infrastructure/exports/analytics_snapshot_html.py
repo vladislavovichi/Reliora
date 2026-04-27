@@ -20,295 +20,373 @@ def render_analytics_snapshot_html(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Аналитика · {escape(title)}</title>
+  <title>Analytics report · {escape(title)}</title>
   <style>
-    :root {{
-      color-scheme: light;
-      --bg: #f4efe8;
-      --paper: rgba(255, 252, 247, 0.94);
-      --paper-strong: #fffdf9;
-      --line: rgba(79, 66, 52, 0.12);
-      --line-strong: rgba(79, 66, 52, 0.18);
-      --text: #20242a;
-      --muted: #6d727b;
-      --accent: #275764;
-      --accent-2: #8e6646;
-      --accent-3: #6e8460;
-      --danger: #a04d48;
-      --shadow: 0 22px 60px rgba(32, 36, 42, 0.08);
-      --radius-xl: 32px;
-      --radius-lg: 24px;
-      --radius-md: 18px;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(39, 87, 100, 0.10), transparent 30%),
-        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
-      color: var(--text);
-      font-family: "SF Pro Text", "Segoe UI", sans-serif;
-      line-height: 1.58;
-      padding: 28px 16px 44px;
-    }}
-    .page {{ max-width: 1180px; margin: 0 auto; }}
-    .hero {{
-      background: linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(247, 242, 234, 0.98));
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      padding: 30px;
-      margin-bottom: 18px;
-    }}
-    .eyebrow {{
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 12px;
-    }}
-    h1, h2 {{
-      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }}
-    h1 {{
-      margin: 0 0 10px;
-      font-size: 38px;
-      line-height: 1.06;
-    }}
-    .hero-copy {{
-      max-width: 760px;
-      color: rgba(32, 36, 42, 0.86);
-      font-size: 18px;
-    }}
-    .pill-row {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 18px;
-    }}
-    .pill {{
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: rgba(39, 87, 100, 0.10);
-      color: var(--accent);
-      font-size: 14px;
-      font-weight: 600;
-    }}
-    .stats-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }}
-    .stat-card, .chart-card, .section {{
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 10px 26px rgba(32, 36, 42, 0.05);
-    }}
-    .stat-card {{
-      padding: 18px;
-    }}
-    .stat-label {{
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
-    }}
-    .stat-value {{
-      font-size: 28px;
-      font-weight: 700;
-      line-height: 1.08;
-      margin-bottom: 6px;
-    }}
-    .stat-note {{
-      color: var(--muted);
-      font-size: 14px;
-    }}
-    .charts-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 14px;
-      margin-bottom: 18px;
-    }}
-    .chart-card {{
-      padding: 18px 18px 14px;
-    }}
-    .chart-card h2 {{
-      margin: 0 0 6px;
-      font-size: 22px;
-    }}
-    .chart-note {{
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 12px;
-    }}
-    .chart-body {{
-      display: grid;
-      gap: 12px;
-    }}
-    .segment-track {{
-      display: flex;
-      min-height: 18px;
-      background: #ece4d9;
-      border-radius: 999px;
-      overflow: hidden;
-    }}
-    .segment-fill {{
-      min-width: 10px;
-    }}
-    .segment-legend {{
-      display: grid;
-      gap: 8px;
-    }}
-    .legend-row {{
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: start;
-      font-size: 14px;
-    }}
-    .legend-label {{
-      color: var(--text);
-      word-break: break-word;
-    }}
-    .legend-value {{
-      color: var(--muted);
-      white-space: nowrap;
-      text-align: right;
-    }}
-    .bar-chart {{
-      display: grid;
-      gap: 12px;
-    }}
-    .bar-row {{
-      display: grid;
-      gap: 6px;
-    }}
-    .bar-head {{
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
-      align-items: baseline;
-    }}
-    .bar-label {{
-      font-size: 14px;
-      word-break: break-word;
-    }}
-    .bar-value {{
-      color: var(--muted);
-      font-size: 13px;
-      white-space: nowrap;
-    }}
-    .bar-track {{
-      height: 12px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: #ece4d9;
-    }}
-    .bar-fill {{
-      height: 100%;
-      border-radius: 999px;
-    }}
-    .section {{
-      padding: 24px;
-    }}
-    .section h2 {{
-      margin: 0 0 14px;
-      font-size: 24px;
-    }}
-    .metrics {{
-      display: grid;
-      gap: 10px;
-    }}
-    .metric-row {{
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 16px;
-      padding-top: 10px;
-      border-top: 1px solid var(--line);
-    }}
-    .metric-row:first-child {{
-      border-top: 0;
-      padding-top: 0;
-    }}
-    .metric-label {{
-      color: var(--muted);
-    }}
-    .metric-value {{
-      font-weight: 700;
-      text-align: right;
-    }}
-    @media (max-width: 680px) {{
-      body {{ padding: 18px 12px 30px; }}
-      .hero {{ padding: 24px 22px; }}
-      h1 {{ font-size: 30px; }}
-      .section {{ padding: 20px; }}
-      .legend-row {{
-        grid-template-columns: 1fr;
-        gap: 2px;
-      }}
-      .legend-value {{
-        text-align: left;
-      }}
-      .bar-head {{
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-      }}
-    }}
+{_document_css()}
   </style>
 </head>
 <body>
   <div class="page">
-    <section class="hero">
-      <div class="eyebrow">HTML отчёт с графиками</div>
-      <h1>{escape(title)}</h1>
-      <div class="hero-copy">{escape(_hero_copy(section))}</div>
-      <div class="pill-row">
-        <span class="pill">Период: {escape(window_label)}</span>
-        <span class="pill">Подготовлен: {escape(generated_at)}</span>
-        <span class="pill">Executive view</span>
+    <section class="cover">
+      <div class="cover-grid">
+        <div>
+          <p class="eyebrow">Analytics report</p>
+          <h1>{escape(title)}</h1>
+          <p class="hero-copy">{escape(_hero_copy(section))}</p>
+          <div class="chip-row">
+            <span class="chip">HTML отчёт с графиками</span>
+            <span class="chip">Период: {escape(window_label)}</span>
+            <span class="chip">Подготовлен: {escape(generated_at)}</span>
+            <span class="chip">Static executive report</span>
+          </div>
+        </div>
+        <aside class="cover-aside">
+          {_cover_metric("Открыто", snapshot.total_open_tickets)}
+          {_cover_metric("Создано", snapshot.period_created_tickets_count)}
+          {_cover_metric("Закрыто", snapshot.period_closed_tickets_count)}
+          {_cover_metric("Оценка", _format_rating(snapshot.satisfaction_average))}
+          {_cover_metric("Покрытие", _format_percent(snapshot.feedback_coverage_percent))}
+        </aside>
       </div>
     </section>
-    <section class="stats-grid">
-      {_stat_card("Новые за период", snapshot.period_created_tickets_count, "Входящий поток")}
-      {_stat_card("Закрыто за период", snapshot.period_closed_tickets_count, "Завершённые дела")}
-      {
-        _stat_card(
-            "Средний рейтинг",
-            _format_rating(snapshot.satisfaction_average),
-            "Клиентская оценка",
-        )
-    }
-      {
-        _stat_card(
-            "Нарушения SLA",
-            str(snapshot.first_response_breach_count + snapshot.resolution_breach_count),
-            "Первый ответ и решение",
-        )
-    }
+    <section class="kpi-board" aria-label="KPI board">
+      {_stat_card("Открыто", snapshot.total_open_tickets, "Все незакрытые заявки")}
+      {_stat_card("В очереди", snapshot.queued_tickets_count, "Ожидают назначения")}
+      {_stat_card("В работе", snapshot.assigned_tickets_count, "Назначены операторам")}
+      {_stat_card("Эскалации", snapshot.escalated_tickets_count, "Требуют внимания")}
+      {_stat_card("Закрыто всего", snapshot.closed_tickets_count, "Исторически закрытые")}
+      {_stat_card("Создано", snapshot.period_created_tickets_count, "За выбранный период")}
+      {_stat_card("Закрыто", snapshot.period_closed_tickets_count, "За выбранный период")}
+      {_stat_card(
+          "Первый ответ",
+          _format_duration(snapshot.average_first_response_time_seconds),
+          "Среднее время",
+      )}
+      {_stat_card(
+          "Решение",
+          _format_duration(snapshot.average_resolution_time_seconds),
+          "Среднее время",
+      )}
+      {_stat_card("Satisfaction", _format_rating(snapshot.satisfaction_average), "Средняя оценка")}
+      {_stat_card("Feedback", snapshot.feedback_count, "Количество оценок")}
+      {_stat_card(
+          "Coverage",
+          _format_percent(snapshot.feedback_coverage_percent),
+          "Покрытие отзывами",
+      )}
     </section>
-    <section class="charts-grid">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Insights</p>
+          <h2>{escape(_section_insight_title(section))}</h2>
+        </div>
+        <span class="chip">{escape(window_label)}</span>
+      </div>
+      {_render_section_metrics(snapshot, section)}
+    </section>
+    <section class="charts-grid" aria-label="Charts">
       {_render_status_mix_chart(snapshot)}
       {_render_volume_chart(snapshot)}
       {_render_category_chart(snapshot, section)}
       {_render_quality_chart(snapshot, section)}
       {_render_operator_chart(snapshot, section)}
     </section>
-    <section class="section">
-      <h2>Ключевые показатели</h2>
-      {_render_section_metrics(snapshot, section)}
-    </section>
+    <footer class="report-footer">
+      <span>Generated by Reliora</span>
+      <span>{escape(generated_at)}</span>
+      <span>{escape(title)} · {escape(window_label)}</span>
+      <span>Static export file</span>
+    </footer>
   </div>
 </body>
 </html>
 """
     return html.encode("utf-8")
+
+
+def _document_css() -> str:
+    return """
+    :root {
+      color-scheme: light;
+      --bg: #f3eee7;
+      --paper: rgba(255, 255, 255, 0.86);
+      --paper-strong: #fffdf9;
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-muted: rgba(248, 243, 237, 0.82);
+      --line: rgba(38, 45, 53, 0.09);
+      --line-strong: rgba(38, 45, 53, 0.16);
+      --text: #1b222b;
+      --muted: #66727d;
+      --accent: #1f2834;
+      --accent-soft: rgba(31, 40, 52, 0.07);
+      --success: #315b4b;
+      --warning: #8a6229;
+      --danger: #8c3f3f;
+      --info: #405d73;
+      --shadow-sm: 0 8px 18px rgba(26, 33, 41, 0.05);
+      --shadow-md: 0 18px 42px rgba(26, 33, 41, 0.08);
+      --shadow-lg: 0 32px 84px rgba(26, 33, 41, 0.12);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+      --radius-xl: 34px;
+    }
+    * { box-sizing: border-box; }
+    html { background: #e5dbcf; }
+    body {
+      margin: 0;
+      min-width: 0;
+      background:
+        radial-gradient(circle at 10% -6%, rgba(180, 151, 110, 0.24), transparent 34%),
+        radial-gradient(circle at 94% 2%, rgba(64, 93, 115, 0.14), transparent 30%),
+        radial-gradient(circle at 50% 104%, rgba(255, 255, 255, 0.88), transparent 40%),
+        linear-gradient(180deg, #fbf8f3 0%, var(--bg) 54%, #e5dbcf 100%);
+      color: var(--text);
+      font-family: "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+      line-height: 1.6;
+      padding: 32px 16px 54px;
+    }
+    .page { width: min(1180px, 100%); margin: 0 auto; }
+    .cover, .stat-card, .chart-card, .report-section {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      box-shadow: var(--shadow-sm);
+    }
+    .cover {
+      overflow: hidden;
+      border-color: rgba(255, 255, 255, 0.74);
+      border-radius: var(--radius-xl);
+      background:
+        radial-gradient(circle at top right, rgba(31, 40, 52, 0.08), transparent 38%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(243, 235, 225, 0.82));
+      box-shadow: var(--shadow-lg);
+      padding: 34px;
+      margin-bottom: 18px;
+    }
+    .cover-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+      gap: 28px;
+      align-items: start;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #756249;
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      color: var(--text);
+      font-weight: 680;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    h1 { font-size: clamp(34px, 5vw, 56px); }
+    h2 { font-size: 24px; }
+    .hero-copy {
+      max-width: 780px;
+      margin: 14px 0 0;
+      color: #3c4652;
+      font-size: 18px;
+      line-height: 1.56;
+      overflow-wrap: anywhere;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 7px 12px;
+      border: 1px solid rgba(38, 45, 53, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.62);
+      color: #4b5662;
+      font-size: 13px;
+      font-weight: 680;
+      overflow-wrap: anywhere;
+    }
+    .cover-aside {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.58);
+    }
+    .cover-metric, .stat-card {
+      min-width: 0;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.66);
+    }
+    .cover-label, .stat-label, .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      text-transform: uppercase;
+    }
+    .cover-value, .stat-value {
+      margin-top: 4px;
+      color: var(--text);
+      font-size: 24px;
+      font-weight: 760;
+      line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+    .stat-note {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .kpi-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .report-section, .chart-card {
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 10px;
+    }
+    .metric-row {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.62);
+    }
+    .metric-value {
+      font-weight: 760;
+      overflow-wrap: anywhere;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 16px;
+    }
+    .chart-card h2 { margin-bottom: 8px; }
+    .chart-note {
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .chart-body, .bar-chart, .segment-legend {
+      display: grid;
+      gap: 12px;
+    }
+    .segment-track {
+      display: flex;
+      min-height: 18px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e8dfd3;
+    }
+    .segment-fill { min-width: 10px; }
+    .legend-row, .bar-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: baseline;
+    }
+    .legend-label, .bar-label {
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+    .legend-value, .bar-value {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .bar-row { display: grid; gap: 7px; }
+    .bar-track {
+      height: 11px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e8dfd3;
+    }
+    .bar-fill {
+      height: 100%;
+      min-width: 8px;
+      border-radius: 999px;
+    }
+    .empty-state {
+      padding: 18px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface-muted);
+      color: var(--muted);
+    }
+    .report-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px 18px;
+      padding: 18px 4px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 760px) {
+      body { padding: 18px 12px 34px; }
+      .cover, .report-section, .chart-card { padding: 22px; border-radius: 24px; }
+      .cover-grid, .section-head { grid-template-columns: 1fr; flex-direction: column; }
+      .cover-grid { display: grid; }
+      .cover-aside { grid-template-columns: 1fr; }
+      .kpi-board { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+      .charts-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 32px; }
+      h2 { font-size: 22px; }
+      .hero-copy { font-size: 16px; }
+      .legend-row, .bar-head { grid-template-columns: 1fr; gap: 3px; }
+      .legend-value, .bar-value { text-align: left; }
+    }
+    @media (max-width: 390px) {
+      body { padding-inline: 10px; }
+      .cover, .report-section, .chart-card { padding: 18px; }
+      .kpi-board, .metrics { grid-template-columns: 1fr; }
+      .chip { white-space: normal; }
+    }
+    @page { margin: 16mm; }
+    @media print {
+      html, body { background: #fff !important; }
+      body { padding: 0; color: #111827; font-size: 11pt; }
+      .cover, .stat-card, .chart-card, .report-section, .metric-row, .cover-metric {
+        box-shadow: none !important;
+        background: #fff !important;
+        border-color: #d6d3ce !important;
+      }
+      .cover, .report-section, .chart-card, .stat-card, .metric-row {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .report-footer { border-top: 1px solid #d6d3ce; margin-top: 10mm; }
+    }
+    """
 
 
 def _hero_copy(section: AnalyticsSection) -> str:
@@ -330,6 +408,25 @@ def _hero_copy(section: AnalyticsSection) -> str:
     return messages[section]
 
 
+def _section_insight_title(section: AnalyticsSection) -> str:
+    return {
+        AnalyticsSection.OVERVIEW: "Ключевые показатели",
+        AnalyticsSection.OPERATORS: "Операторская картина",
+        AnalyticsSection.TOPICS: "Темы и спрос",
+        AnalyticsSection.QUALITY: "Качество сервиса",
+        AnalyticsSection.SLA: "SLA и риски",
+    }[section]
+
+
+def _cover_metric(label: str, value: object) -> str:
+    return (
+        '<article class="cover-metric">'
+        f'<div class="cover-label">{escape(str(label))}</div>'
+        f'<div class="cover-value">{escape(str(value))}</div>'
+        "</article>"
+    )
+
+
 def _stat_card(label: str, value: object, note: str) -> str:
     return (
         '<article class="stat-card">'
@@ -342,27 +439,30 @@ def _stat_card(label: str, value: object, note: str) -> str:
 
 def _render_status_mix_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
     items = (
-        ("В очереди", snapshot.queued_tickets_count, "#9c7a57"),
-        ("В работе", snapshot.assigned_tickets_count, "#275764"),
-        ("Эскалация", snapshot.escalated_tickets_count, "#a04d48"),
-        ("Закрытые", snapshot.closed_tickets_count, "#6e8460"),
+        ("В очереди", snapshot.queued_tickets_count, "#8a6229"),
+        ("В работе", snapshot.assigned_tickets_count, "#405d73"),
+        ("Эскалация", snapshot.escalated_tickets_count, "#8c3f3f"),
+        ("Закрытые", snapshot.closed_tickets_count, "#315b4b"),
     )
-    total = sum(value for _, value, _ in items) or 1
+    total = sum(value for _, value, _ in items)
+    chart_total = total or 1
     track = "".join(
         (
-            f'<div class="segment-fill" style="width: {max(round((value / total) * 100, 2), 3)}%; '
+            '<div class="segment-fill" '
+            f'style="width: {_segment_width(value, chart_total)}%; '
             f'background: {color};"></div>'
         )
         for _, value, color in items
         if value > 0
     )
+    if not track:
+        track = '<div class="segment-fill" style="width: 100%; background: #d8d0c5;"></div>'
     legend = "".join(
         (
             '<div class="legend-row">'
             f'<div class="legend-label">{escape(label)}</div>'
-            f'<div class="legend-value">'
-            f"{value} · {_format_percent(round((value / total) * 100))}"
-            "</div>"
+            f'<div class="legend-value">{value} · '
+            f'{_format_percent(round((value / chart_total) * 100))}</div>'
             "</div>"
         )
         for label, value, _ in items
@@ -384,8 +484,8 @@ def _render_status_mix_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
 def _render_volume_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
     chart = _render_dual_bar_chart(
         items=(
-            ("Создано", snapshot.period_created_tickets_count, "#275764"),
-            ("Закрыто", snapshot.period_closed_tickets_count, "#6e8460"),
+            ("Создано", snapshot.period_created_tickets_count, "#405d73"),
+            ("Закрыто", snapshot.period_closed_tickets_count, "#315b4b"),
         )
     )
     return _chart_card(
@@ -406,19 +506,15 @@ def _render_category_chart(
         ]
         title = "Нарушения по темам"
         note = "Где SLA проседает сильнее всего."
-        color = "#a04d48"
+        color = "#8c3f3f"
     else:
         items = [
             (item.category_title, item.created_ticket_count) for item in snapshot.top_categories[:5]
         ]
         title = "Топ тем"
         note = "Самые заметные направления входящего потока."
-        color = "#275764"
-    return _chart_card(
-        title=title,
-        note=note,
-        chart=_bar_chart_html(items, color=color),
-    )
+        color = "#405d73"
+    return _chart_card(title=title, note=note, chart=_bar_chart_html(items, color=color))
 
 
 def _render_quality_chart(
@@ -433,19 +529,15 @@ def _render_quality_chart(
         ]
         title = "Срез SLA"
         note = "Разделение нарушений по типу."
-        color = "#a04d48"
+        color = "#8c3f3f"
     else:
         items = tuple(
             (f"Оценка {item.rating}", item.count) for item in snapshot.rating_distribution
         )
         title = "Распределение оценок"
         note = "Как клиенты оценивали поддержку."
-        color = "#8e6646"
-    return _chart_card(
-        title=title,
-        note=note,
-        chart=_bar_chart_html(items[:5], color=color),
-    )
+        color = "#8a6229"
+    return _chart_card(title=title, note=note, chart=_bar_chart_html(items[:5], color=color))
 
 
 def _render_operator_chart(
@@ -460,7 +552,7 @@ def _render_operator_chart(
         ]
         title = "Закрытия по операторам"
         note = "Кто дал основной результат за период."
-        color = "#275764"
+        color = "#405d73"
     elif section == AnalyticsSection.QUALITY:
         items = [
             (item.display_name, _format_float(item.average_satisfaction))
@@ -468,19 +560,15 @@ def _render_operator_chart(
         ]
         title = "Лидеры по качеству"
         note = "Операторы с лучшей клиентской оценкой."
-        color = "#6e8460"
+        color = "#315b4b"
     else:
         items = [
             (item.display_name, item.ticket_count) for item in snapshot.tickets_per_operator[:5]
         ]
         title = "Текущая нагрузка"
         note = "Сколько активных дел сейчас у каждого оператора."
-        color = "#275764"
-    return _chart_card(
-        title=title,
-        note=note,
-        chart=_bar_chart_html(items, color=color),
-    )
+        color = "#405d73"
+    return _chart_card(title=title, note=note, chart=_bar_chart_html(items, color=color))
 
 
 def _chart_card(*, title: str, note: str, chart: str) -> str:
@@ -493,19 +581,18 @@ def _chart_card(*, title: str, note: str, chart: str) -> str:
     )
 
 
-def _render_dual_bar_chart(
-    items: Sequence[tuple[str, int, str]],
-) -> str:
+def _render_dual_bar_chart(items: Sequence[tuple[str, int, str]]) -> str:
     max_value = max((value for _, value, _ in items), default=1) or 1
     rows = []
     for label, value, color in items:
-        width = round((value / max_value) * 100, 2)
+        width = round((value / max_value) * 100, 2) if value > 0 else 0
         rows.append(
             '<div class="bar-row">'
             f'<div class="bar-head"><div class="bar-label">{escape(label)}</div>'
             f'<div class="bar-value">{value}</div></div>'
             '<div class="bar-track">'
-            f'<div class="bar-fill" style="width: {max(width, 3)}%; background: {color};"></div>'
+            f'<div class="bar-fill" style="width: {_bar_width(width, value)}%; '
+            f'background: {color};"></div>'
             "</div>"
             "</div>"
         )
@@ -523,14 +610,14 @@ def _bar_chart_html(
         if _coerce_numeric(value) > 0
     ]
     if not normalized_items:
-        return '<div class="chart-note">Данных пока недостаточно.</div>'
+        return '<div class="empty-state">Данных пока недостаточно.</div>'
     max_value = max(value for _, value in normalized_items) or 1
     rows: list[str] = []
     for label, value in normalized_items:
         width = round((value / max_value) * 100, 2)
         rows.append(
             '<div class="bar-row">'
-            f'<div class="bar-head"><div class="bar-label">{escape(_truncate(label, 44))}</div>'
+            f'<div class="bar-head"><div class="bar-label">{escape(_truncate(label, 64))}</div>'
             f'<div class="bar-value">{escape(_format_chart_value(value))}</div></div>'
             '<div class="bar-track">'
             f'<div class="bar-fill" style="width: {max(width, 3)}%; background: {color};"></div>'
@@ -661,6 +748,14 @@ def _coerce_numeric(value: object) -> float:
     if isinstance(value, int | float):
         return float(value)
     return 0.0
+
+
+def _segment_width(value: int, total: int) -> float:
+    return max(round((value / total) * 100, 2), 3)
+
+
+def _bar_width(width: float, value: int) -> float:
+    return max(width, 3) if value > 0 else 0
 
 
 def _format_chart_value(value: float) -> str:
