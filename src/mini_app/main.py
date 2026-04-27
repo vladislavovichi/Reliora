@@ -4,6 +4,10 @@ import logging
 from pathlib import Path
 
 from backend.grpc.client import build_helpdesk_backend_client_factory
+from infrastructure.config.ai_settings import (
+    JsonAISettingsRepository,
+    build_runtime_ai_settings_defaults,
+)
 from infrastructure.config.settings import Settings, get_settings
 from infrastructure.logging import configure_logging
 from mini_app.api import MiniAppGateway
@@ -50,7 +54,11 @@ def main() -> None:
             settings.backend_service,
             auth_config=settings.backend_auth,
             resilience_config=settings.resilience,
-        )
+        ),
+        ai_settings_repository=JsonAISettingsRepository(
+            path=settings.ai_runtime_settings.path,
+            defaults=build_runtime_ai_settings_defaults(settings.ai.model_id),
+        ),
     )
     server = MiniAppHttpServer(
         config=settings.mini_app,

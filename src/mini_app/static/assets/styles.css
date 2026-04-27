@@ -554,7 +554,10 @@ select:focus-visible {
 .archive-filter-row,
 .archive-meta,
 .archive-meta-row,
-.archive-picker-grid {
+.archive-picker-grid,
+.settings-form,
+.settings-toggle-grid,
+.settings-row {
   display: grid;
   gap: 14px;
 }
@@ -874,14 +877,17 @@ select:focus-visible {
 .search-field,
 .select-field,
 .note-form,
-.assign-form {
+.assign-form,
+.settings-field {
   display: grid;
   gap: 10px;
 }
 
 .search-field input,
 .select-field select,
-.note-form textarea {
+.note-form textarea,
+.settings-field input,
+.settings-field select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -890,7 +896,9 @@ select:focus-visible {
 }
 
 .search-field input,
-.select-field select {
+.select-field select,
+.settings-field input,
+.settings-field select {
   min-height: 52px;
   padding: 14px 16px;
 }
@@ -899,6 +907,72 @@ select:focus-visible {
   min-height: 124px;
   padding: 16px;
   resize: vertical;
+}
+
+.settings-form {
+  gap: 18px;
+}
+
+.settings-toggle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+.settings-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.settings-field span {
+  color: #7a6348;
+  font-size: 12px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(30, 38, 46, 0.07);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.settings-toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.settings-toggle span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-toggle strong {
+  font-size: 15px;
+}
+
+.settings-toggle small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-review-note {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(53, 89, 75, 0.14);
+  background: rgba(241, 247, 243, 0.7);
+  color: var(--success);
+}
+
+.settings-review-note span {
+  color: var(--muted-strong);
+  line-height: 1.5;
 }
 
 .lead {

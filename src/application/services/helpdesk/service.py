@@ -19,6 +19,7 @@ from application.services.helpdesk.operator_operations import HelpdeskOperatorOp
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.helpdesk.sla_operations import HelpdeskSLAOperations
 from application.services.helpdesk.ticket_operations import HelpdeskTicketOperations
+from application.use_cases.ai.settings import AISettingsProvider, InMemoryAISettingsRepository
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
@@ -67,6 +68,9 @@ class HelpdeskService(
     export_renderers: HelpdeskExportRenderers
     super_admin_telegram_user_ids: frozenset[int]
     include_internal_notes_in_ticket_reports: bool = True
+    ai_settings_provider: AISettingsProvider = field(
+        default_factory=InMemoryAISettingsRepository
+    )
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
     correlation_id_provider: CorrelationIdProvider | None = None
     _components: HelpdeskComponents = field(init=False, repr=False)
@@ -95,6 +99,7 @@ class HelpdeskService(
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
             export_renderers=self.export_renderers,
             include_internal_notes_in_ticket_reports=self.include_internal_notes_in_ticket_reports,
+            ai_settings_provider=self.ai_settings_provider,
         )
         self._audit = AuditTrail(
             repository=self.audit_log_repository,

@@ -49,6 +49,7 @@ const state = {
   },
   aiReplyDrafts: {},
   lastInvite: null,
+  aiSettingsDraft: null,
 };
 
 let noticeTimeoutId = 0;
@@ -150,7 +151,11 @@ async function renderRoute() {
     }
 
     if (state.currentRoute === "admin") {
-      content.innerHTML = renderAdmin(await loadAdmin(), state.lastInvite);
+      content.innerHTML = renderAdmin(
+        await loadAdmin(),
+        state.lastInvite,
+        state.aiSettingsDraft,
+      );
       return;
     }
 
@@ -279,6 +284,13 @@ function bindGlobalEvents() {
       });
       await renderRoute();
       showNotice("Инвайт создан.", "success");
+      return;
+    }
+
+    const aiSettingsCancelButton = event.target.closest("[data-ai-settings-cancel]");
+    if (aiSettingsCancelButton) {
+      state.aiSettingsDraft = null;
+      content.innerHTML = renderAdmin(await loadAdmin(), state.lastInvite, state.aiSettingsDraft);
       return;
     }
 
@@ -421,6 +433,35 @@ function bindGlobalEvents() {
       await renderRoute();
       showNotice("Назначение обновлено.", "success");
     }
+
+    if (event.target.id === "ai-settings-form") {
+      const formData = new FormData(event.target);
+      const payload = {
+        ai_summaries_enabled: formData.has("ai_summaries_enabled"),
+        ai_macro_suggestions_enabled: formData.has("ai_macro_suggestions_enabled"),
+        ai_reply_drafts_enabled: formData.has("ai_reply_drafts_enabled"),
+        ai_category_prediction_enabled: formData.has("ai_category_prediction_enabled"),
+        default_model_id: normalizeNullableInput(formData.get("default_model_id")),
+        max_history_messages: Number(formData.get("max_history_messages")),
+        reply_draft_tone: String(formData.get("reply_draft_tone") || "polite"),
+        operator_must_review_ai: true,
+      };
+      state.aiSettingsDraft = payload;
+      let saved = false;
+      await runMutation(async () => {
+        const result = await state.api.updateAISettings(payload);
+        state.cache.admin = {
+          ...(state.cache.admin || {}),
+          aiSettings: result,
+        };
+        state.aiSettingsDraft = null;
+        saved = true;
+      });
+      await renderRoute();
+      if (saved) {
+        showNotice("AI settings saved.", "success");
+      }
+    }
   });
 }
 
@@ -534,7 +575,11 @@ async function loadAdmin() {
   if (state.cache.admin) {
     return state.cache.admin;
   }
-  state.cache.admin = await state.api.getOperators();
+  const [operators, aiSettings] = await Promise.all([
+    state.api.getOperators(),
+    state.api.getAISettings(),
+  ]);
+  state.cache.admin = { operators, aiSettings };
   return state.cache.admin;
 }
 
@@ -551,6 +596,11 @@ function resolveErrorMessage(error) {
     return error.message;
   }
   return "Сервис временно недоступен.";
+}
+
+function normalizeNullableInput(value) {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
 }
 
 async function resolveLaunchContext() {

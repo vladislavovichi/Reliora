@@ -239,6 +239,19 @@ class AIConfig(BaseModel):
         return provider or "disabled"
 
 
+class RuntimeAISettingsConfig(BaseModel):
+    path: Path = Path("assets/ai_settings.json")
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def validate_path(cls, value: object) -> Path:
+        if isinstance(value, Path):
+            return value
+        if isinstance(value, str) and value.strip():
+            return Path(value.strip())
+        return Path("assets/ai_settings.json")
+
+
 class ResilienceConfig(BaseModel):
     startup_check_timeout_seconds: float = 5.0
     startup_retry_attempts: int = 3
@@ -394,6 +407,9 @@ class Settings(BaseSettings):
     backend_auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
     ai_service_auth: AIServiceAuthConfig = Field(default_factory=AIServiceAuthConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
+    ai_runtime_settings: RuntimeAISettingsConfig = Field(
+        default_factory=RuntimeAISettingsConfig
+    )
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
     attachments: AttachmentLimitsConfig = Field(default_factory=AttachmentLimitsConfig)

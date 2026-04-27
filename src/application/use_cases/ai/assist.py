@@ -26,6 +26,11 @@ from application.contracts.ai import (
     PredictTicketCategoryCommand,
     SuggestMacrosCommand,
 )
+from application.use_cases.ai.settings import (
+    AISettingsProvider,
+    InMemoryAISettingsRepository,
+    RuntimeAISettings,
+)
 from application.use_cases.tickets.summaries import MacroSummary, TicketCategorySummary
 from domain.contracts.repositories import (
     MacroRepository,
@@ -54,11 +59,13 @@ class BuildTicketAssistSnapshotUseCase:
         ticket_ai_summary_repository: TicketAISummaryRepository,
         macro_repository: MacroRepository,
         ai_client_factory: AIServiceClientFactory,
+        ai_settings_provider: AISettingsProvider | None = None,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.ticket_ai_summary_repository = ticket_ai_summary_repository
         self.macro_repository = macro_repository
         self.ai_client_factory = ai_client_factory
+        self.ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
 
     async def __call__(
         self,
@@ -77,11 +84,15 @@ class BuildTicketAssistSnapshotUseCase:
         summary_result = None
         macros_result = None
         status_note: str | None = None
+        settings = self.ai_settings_provider.get()
 
         async with self.ai_client_factory() as ai_client:
-            if refresh_summary:
+            if refresh_summary and settings.ai_summaries_enabled:
                 summary_result = await ai_client.generate_ticket_summary(
-                    _build_generate_ticket_summary_command(ticket)
+                    _build_generate_ticket_summary_command(
+                        ticket,
+                        settings=settings,
+                    )
                 )
                 if not summary_result.available or summary_result.summary is None:
                     status_note = (
@@ -104,10 +115,19 @@ class BuildTicketAssistSnapshotUseCase:
                         model_id=summary_result.model_id,
                     )
                     status_note = "Сводка обновлена по сохранённой переписке."
+            elif refresh_summary:
+                status_note = "AI-сводки отключены в настройках администратора."
 
-            macros_result = await ai_client.suggest_macros(
-                _build_suggest_macros_command(ticket=ticket, macros=macros)
-            )
+            if settings.ai_macro_suggestions_enabled:
+                macros_result = await ai_client.suggest_macros(
+                    _build_suggest_macros_command(
+                        ticket=ticket,
+                        macros=macros,
+                        settings=settings,
+                    )
+                )
+            else:
+                status_note = status_note or "AI-подсказки макросов отключены."
 
         macro_suggestions = _resolve_macro_suggestions(
             macros=macros,
@@ -188,10 +208,12 @@ class GenerateTicketReplyDraftUseCase:
         ticket_repository: TicketRepository,
         ticket_ai_summary_repository: TicketAISummaryRepository,
         ai_client_factory: AIServiceClientFactory,
+        ai_settings_provider: AISettingsProvider | None = None,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.ticket_ai_summary_repository = ticket_ai_summary_repository
         self.ai_client_factory = ai_client_factory
+        self.ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
 
     async def __call__(
         self,
@@ -201,6 +223,13 @@ class GenerateTicketReplyDraftUseCase:
         ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
         if ticket is None:
             return None
+        settings = self.ai_settings_provider.get()
+        if not settings.ai_reply_drafts_enabled:
+            return TicketReplyDraft(
+                available=False,
+                unavailable_reason="AI reply drafts are disabled by admin settings.",
+                model_id=settings.default_model_id,
+            )
         stored_summary = await self.ticket_ai_summary_repository.get_by_ticket_id(
             ticket_id=ticket.id
         )
@@ -209,6 +238,7 @@ class GenerateTicketReplyDraftUseCase:
                 _build_generate_ticket_reply_draft_command(
                     ticket=ticket,
                     stored_summary=stored_summary,
+                    settings=settings,
                 )
             )
         return TicketReplyDraft(
@@ -229,14 +259,22 @@ class PredictTicketCategoryUseCase:
         *,
         ticket_category_repository: TicketCategoryRepository,
         ai_client_factory: AIServiceClientFactory,
+        ai_settings_provider: AISettingsProvider | None = None,
     ) -> None:
         self.ticket_category_repository = ticket_category_repository
         self.ai_client_factory = ai_client_factory
+        self.ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
 
     async def __call__(
         self,
         command: PredictTicketCategoryCommand,
     ) -> TicketCategoryPrediction:
+        settings = self.ai_settings_provider.get()
+        if not settings.ai_category_prediction_enabled:
+            return TicketCategoryPrediction(
+                available=False,
+                model_id=settings.default_model_id,
+            )
         categories = await self._list_categories()
         if not categories or not _has_signal(command):
             return TicketCategoryPrediction(available=False)
@@ -303,6 +341,8 @@ class PredictTicketCategoryUseCase:
 
 def _build_generate_ticket_summary_command(
     ticket: TicketDetails,
+    *,
+    settings: RuntimeAISettings,
 ) -> GenerateTicketSummaryCommand:
     return GenerateTicketSummaryCommand(
         ticket_public_id=ticket.public_id,
@@ -311,7 +351,8 @@ def _build_generate_ticket_summary_command(
         category_title=ticket.category_title,
         tags=ticket.tags,
         message_history=tuple(
-            _build_message_context(message) for message in ticket.message_history
+            _build_message_context(message)
+            for message in _limited_messages(ticket.message_history, settings=settings)
         ),
         internal_notes=tuple(
             AIContextInternalNote(
@@ -328,6 +369,7 @@ def _build_generate_ticket_reply_draft_command(
     *,
     ticket: TicketDetails,
     stored_summary: TicketAISummaryDetails | None,
+    settings: RuntimeAISettings,
 ) -> GenerateTicketReplyDraftCommand:
     summary = None
     if stored_summary is not None:
@@ -339,6 +381,24 @@ def _build_generate_ticket_reply_draft_command(
             current_status=stored_summary.current_status,
             status_note=freshness.note,
         )
+    internal_notes = tuple(
+        AIContextInternalNote(
+            author_name=note.author_operator_name,
+            text=note.text,
+            created_at=note.created_at,
+        )
+        for note in ticket.internal_notes
+    )
+    if settings.reply_draft_tone:
+        internal_notes = (
+            *internal_notes,
+            AIContextInternalNote(
+                author_name="AI settings",
+                text=f"Preferred reply tone: {settings.reply_draft_tone}.",
+                created_at=datetime.now(UTC),
+            ),
+        )
+
     return GenerateTicketReplyDraftCommand(
         ticket_public_id=ticket.public_id,
         subject=ticket.subject,
@@ -346,16 +406,10 @@ def _build_generate_ticket_reply_draft_command(
         category_title=ticket.category_title,
         tags=ticket.tags,
         message_history=tuple(
-            _build_message_context(message) for message in ticket.message_history
+            _build_message_context(message)
+            for message in _limited_messages(ticket.message_history, settings=settings)
         ),
-        internal_notes=tuple(
-            AIContextInternalNote(
-                author_name=note.author_operator_name,
-                text=note.text,
-                created_at=note.created_at,
-            )
-            for note in ticket.internal_notes
-        ),
+        internal_notes=internal_notes,
         summary=summary,
     )
 
@@ -364,6 +418,7 @@ def _build_suggest_macros_command(
     *,
     ticket: TicketDetails,
     macros: tuple[MacroSummary, ...],
+    settings: RuntimeAISettings,
 ) -> SuggestMacrosCommand:
     return SuggestMacrosCommand(
         ticket_public_id=ticket.public_id,
@@ -372,12 +427,22 @@ def _build_suggest_macros_command(
         category_title=ticket.category_title,
         tags=ticket.tags,
         message_history=tuple(
-            _build_message_context(message) for message in ticket.message_history
+            _build_message_context(message)
+            for message in _limited_messages(ticket.message_history, settings=settings)
         ),
         macros=tuple(
             MacroCandidate(id=macro.id, title=macro.title, body=macro.body) for macro in macros
         ),
     )
+
+
+def _limited_messages(
+    messages: tuple[TicketMessageDetails, ...],
+    *,
+    settings: RuntimeAISettings,
+) -> tuple[TicketMessageDetails, ...]:
+    limit = max(settings.max_history_messages, 1)
+    return messages[-limit:]
 
 
 def _build_message_context(message: TicketMessageDetails) -> AIContextMessage:

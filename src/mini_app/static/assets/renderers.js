@@ -425,7 +425,9 @@ export function renderAnalytics(data, windowKey) {
   `;
 }
 
-export function renderAdmin(data, invite) {
+export function renderAdmin(data, invite, aiSettingsDraft = null) {
+  const operators = data.operators?.items ?? data.items ?? [];
+  const aiSettings = aiSettingsDraft ?? data.aiSettings?.settings ?? {};
   return `
     <section class="surface-grid">
       <article class="surface surface-roomy">
@@ -453,8 +455,8 @@ export function renderAdmin(data, invite) {
         }
         <div class="operator-list">
           ${
-            data.items.length
-              ? data.items
+            operators.length
+              ? operators
                   .map(
                     (item) => `
                       <article class="operator-row">
@@ -479,16 +481,111 @@ export function renderAdmin(data, invite) {
       <article class="surface surface-roomy surface-quiet">
         <div class="surface-head">
           <div>
-            <p class="eyebrow">Контроль</p>
-            <h2>Спокойное управление</h2>
+            <p class="eyebrow">AI settings</p>
+            <h2>Safe AI controls</h2>
           </div>
         </div>
-        <p class="subtitle">
-          Здесь остаются только ежедневные действия: состав команды и одноразовые инвайты.
-          Остальные продуктовые сценарии продолжают жить в backend и bot-слое.
-        </p>
+        ${renderAISettingsForm(aiSettings)}
       </article>
     </section>
+  `;
+}
+
+function renderAISettingsForm(settings) {
+  const maxHistory = Number.isFinite(Number(settings.max_history_messages))
+    ? Number(settings.max_history_messages)
+    : 20;
+  const tone = settings.reply_draft_tone || "polite";
+  return `
+    <form class="settings-form" id="ai-settings-form">
+      <div class="settings-toggle-grid">
+        ${renderSettingsToggle(
+          "ai_summaries_enabled",
+          "AI summaries",
+          "Generate operator-facing ticket summaries.",
+          settings.ai_summaries_enabled !== false,
+        )}
+        ${renderSettingsToggle(
+          "ai_macro_suggestions_enabled",
+          "Macro suggestions",
+          "Suggest existing macros from ticket context.",
+          settings.ai_macro_suggestions_enabled !== false,
+        )}
+        ${renderSettingsToggle(
+          "ai_reply_drafts_enabled",
+          "Reply drafts",
+          "Prepare drafts that operators must review.",
+          settings.ai_reply_drafts_enabled !== false,
+        )}
+        ${renderSettingsToggle(
+          "ai_category_prediction_enabled",
+          "Category prediction",
+          "Predict ticket category from safe intake context.",
+          settings.ai_category_prediction_enabled !== false,
+        )}
+      </div>
+
+      <label class="settings-field">
+        <span>Default model id</span>
+        <input
+          name="default_model_id"
+          type="text"
+          value="${escapeAttribute(settings.default_model_id || "")}"
+          placeholder="Use env/provider default"
+          autocomplete="off"
+        />
+      </label>
+
+      <div class="settings-row">
+        <label class="settings-field">
+          <span>Max history messages</span>
+          <input
+            name="max_history_messages"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value="${escapeAttribute(String(maxHistory))}"
+          />
+        </label>
+        <label class="settings-field">
+          <span>Reply tone</span>
+          <select name="reply_draft_tone">
+            ${["polite", "friendly", "formal"]
+              .map(
+                (value) => `
+                  <option value="${value}" ${tone === value ? "selected" : ""}>
+                    ${value}
+                  </option>
+                `,
+              )
+              .join("")}
+          </select>
+        </label>
+      </div>
+
+      <div class="settings-review-note">
+        <strong>Operator review required</strong>
+        <span>AI output remains draft-only. Provider secrets and API keys are never shown here.</span>
+      </div>
+
+      <div class="inline-actions">
+        <button class="action action-primary" type="submit">Save settings</button>
+        <button class="action action-subtle" data-ai-settings-cancel type="button">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderSettingsToggle(name, title, description, checked) {
+  return `
+    <label class="settings-toggle">
+      <input name="${escapeAttribute(name)}" type="checkbox" ${checked ? "checked" : ""} />
+      <span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(description)}</small>
+      </span>
+    </label>
   `;
 }
 

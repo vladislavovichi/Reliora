@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
+from application.ai.summaries import TicketReplyDraft
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.tickets import (
     AddInternalNoteCommand,
@@ -13,6 +14,11 @@ from application.contracts.tickets import (
     TicketAssignmentCommand,
 )
 from application.services.stats import AnalyticsWindow
+from application.use_cases.ai.settings import (
+    AISettingsRepository,
+    InMemoryAISettingsRepository,
+    build_ai_settings_from_update,
+)
 from application.use_cases.analytics.exports import AnalyticsExportFormat, AnalyticsSection
 from application.use_cases.tickets.exports import TicketReportFormat
 from application.use_cases.tickets.summaries import (
@@ -27,6 +33,7 @@ from mini_app.serializers import (
     is_negative_dashboard_sentiment,
     needs_operator_reply,
     serialize_access_context,
+    serialize_ai_settings,
     serialize_analytics_snapshot,
     serialize_archived_ticket,
     serialize_dashboard_bucket,
@@ -52,6 +59,9 @@ class BinaryPayload:
 @dataclass(slots=True)
 class MiniAppGateway:
     backend_client_factory: HelpdeskBackendClientFactory
+    ai_settings_repository: AISettingsRepository = field(
+        default_factory=InMemoryAISettingsRepository
+    )
 
     async def get_session(self, *, user: TelegramMiniAppUser) -> dict[str, Any]:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
@@ -184,11 +194,14 @@ class MiniAppGateway:
                 "items": [],
                 "warning": "Ticket history is temporarily unavailable.",
             }
+        serialized_ai = serialize_ticket_ai_snapshot(ai_snapshot)
 
         return {
             "session": serialize_access_context(session),
             "ticket": serialize_ticket_details(details),
-            "ai": serialize_ticket_ai_snapshot(ai_snapshot),
+            "ai": self._apply_ai_settings_to_snapshot_payload(serialized_ai)
+            if serialized_ai is not None
+            else None,
             "timeline": timeline,
             "macros": [serialize_macro(item) for item in macros],
             "operators": [serialize_operator(item) for item in operators],
@@ -201,10 +214,11 @@ class MiniAppGateway:
         ticket_public_id: UUID,
     ) -> dict[str, Any]:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
+        settings = self.ai_settings_repository.get()
         async with self.backend_client_factory() as client:
             ai_snapshot = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
-                refresh_summary=True,
+                refresh_summary=settings.ai_summaries_enabled,
                 actor=actor,
             )
         if ai_snapshot is None:
@@ -212,7 +226,7 @@ class MiniAppGateway:
         serialized = serialize_ticket_ai_snapshot(ai_snapshot)
         if serialized is None:
             raise LookupError("Заявка не найдена.")
-        return serialized
+        return self._apply_ai_settings_to_snapshot_payload(serialized)
 
     async def generate_ticket_reply_draft(
         self,
@@ -221,6 +235,15 @@ class MiniAppGateway:
         ticket_public_id: UUID,
     ) -> dict[str, Any]:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
+        settings = self.ai_settings_repository.get()
+        if not settings.ai_reply_drafts_enabled:
+            return serialize_ticket_reply_draft(
+                TicketReplyDraft(
+                    available=False,
+                    unavailable_reason="AI reply drafts are disabled by admin settings.",
+                    model_id=settings.default_model_id,
+                )
+            ) or {}
         async with self.backend_client_factory() as client:
             draft = await client.generate_ticket_reply_draft(
                 ticket_public_id=ticket_public_id,
@@ -418,6 +441,22 @@ class MiniAppGateway:
             invite = await client.create_operator_invite(actor=actor)
         return {"invite": serialize_operator_invite(invite)}
 
+    async def get_ai_settings(self, *, user: TelegramMiniAppUser) -> dict[str, Any]:
+        del user
+        return {"settings": serialize_ai_settings(self.ai_settings_repository.get())}
+
+    async def update_ai_settings(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        del user
+        current = self.ai_settings_repository.get()
+        updated = build_ai_settings_from_update(current, payload)
+        saved = self.ai_settings_repository.save(updated)
+        return {"settings": serialize_ai_settings(saved)}
+
     def _build_operator_identity(self, user: TelegramMiniAppUser) -> OperatorIdentity:
         return OperatorIdentity(
             telegram_user_id=user.telegram_user_id,
@@ -446,6 +485,29 @@ class MiniAppGateway:
             macro_id=macro_id,
             operator=self._build_operator_identity(user),
         )
+
+    def _apply_ai_settings_to_snapshot_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        settings = self.ai_settings_repository.get()
+        result = dict(payload)
+        notes: list[str] = []
+        if not settings.ai_summaries_enabled:
+            result["short_summary"] = None
+            result["user_goal"] = None
+            result["actions_taken"] = None
+            result["current_status"] = None
+            result["summary_status"] = "missing"
+            result["summary_generated_at"] = None
+            notes.append("AI summaries are disabled by admin settings.")
+        if not settings.ai_macro_suggestions_enabled:
+            result["macro_suggestions"] = []
+            notes.append("AI macro suggestions are disabled by admin settings.")
+        if notes:
+            result["status_note"] = " ".join(notes)
+            result["unavailable_reason"] = result.get("unavailable_reason") or result["status_note"]
+        return result
 
     async def _load_dashboard_ticket_details(
         self,

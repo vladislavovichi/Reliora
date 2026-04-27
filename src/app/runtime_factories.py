@@ -21,8 +21,13 @@ from application.services.authorization import (
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
+from application.use_cases.ai.settings import AISettingsProvider
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
+from infrastructure.config.ai_settings import (
+    JsonAISettingsRepository,
+    build_runtime_ai_settings_defaults,
+)
 from infrastructure.config.settings import MiniAppConfig, Settings
 from infrastructure.db.repositories.ai import SqlAlchemyTicketAISummaryRepository
 from infrastructure.db.repositories.audit import SqlAlchemyAuditLogRepository
@@ -111,6 +116,7 @@ def build_helpdesk_service(
     *,
     super_admin_telegram_user_ids: frozenset[int],
     ai_client_factory: AIServiceClientFactory,
+    ai_settings_provider: AISettingsProvider | None = None,
     include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
@@ -132,6 +138,7 @@ def build_helpdesk_service(
         ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         ai_client_factory=ai_client_factory,
+        ai_settings_provider=ai_settings_provider,
         export_renderers=HelpdeskExportRenderers(
             ticket_report_csv=render_ticket_report_csv,
             ticket_report_html=render_ticket_report_html,
@@ -150,6 +157,7 @@ def build_helpdesk_service_factory(
     *,
     super_admin_telegram_user_ids: frozenset[int],
     ai_client_factory: AIServiceClientFactory,
+    ai_settings_provider: AISettingsProvider | None = None,
     include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
@@ -160,6 +168,7 @@ def build_helpdesk_service_factory(
                 session,
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
                 ai_client_factory=ai_client_factory,
+                ai_settings_provider=ai_settings_provider,
                 include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
@@ -182,6 +191,13 @@ def build_helpdesk_ai_client_factory(settings: Settings) -> AIServiceClientFacto
         settings.ai_service,
         auth_config=settings.ai_service_auth,
         resilience_config=settings.resilience,
+    )
+
+
+def build_ai_settings_repository(settings: Settings) -> JsonAISettingsRepository:
+    return JsonAISettingsRepository(
+        path=settings.ai_runtime_settings.path,
+        defaults=build_runtime_ai_settings_defaults(settings.ai.model_id),
     )
 
 

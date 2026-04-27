@@ -82,6 +82,9 @@ def build_handler_class(
         def do_POST(self) -> None:  # noqa: N802
             self._dispatch("POST")
 
+        def do_PUT(self) -> None:  # noqa: N802
+            self._dispatch("PUT")
+
         def log_message(self, format: str, *args: object) -> None:
             logger.info("mini-app http %s - %s", self.address_string(), format % args)
 
@@ -259,6 +262,19 @@ def build_handler_class(
             if method == "GET" and path == "/api/admin/operators":
                 self._require_admin(session)
                 self._write_async_json(self.gateway.list_operators(user=user))
+                return
+            if method == "GET" and path == "/api/admin/ai-settings":
+                self._require_admin(session)
+                self._write_async_json(self.gateway.get_ai_settings(user=user))
+                return
+            if method == "PUT" and path == "/api/admin/ai-settings":
+                self._require_admin(session)
+                self._write_async_json(
+                    self.gateway.update_ai_settings(
+                        user=user,
+                        payload=self._read_json_body(),
+                    )
+                )
                 return
             if method == "POST" and path == "/api/admin/invites":
                 self._require_admin(session)

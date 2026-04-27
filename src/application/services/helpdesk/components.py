@@ -10,6 +10,10 @@ from application.use_cases.ai.assist import (
     GenerateTicketReplyDraftUseCase,
     PredictTicketCategoryUseCase,
 )
+from application.use_cases.ai.settings import (
+    AISettingsProvider,
+    InMemoryAISettingsRepository,
+)
 from application.use_cases.analytics.exports import (
     AnalyticsSnapshotRenderer,
     ExportAnalyticsSnapshotUseCase,
@@ -207,8 +211,10 @@ def build_helpdesk_components(
     super_admin_telegram_user_ids: frozenset[int],
     export_renderers: HelpdeskExportRenderers,
     include_internal_notes_in_ticket_reports: bool = True,
+    ai_settings_provider: AISettingsProvider | None = None,
 ) -> HelpdeskComponents:
     stats_service = HelpdeskStatsService(analytics_repository=ticket_analytics_repository)
+    resolved_ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
     return HelpdeskComponents(
         permissions=HelpdeskPermissionGuard(
             operator_repository=operator_repository,
@@ -392,15 +398,18 @@ def build_helpdesk_components(
                 ticket_ai_summary_repository=ticket_ai_summary_repository,
                 macro_repository=macro_repository,
                 ai_client_factory=ai_client_factory,
+                ai_settings_provider=resolved_ai_settings_provider,
             ),
             generate_ticket_reply_draft=GenerateTicketReplyDraftUseCase(
                 ticket_repository=ticket_repository,
                 ticket_ai_summary_repository=ticket_ai_summary_repository,
                 ai_client_factory=ai_client_factory,
+                ai_settings_provider=resolved_ai_settings_provider,
             ),
             predict_ticket_category=PredictTicketCategoryUseCase(
                 ticket_category_repository=ticket_category_repository,
                 ai_client_factory=ai_client_factory,
+                ai_settings_provider=resolved_ai_settings_provider,
             ),
         ),
         stats=stats_service,

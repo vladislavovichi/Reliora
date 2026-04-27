@@ -5,6 +5,7 @@ from typing import Any
 
 from application.ai.summaries import TicketAssistSnapshot, TicketReplyDraft
 from application.services.stats import HelpdeskAnalyticsSnapshot
+from application.use_cases.ai.settings import RuntimeAISettings
 from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
 from application.use_cases.tickets.summaries import (
     AccessContextSummary,
@@ -23,6 +24,19 @@ def serialize_access_context(access_context: AccessContextSummary) -> dict[str, 
     return {
         "telegram_user_id": access_context.telegram_user_id,
         "role": access_context.role.value,
+    }
+
+
+def serialize_ai_settings(settings: RuntimeAISettings) -> dict[str, Any]:
+    return {
+        "ai_summaries_enabled": settings.ai_summaries_enabled,
+        "ai_macro_suggestions_enabled": settings.ai_macro_suggestions_enabled,
+        "ai_reply_drafts_enabled": settings.ai_reply_drafts_enabled,
+        "ai_category_prediction_enabled": settings.ai_category_prediction_enabled,
+        "default_model_id": settings.default_model_id,
+        "max_history_messages": settings.max_history_messages,
+        "reply_draft_tone": settings.reply_draft_tone,
+        "operator_must_review_ai": settings.operator_must_review_ai,
     }
 
 

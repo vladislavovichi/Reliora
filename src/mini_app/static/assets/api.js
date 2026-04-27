@@ -118,6 +118,12 @@ export function createMiniAppApi(launchContext) {
     getOperators() {
       return request("/api/admin/operators");
     },
+    getAISettings() {
+      return request("/api/admin/ai-settings");
+    },
+    updateAISettings(payload) {
+      return request("/api/admin/ai-settings", { method: "PUT", body: payload });
+    },
     createInvite() {
       return request("/api/admin/invites", { method: "POST" });
     },
