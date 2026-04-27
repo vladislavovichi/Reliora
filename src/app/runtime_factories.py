@@ -21,7 +21,7 @@ from application.services.authorization import (
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
-from application.use_cases.ai.settings import AISettingsProvider
+from application.use_cases.ai.settings import AISettingsProvider, InMemoryAISettingsRepository
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from infrastructure.config.ai_settings import (
@@ -121,6 +121,7 @@ def build_helpdesk_service(
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
     ticket_repository = SqlAlchemyTicketRepository(session)
+    resolved_ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
     return HelpdeskService(
         ticket_repository=ticket_repository,
         ticket_analytics_repository=ticket_repository,
@@ -138,7 +139,7 @@ def build_helpdesk_service(
         ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         ai_client_factory=ai_client_factory,
-        ai_settings_provider=ai_settings_provider,
+        ai_settings_provider=resolved_ai_settings_provider,
         export_renderers=HelpdeskExportRenderers(
             ticket_report_csv=render_ticket_report_csv,
             ticket_report_html=render_ticket_report_html,

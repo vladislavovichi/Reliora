@@ -286,7 +286,7 @@ def _ticket_details(
     sentiment: TicketSentiment | None = None,
     last_message_sender_type: TicketMessageSenderType | None = None,
 ) -> TicketDetailsSummary:
-    message_history = ()
+    message_history: tuple[TicketMessageSummary, ...] = ()
     if last_message_sender_type is not None:
         message_history = (
             TicketMessageSummary(
