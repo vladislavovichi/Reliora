@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketAttachmentKind
 from infrastructure.assets.storage import LocalTicketAssetStorage
@@ -42,3 +44,21 @@ def test_local_ticket_asset_storage_rejects_path_escape(tmp_path: Path) -> None:
         assert "unsafe storage path" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+async def test_local_ticket_asset_storage_propagates_download_failure(tmp_path: Path) -> None:
+    bot = Mock()
+    bot.download = AsyncMock(side_effect=FileNotFoundError("telegram file missing"))
+    storage = LocalTicketAssetStorage(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        await storage.save_telegram_attachment(
+            bot,
+            attachment=TicketAttachmentDetails(
+                kind=TicketAttachmentKind.DOCUMENT,
+                telegram_file_id="missing-file-id",
+                telegram_file_unique_id="missing-file",
+                filename="guide.pdf",
+                mime_type="application/pdf",
+            ),
+        )

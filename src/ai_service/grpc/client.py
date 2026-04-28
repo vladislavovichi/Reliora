@@ -38,6 +38,7 @@ from application.contracts.ai import (
     SuggestedMacrosResult,
     SuggestMacrosCommand,
 )
+from application.errors import AIUnavailableError, ValidationAppError
 from infrastructure.config.settings import AIServiceAuthConfig, AIServiceConfig, ResilienceConfig
 from infrastructure.runtime_context import ensure_correlation_id
 
@@ -209,5 +210,7 @@ def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
     if exc.code() == grpc.StatusCode.PERMISSION_DENIED:
         return PermissionError(exc.details() or "Внутренний запрос к ai-service отклонён.")
     if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
-        return ValueError(exc.details() or "Некорректный AI-запрос.")
+        return ValidationAppError(exc.details() or "Некорректный AI-запрос.")
+    if exc.code() == grpc.StatusCode.UNAVAILABLE:
+        return AIUnavailableError(exc.details() or "AI-service временно недоступен.")
     return RuntimeError(exc.details() or "Внутренняя ошибка ai-service.")

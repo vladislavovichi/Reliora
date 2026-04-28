@@ -26,6 +26,13 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,
 )
+from application.errors import (
+    BackendUnavailableError,
+    ConcurrencyConflictError,
+    NotFoundError,
+    RateLimitError,
+    ValidationAppError,
+)
 from application.services.stats import AnalyticsWindow, HelpdeskAnalyticsSnapshot
 from application.use_cases.analytics.exports import (
     AnalyticsExportFormat,
@@ -722,10 +729,19 @@ def _raise_optional_rpc_error(exc: grpc.aio.AioRpcError) -> None:
 
 
 def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
+    details = exc.details() or ""
+    if exc.code() == grpc.StatusCode.NOT_FOUND:
+        return NotFoundError(details or "Ресурс не найден.")
     if exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
-        return InvalidTicketTransitionError(exc.details() or "Недопустимый переход заявки.")
+        return InvalidTicketTransitionError(details or "Недопустимый переход заявки.")
     if exc.code() == grpc.StatusCode.PERMISSION_DENIED:
-        return PermissionError(exc.details() or "Недостаточно прав.")
+        return PermissionError(details or "Недостаточно прав.")
     if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
-        return ValueError(exc.details() or "Некорректный запрос.")
-    return RuntimeError(exc.details() or "Внутренняя ошибка backend gRPC.")
+        return ValidationAppError(details or "Некорректный запрос.")
+    if exc.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
+        return RateLimitError(details or "Слишком много запросов.")
+    if exc.code() == grpc.StatusCode.UNAVAILABLE:
+        return BackendUnavailableError(details or "Backend сервис временно недоступен.")
+    if exc.code() == grpc.StatusCode.ABORTED:
+        return ConcurrencyConflictError(details or "Операция конфликтует с другим изменением.")
+    return RuntimeError(details or "Внутренняя ошибка backend gRPC.")

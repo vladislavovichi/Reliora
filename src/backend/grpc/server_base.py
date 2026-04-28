@@ -9,6 +9,17 @@ from typing import Any, TypeVar
 import grpc
 
 from application.contracts.actors import RequestActor
+from application.errors import (
+    AIUnavailableError,
+    ApplicationError,
+    BackendUnavailableError,
+    ConcurrencyConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitError,
+    ValidationAppError,
+)
+from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from backend.grpc.auth import BackendRequestContext, resolve_backend_request_context
 from backend.grpc.translators import deserialize_request_actor
@@ -167,7 +178,9 @@ async def abort_for_exception(
 ) -> None:
     level = (
         logging.WARNING
-        if isinstance(exc, (InvalidTicketTransitionError, PermissionError, ValueError))
+        if isinstance(
+            exc, (InvalidTicketTransitionError, AuthorizationError, PermissionError, ValueError)
+        )
         else logging.ERROR
     )
     logger.log(
@@ -180,6 +193,22 @@ async def abort_for_exception(
     )
     if isinstance(exc, InvalidTicketTransitionError):
         await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
+    if isinstance(exc, AuthorizationError):
+        await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+    if isinstance(exc, NotFoundError):
+        await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+    if isinstance(exc, ForbiddenError):
+        await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+    if isinstance(exc, ValidationAppError):
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    if isinstance(exc, RateLimitError):
+        await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, str(exc))
+    if isinstance(exc, (BackendUnavailableError, AIUnavailableError)):
+        await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
+    if isinstance(exc, ConcurrencyConflictError):
+        await context.abort(grpc.StatusCode.ABORTED, str(exc))
+    if isinstance(exc, ApplicationError):
+        await context.abort(grpc.StatusCode.UNKNOWN, str(exc))
     if isinstance(exc, PermissionError):
         await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
     if isinstance(exc, ValueError):

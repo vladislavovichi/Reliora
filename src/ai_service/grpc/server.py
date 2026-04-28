@@ -25,6 +25,7 @@ from ai_service.grpc.translators import (
     serialize_suggested_macros_result,
 )
 from ai_service.service import AIApplicationService
+from application.errors import AIUnavailableError, ApplicationError, ValidationAppError
 from infrastructure.config.settings import AIServiceAuthConfig
 from infrastructure.runtime_context import bind_correlation_id, reset_correlation_id
 
@@ -237,6 +238,12 @@ async def _abort_for_exception(
     )
     if isinstance(exc, PermissionError):
         await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+    if isinstance(exc, ValidationAppError):
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    if isinstance(exc, AIUnavailableError):
+        await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
+    if isinstance(exc, ApplicationError):
+        await context.abort(grpc.StatusCode.UNKNOWN, str(exc))
     if isinstance(exc, ValueError):
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
     if isinstance(exc, (ConnectionError, OSError, TimeoutError)):

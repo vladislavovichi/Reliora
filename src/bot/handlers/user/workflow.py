@@ -107,10 +107,12 @@ async def process_client_ticket_command(
     )
 
     if ticket.created:
-        await context.ticket_stream_publisher.publish_new_ticket(
+        await _publish_new_ticket_event(
+            context=context,
             ticket_id=str(ticket.public_id),
             client_chat_id=command.client_chat_id,
             subject=ticket_details.subject,
+            public_number=ticket.public_number,
         )
         await response_message.answer(
             build_ticket_created_text(ticket.public_number),
@@ -234,10 +236,12 @@ async def process_client_intake_submission(
     )
 
     if ticket.created:
-        await context.ticket_stream_publisher.publish_new_ticket(
+        await _publish_new_ticket_event(
+            context=context,
             ticket_id=str(ticket.public_id),
             client_chat_id=initial_command.client_chat_id,
             subject=ticket_details.subject,
+            public_number=ticket.public_number,
         )
         await response_message.answer(
             (
@@ -263,3 +267,26 @@ async def process_client_intake_submission(
         ),
         reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
     )
+
+
+async def _publish_new_ticket_event(
+    *,
+    context: TicketRuntimeContext,
+    ticket_id: str,
+    client_chat_id: int,
+    subject: str,
+    public_number: str,
+) -> None:
+    try:
+        await context.ticket_stream_publisher.publish_new_ticket(
+            ticket_id=ticket_id,
+            client_chat_id=client_chat_id,
+            subject=subject,
+        )
+    except (ConnectionError, OSError, RuntimeError, TimeoutError) as exc:
+        context.logger.warning(
+            "New ticket stream publish failed ticket=%s client_chat_id=%s error=%s",
+            public_number,
+            client_chat_id,
+            exc,
+        )

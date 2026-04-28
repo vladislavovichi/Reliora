@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from application.ai.contracts import AIMessage, AIProvider, AIProviderError
+from application.ai.contracts import AIMessage, AIProvider, AIProviderError, AIProviderTimeoutError
 
 
 class AICompletionFailureReason(StrEnum):
@@ -64,6 +64,11 @@ async def complete_json_with_metadata[SchemaT: BaseModel](
             max_output_tokens=max_output_tokens,
             temperature=temperature,
         )
+    except TimeoutError as exc:
+        return AIJSONCompletionResult(
+            payload=None,
+            failure_reason=_provider_failure_reason(AIProviderTimeoutError(str(exc))),
+        )
     except AIProviderError as exc:
         return AIJSONCompletionResult(
             payload=None,
@@ -83,6 +88,12 @@ async def complete_json_with_metadata[SchemaT: BaseModel](
             ),
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+        )
+    except TimeoutError as exc:
+        return AIJSONCompletionResult(
+            payload=None,
+            failure_reason=_provider_failure_reason(AIProviderTimeoutError(str(exc))),
+            retry_count=1,
         )
     except AIProviderError as exc:
         return AIJSONCompletionResult(

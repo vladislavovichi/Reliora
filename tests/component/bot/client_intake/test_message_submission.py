@@ -239,3 +239,44 @@ async def test_intake_preserves_first_media_when_follow_up_text_save_fails(
         build_ticket_created_with_missing_follow_up_text(ticket.public_number),
         reply_markup=ANY,
     )
+
+
+async def test_intake_ticket_creation_still_replies_when_stream_publish_fails(
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
+    client_intake_context_builder: ClientIntakeContextBuilder,
+    publisher: SimpleNamespace,
+) -> None:
+    ticket_public_id = uuid4()
+    harness = message_harness_builder(text="Не получается войти")
+    state = SimpleNamespace(
+        get_data=AsyncMock(return_value={"category_id": 2}),
+        clear=AsyncMock(),
+    )
+    ticket = ticket_summary_builder(ticket_public_id)
+    ticket_details = ticket_details_builder(
+        public_id=ticket_public_id,
+        subject="Не получается войти",
+        category_id=2,
+        category_title="Доступ и вход",
+    )
+    service = SimpleNamespace(
+        create_ticket_from_client_intake=AsyncMock(return_value=ticket),
+        get_ticket_details=AsyncMock(return_value=ticket_details),
+    )
+    publisher.publish_new_ticket.side_effect = RuntimeError("redis unavailable")
+
+    await handle_client_intake_message(
+        message=harness.message,
+        state=state,
+        bot=Mock(),
+        client_intake_context=client_intake_context_builder(service, publisher),
+    )
+
+    service.create_ticket_from_client_intake.assert_awaited_once()
+    publisher.publish_new_ticket.assert_awaited_once()
+    harness.answer.assert_awaited_once_with(
+        build_ticket_created_text(ticket.public_number),
+        reply_markup=ANY,
+    )

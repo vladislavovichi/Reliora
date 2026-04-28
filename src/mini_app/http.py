@@ -14,6 +14,14 @@ from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import UUID
 
 from application.contracts.actors import OperatorIdentity
+from application.errors import (
+    ApplicationError,
+    BackendUnavailableError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitError,
+    ValidationAppError,
+)
 from application.services.stats import AnalyticsWindow
 from application.use_cases.analytics.exports import AnalyticsExportFormat, AnalyticsSection
 from application.use_cases.tickets.exports import TicketReportFormat
@@ -138,6 +146,15 @@ def build_handler_class(
                     {
                         "error": str(exc),
                         "code": "forbidden" if _is_ai_route(path) else "access_denied",
+                    },
+                )
+            except ApplicationError as exc:
+                status = _application_error_status(exc)
+                self._write_json(
+                    status,
+                    {
+                        "error": exc.public_message,
+                        "code": _safe_application_error_code(exc, path),
                     },
                 )
             except LookupError as exc:
@@ -616,3 +633,23 @@ def _is_ai_route(path: str) -> bool:
         _TICKET_AI_SUMMARY_ROUTE.fullmatch(path) is not None
         or _TICKET_AI_REPLY_DRAFT_ROUTE.fullmatch(path) is not None
     )
+
+
+def _application_error_status(exc: ApplicationError) -> HTTPStatus:
+    if isinstance(exc, NotFoundError):
+        return HTTPStatus.NOT_FOUND
+    if isinstance(exc, ForbiddenError):
+        return HTTPStatus.FORBIDDEN
+    if isinstance(exc, ValidationAppError):
+        return HTTPStatus.BAD_REQUEST
+    if isinstance(exc, RateLimitError):
+        return HTTPStatus.TOO_MANY_REQUESTS
+    if isinstance(exc, BackendUnavailableError):
+        return HTTPStatus.SERVICE_UNAVAILABLE
+    return HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+def _safe_application_error_code(exc: ApplicationError, path: str) -> str:
+    if _is_ai_route(path) and isinstance(exc, BackendUnavailableError):
+        return "ai_unavailable"
+    return exc.code
