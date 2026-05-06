@@ -65,6 +65,6 @@ make logs-mini-app
 ## Что помнить
 
 - Redis можно восстановить как runtime-зависимость, но потерянный FSM-контекст не восстанавливается из backup.
-- Backup базы не включает `ASSETS__PATH`, `.env` и Docker volumes вне PostgreSQL dump.
+- Backup базы не включает `ASSETS__PATH`, `.env.local`, старый `.env` и Docker volumes вне PostgreSQL dump.
 - Отключённый AI provider - degraded mode; недоступный `ai-service` ломает готовность backend.
 - Пустой или невалидный `MINI_APP__PUBLIC_URL` отключает Telegram launch button, но не ломает bot.

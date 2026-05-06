@@ -15,7 +15,8 @@ FORBIDDEN_TRACKED_PATH = re.compile(
     r"(^|/)\.coverage(?:\..*)?$|"
     r"(^|/)coverage\.xml$"
 )
-FORBIDDEN_ENV_PATH = re.compile(r"(^|/)\.env(?:\..*)?$|^ops/env/(?!.*\.example$).+")
+ALLOWED_TRACKED_ENV_FILES = {".env.example", ".env.test"}
+FORBIDDEN_ENV_PATH = re.compile(r"(^|/)\.env(?:\..*)?$|^ops/env/(?!.*\.example$|README\.md$).+")
 SECRET_PATTERNS = (
     re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{35,}\b"),
     re.compile(r"\b(?:sk|rk|pk)-[A-Za-z0-9][A-Za-z0-9_-]{20,}\b"),
@@ -86,7 +87,7 @@ def _forbidden_artifacts(tracked_files: list[str]) -> list[str]:
         path
         for path in tracked_files
         if FORBIDDEN_TRACKED_PATH.search(path)
-        or (FORBIDDEN_ENV_PATH.search(path) and path != ".env.example")
+        or (FORBIDDEN_ENV_PATH.search(path) and path not in ALLOWED_TRACKED_ENV_FILES)
     ]
 
 

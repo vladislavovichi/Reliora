@@ -194,7 +194,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             )
         else:
             logger.info(
-                "Telegram bot runtime is skipped because BOT__TOKEN is empty "
+                "Telegram bot runtime is skipped because TELEGRAM_BOT_TOKEN is empty "
                 "and dry-run mode is enabled."
             )
 

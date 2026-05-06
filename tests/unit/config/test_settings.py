@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from infrastructure.config import settings as settings_module
-from infrastructure.config.settings import AuthorizationConfig, Settings
+from infrastructure.config.settings import AuthorizationConfig, Settings, settings_env_files
 
 
 def test_database_url_is_built_from_parts(
@@ -29,8 +31,8 @@ def test_explicit_urls_override_component_settings() -> None:
     settings = Settings.model_validate(
         {
             "authorization": {"super_admin_telegram_user_ids": [99]},
-            "database": {"url": "postgresql+asyncpg://user:pass@db:5432/app"},
-            "redis": {"url": "redis://cache:6379/4"},
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@db:5432/app",
+            "REDIS_URL": "redis://cache:6379/4",
         }
     )
 
@@ -74,15 +76,68 @@ def test_ai_reply_draft_generation_settings_load_from_env(
     assert settings.ai.reply_draft_max_output_tokens == 777
 
 
-def test_hosted_ai_provider_setting_is_ignored_for_backward_compatibility() -> None:
-    settings = Settings.model_validate(
-        {
-            "authorization": {"super_admin_telegram_user_ids": [99]},
-            "ai": {"provider": "huggingface"},
-        }
+def test_settings_env_file_order_is_explicit() -> None:
+    assert settings_env_files(testing=False) == (".env.local",)
+    assert settings_env_files(testing=True) == (".env.test", ".env.local")
+
+
+def test_settings_load_env_local_with_test_fallback_and_env_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    tmp_path.joinpath(".env.test").write_text(
+        "\n".join(
+            (
+                "AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=111",
+                "TELEGRAM_BOT_TOKEN=from-test",
+            )
+        ),
+        encoding="utf-8",
+    )
+    local_env = tmp_path.joinpath(".env.local")
+    local_env.write_text(
+        "\n".join(
+            (
+                "AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=222",
+                "TELEGRAM_BOT_TOKEN=from-local",
+                "DATABASE_URL=postgresql+asyncpg://local:pass@localhost:5432/app",
+                "REDIS_URL=redis://localhost:6379/3",
+            )
+        ),
+        encoding="utf-8",
     )
 
-    assert settings.ai.normalized_provider == "local"
+    monkeypatch.setenv("AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS", "333")
+    settings = Settings(_env_file=settings_env_files(testing=True))  # type: ignore[call-arg]
+
+    assert settings.authorization.super_admin_telegram_user_ids == (333,)
+    assert settings.bot.token == "from-local"
+    assert settings.database.sqlalchemy_url == "postgresql+asyncpg://local:pass@localhost:5432/app"
+    assert settings.redis.url_with_auth == "redis://localhost:6379/3"
+
+    monkeypatch.delenv("AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS")
+    settings = Settings(_env_file=settings_env_files(testing=True))  # type: ignore[call-arg]
+    assert settings.authorization.super_admin_telegram_user_ids == (222,)
+
+    local_env.unlink()
+    settings = Settings(_env_file=settings_env_files(testing=True))  # type: ignore[call-arg]
+    assert settings.authorization.super_admin_telegram_user_ids == (111,)
+
+
+def test_removed_env_names_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOT__TOKEN", "old-token")
+    monkeypatch.setenv("DATABASE__URL", "postgresql+asyncpg://old:pass@db:5432/app")
+    monkeypatch.setenv("REDIS__URL", "redis://old-cache:6379/4")
+
+    settings = Settings(
+        _env_file=None,
+        authorization=AuthorizationConfig(super_admin_telegram_user_ids=(99,)),
+    )  # type: ignore[call-arg]
+
+    assert settings.bot.token == ""
+    assert settings.database.url is None
+    assert settings.redis.url is None
 
 
 def test_super_admin_ids_are_parsed_from_comma_separated_env_style_value() -> None:

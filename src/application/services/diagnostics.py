@@ -177,7 +177,7 @@ class DiagnosticsService:
             return "часть Telegram runtime не инициализирована в dry-run режиме"
 
         if not self.bot_configured:
-            return "BOT__TOKEN не задан"
+            return "TELEGRAM_BOT_TOKEN не задан"
         if not self.bot_initialized:
             return "экземпляр бота не инициализирован"
         if not self.dispatcher_initialized:

@@ -37,7 +37,7 @@ def validate_app_startup_settings(settings: Settings) -> None:
     if settings.app.dry_run:
         return
     if not settings.bot.token.strip():
-        raise RuntimeError("Невозможно запустить polling: BOT__TOKEN не задан.")
+        raise RuntimeError("Невозможно запустить polling: TELEGRAM_BOT_TOKEN не задан.")
 
 
 def validate_backend_startup_settings(settings: Settings) -> None:

@@ -57,7 +57,7 @@ async def test_collect_report_marks_failed_dependency_and_bot_runtime() -> None:
     assert checks_by_name["redis"].ok is False
     assert "boom" in checks_by_name["redis"].detail
     assert checks_by_name["bot_runtime"].ok is False
-    assert checks_by_name["bot_runtime"].detail == "BOT__TOKEN не задан"
+    assert checks_by_name["bot_runtime"].detail == "TELEGRAM_BOT_TOKEN не задан"
     assert checks_by_name["mini_app_url"].ok is False
     assert checks_by_name["mini_app_url"].affects_readiness is False
 

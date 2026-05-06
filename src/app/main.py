@@ -33,7 +33,7 @@ async def run() -> None:
             return
 
         if runtime.bot is None or runtime.dispatcher is None:
-            raise RuntimeError("BOT__TOKEN must be set when APP__DRY_RUN is false.")
+            raise RuntimeError("TELEGRAM_BOT_TOKEN must be set when APP__DRY_RUN is false.")
 
         logger.info("Starting Telegram polling.")
         await runtime.dispatcher.start_polling(

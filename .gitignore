@@ -7,14 +7,23 @@ __pycache__/
 .venv/
 venv/
 env/
+!ops/env/
+!ops/env/README.md
+!ops/env/examples/
 
 # Environment files
+# Local env files may contain real Telegram tokens, internal auth tokens, and passwords.
 .env
 .env.*
 !.env.example
-ops/env/*.env
-ops/env/*.local
-!ops/env/*.example
+# Explicit local patterns kept for readability even though .env.* also matches them.
+.env.local
+.env.*.local
+!.env.test
+# ops/env is allowed to keep docs and safe examples, but not real env material.
+ops/env/**/*.env
+ops/env/**/*.local
+!ops/env/**/*.example
 
 # Tooling caches and reports
 .mypy_cache/

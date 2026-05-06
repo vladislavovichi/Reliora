@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from ipaddress import ip_address
 from pathlib import Path
@@ -11,6 +12,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from infrastructure.config.parsers import parse_positive_int_list
 
 _DOCKER_ENV_PATH = Path("/.dockerenv")
+_LOCAL_ENV_FILE = ".env.local"
+_TEST_ENV_FILE = ".env.test"
 _LOCAL_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 _LOCAL_HOST_SUFFIXES = (".internal", ".local", ".localhost", ".test", ".invalid")
 _TEMPORARY_PUBLIC_HOST_SUFFIXES = (
@@ -24,6 +27,24 @@ _TEMPORARY_PUBLIC_HOST_SUFFIXES = (
 
 def _is_running_in_docker() -> bool:
     return _DOCKER_ENV_PATH.exists()
+
+
+def _is_pytest_running() -> bool:
+    return "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_VERSION" in os.environ
+
+
+def settings_env_files(*, testing: bool | None = None) -> tuple[str, ...]:
+    """Return dotenv files in increasing priority order.
+
+    Pydantic loads OS environment variables before dotenv files. For multiple
+    dotenv files, later files override earlier ones, so the effective order is:
+    environment variables, .env.local, then .env.test only during pytest runs.
+    """
+
+    should_load_test_env = _is_pytest_running() if testing is None else testing
+    if should_load_test_env:
+        return (_TEST_ENV_FILE, _LOCAL_ENV_FILE)
+    return (_LOCAL_ENV_FILE,)
 
 
 def _resolve_service_target(
@@ -230,7 +251,6 @@ class AIServiceAuthConfig(BaseModel):
 
 
 class AIConfig(BaseModel):
-    provider: str | None = None
     model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
     local_model_path: Path | None = None
     local_cache_dir: Path = Path("/cache/huggingface")
@@ -277,13 +297,6 @@ class AIConfig(BaseModel):
             normalized = value.strip()
             return Path(normalized) if normalized else None
         return None
-
-    @field_validator("provider")
-    @classmethod
-    def validate_legacy_provider(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
-        return value.strip().lower()
 
     @field_validator("model_id")
     @classmethod
@@ -506,7 +519,7 @@ class MiniAppConfig(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=settings_env_files(),
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         populate_by_name=True,
@@ -515,8 +528,14 @@ class Settings(BaseSettings):
 
     app: AppConfig = Field(default_factory=AppConfig)
     bot: BotConfig = Field(default_factory=BotConfig)
-    bot_username: str | None = Field(default=None, validation_alias="BOT_USERNAME")
+    telegram_bot_token: str = Field(
+        default="",
+        validation_alias="TELEGRAM_BOT_TOKEN",
+        exclude=True,
+    )
     authorization: AuthorizationConfig
+    database_url: str = Field(default="", validation_alias="DATABASE_URL", exclude=True)
+    redis_url: str = Field(default="", validation_alias="REDIS_URL", exclude=True)
     postgres_expose_port: int | None = Field(default=None, validation_alias="POSTGRES_EXPOSE_PORT")
     redis_expose_port: int | None = Field(default=None, validation_alias="REDIS_EXPOSE_PORT")
     backend_expose_port: int | None = Field(default=None, validation_alias="BACKEND_EXPOSE_PORT")
@@ -541,8 +560,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def apply_runtime_service_targets(self) -> Settings:
-        if not self.bot.username and self.bot_username:
-            self.bot.username = self.bot_username.strip().removeprefix("@").strip() or None
+        self.bot.token = self.telegram_bot_token.strip()
+        self.database.url = self.database_url.strip() or None
+        self.redis.url = self.redis_url.strip() or None
         self.database.expose_port = self.postgres_expose_port
         self.redis.expose_port = self.redis_expose_port
         self.backend_service.expose_port = self.backend_expose_port

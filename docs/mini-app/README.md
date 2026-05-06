@@ -55,7 +55,7 @@ Mini App принимает init data из:
 - `Authorization: TMA ...`;
 - query `tgWebAppData` или `init_data`.
 
-Подпись проверяется по `BOT__TOKEN`. Возраст запуска ограничен `MINI_APP__INIT_DATA_TTL_SECONDS`.
+Подпись проверяется по `TELEGRAM_BOT_TOKEN`. Возраст запуска ограничен `MINI_APP__INIT_DATA_TTL_SECONDS`.
 
 Если открыть Mini App как обычную web-страницу без Telegram context, API вернёт `401`, а frontend покажет состояние отсутствующего запуска.
 

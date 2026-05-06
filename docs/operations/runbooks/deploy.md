@@ -4,8 +4,8 @@
 
 Перед обновлением проверьте:
 
-- `.env` соответствует окружению;
-- `BOT__TOKEN` задан для режима `APP__DRY_RUN=false`;
+- `.env.local` или переменные окружения процесса соответствуют окружению;
+- `TELEGRAM_BOT_TOKEN` задан для режима `APP__DRY_RUN=false`;
 - `BACKEND_AUTH__TOKEN` и `AI_SERVICE_AUTH__TOKEN` не пустые и совпадают между потребителями;
 - `MINI_APP__PUBLIC_URL` публичный `HTTPS`, если Mini App должен открываться из Telegram;
 - есть свежий backup PostgreSQL перед миграциями;

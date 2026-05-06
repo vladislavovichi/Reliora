@@ -92,14 +92,14 @@ Runtime AI settings в Mini App admin могут отключать отдель
 
 В production обязательно заменить:
 
-- `BOT__TOKEN`;
+- `TELEGRAM_BOT_TOKEN`;
 - `BACKEND_AUTH__TOKEN`;
 - `AI_SERVICE_AUTH__TOKEN`;
 - `DATABASE__PASSWORD`;
 - `REDIS__PASSWORD`, если Redis защищён паролем;
 - `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`.
 
-`.env` не должен попадать в публичные артефакты и отчёты.
+`.env.local` и старый `.env` не должны попадать в публичные артефакты и отчёты.
 
 ## Audit
 
@@ -117,7 +117,7 @@ Audit не заменяет централизованные immutable logs prod
 ## Checklist перед deploy
 
 - `APP__DRY_RUN=false` только там, где должен идти Telegram polling.
-- `BOT__TOKEN` задан и не является примером.
+- `TELEGRAM_BOT_TOKEN` задан и не является примером.
 - `BACKEND_AUTH__TOKEN` и `AI_SERVICE_AUTH__TOKEN` заменены.
 - `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS` содержит только нужных администраторов.
 - `MINI_APP__PUBLIC_URL` публичный `HTTPS`.

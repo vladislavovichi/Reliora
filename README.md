@@ -32,7 +32,7 @@ mini-app -> HTTP -> gRPC    -> backend -> gRPC -> ai-service
 ## Быстрый старт
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 make full
 make health
 make smoke
@@ -50,7 +50,7 @@ make up
 APP__DRY_RUN=true
 ```
 
-В этом режиме бот и зависимости инициализируются, но polling Telegram не запускается. Для настоящего бота нужен рабочий `BOT__TOKEN` и `APP__DRY_RUN=false`.
+В этом режиме бот и зависимости инициализируются, но polling Telegram не запускается. Для настоящего бота нужен рабочий `TELEGRAM_BOT_TOKEN` и `APP__DRY_RUN=false`.
 
 ## Telegram Mini App
 
@@ -68,7 +68,7 @@ Telegram требует публичный `HTTPS` URL. Не подходят `l
 make full-cloudflared
 ```
 
-Команда поднимает стек, открывает tunnel к Mini App, обновляет `MINI_APP__PUBLIC_URL` в `.env` и перезапускает потребителей URL.
+Команда поднимает стек, открывает tunnel к Mini App, обновляет `MINI_APP__PUBLIC_URL` в `.env.local` и перезапускает потребителей URL.
 
 ## AI
 
@@ -114,5 +114,5 @@ AI runtime локальный: `ai-service` загружает transformers mode
 - [Exports](docs/exports/README.md) - состав `HTML` и `CSV` выгрузок и код рендереров.
 - [Разработка](docs/development/README.md) - локальный запуск, проверки, миграции, proto и рабочие сценарии.
 - [Эксплуатация](docs/operations/README.md) - порядок старта, health checks, логи, backup и runbooks.
-- [Переменные окружения](ops/env/README.md) - структура `.env`, минимальные настройки и частые ошибки.
+- [Переменные окружения](ops/env/README.md) - `.env.example`, `.env.local`, минимальные настройки и частые ошибки.
 - [Безопасность](docs/security/README.md) - threat model, internal auth, инвайты, вложения, экспорты и AI-граница.

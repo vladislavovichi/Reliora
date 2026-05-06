@@ -13,7 +13,8 @@ CLOUDFLARED_BIN ?= cloudflared
 MINI_APP_TUNNEL_HOST ?= 127.0.0.1
 MINI_APP_TUNNEL_PORT ?= 8088
 MINI_APP_TUNNEL_URL ?= http://$(MINI_APP_TUNNEL_HOST):$(MINI_APP_TUNNEL_PORT)
-ENV_FILE ?= .env
+ENV_FILE ?= .env.local
+export RELIORA_ENV_FILE ?= ../../$(ENV_FILE)
 FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis ai-service backend bot mini-app
 FULL_TIMEOUT ?= 180
@@ -44,7 +45,7 @@ endef
 
 .PHONY: help install lint format typecheck test repo-hygiene architecture-boundaries proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
-COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
+COMPOSE_CMD = $(COMPOSE) --env-file $(ENV_FILE) $(COMPOSE_FILES)
 
 help:
 	@printf "Available targets:\n"

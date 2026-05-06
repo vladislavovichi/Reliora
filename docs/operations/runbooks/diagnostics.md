@@ -85,7 +85,7 @@ make health-bot
 
 Вероятные причины:
 
-- `APP__DRY_RUN=false`, но `BOT__TOKEN` пустой или неверный;
+- `APP__DRY_RUN=false`, но `TELEGRAM_BOT_TOKEN` пустой или неверный;
 - backend недоступен;
 - Redis/PostgreSQL недоступны для runtime diagnostics;
 - Telegram polling конфликтует с другим запущенным экземпляром бота.
@@ -188,8 +188,8 @@ curl http://127.0.0.1:8088/healthz
 - `MINI_APP__PUBLIC_URL` пустой;
 - URL начинается с `http://`;
 - указан `localhost`, приватный IP или локальный домен;
-- после изменения `.env` не перезапущены `bot` и `mini-app`;
-- `cloudflared` tunnel сменил адрес, а `.env` ещё содержит старый.
+- после изменения `.env.local` не перезапущены `bot` и `mini-app`;
+- `cloudflared` tunnel сменил адрес, а `.env.local` ещё содержит старый.
 
 Для временного публичного URL:
 

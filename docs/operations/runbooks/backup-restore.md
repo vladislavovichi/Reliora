@@ -18,7 +18,7 @@
 
 - Redis state;
 - файлы в `ASSETS__PATH`;
-- `.env`;
+- `.env.local` или старый `.env`;
 - Docker images;
 - Compose-файлы;
 - внешнее состояние Telegram или AI provider.

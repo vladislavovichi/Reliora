@@ -11,6 +11,8 @@ services:
     environment:
       PYTHONPATH: /app/src
       APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
+      DATABASE_URL: ""
+      REDIS_URL: ""
       AI_SERVICE__HOST: ai-service
       AI_SERVICE__PORT: 50061
       AI_SERVICE__LISTEN_HOST: 0.0.0.0
@@ -29,7 +31,7 @@ services:
       RUN_MIGRATIONS: "false"
       SERVICE_MODULE: ai_service.main
     env_file:
-      - ../../.env
+      - ${RELIORA_ENV_FILE:-../../.env.local}
     init: true
     healthcheck:
       test: ["CMD", "python", "-m", "ai_service.healthcheck"]
@@ -57,6 +59,8 @@ services:
     environment:
       PYTHONPATH: /app/src
       APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
+      DATABASE_URL: ""
+      REDIS_URL: ""
       DATABASE__HOST: postgres
       DATABASE__PORT: 5432
       REDIS__HOST: redis
@@ -69,7 +73,7 @@ services:
       RUN_MIGRATIONS: "true"
       SERVICE_MODULE: backend.main
     env_file:
-      - ../../.env
+      - ${RELIORA_ENV_FILE:-../../.env.local}
     init: true
     depends_on:
       ai-service:
@@ -99,6 +103,8 @@ services:
     environment:
       PYTHONPATH: /app/src
       APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
+      DATABASE_URL: ""
+      REDIS_URL: ""
       DATABASE__HOST: postgres
       DATABASE__PORT: 5432
       REDIS__HOST: redis
@@ -108,7 +114,7 @@ services:
       RUN_MIGRATIONS: "false"
       SERVICE_MODULE: app.main
     env_file:
-      - ../../.env
+      - ${RELIORA_ENV_FILE:-../../.env.local}
     init: true
     depends_on:
       postgres:
@@ -136,6 +142,8 @@ services:
     environment:
       PYTHONPATH: /app/src
       APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
+      DATABASE_URL: ""
+      REDIS_URL: ""
       BACKEND_SERVICE__HOST: backend
       BACKEND_SERVICE__PORT: 50051
       MINI_APP__LISTEN_HOST: 0.0.0.0
@@ -143,7 +151,7 @@ services:
       RUN_MIGRATIONS: "false"
       SERVICE_MODULE: mini_app.main
     env_file:
-      - ../../.env
+      - ${RELIORA_ENV_FILE:-../../.env.local}
     init: true
     depends_on:
       backend:

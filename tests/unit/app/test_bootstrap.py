@@ -15,7 +15,7 @@ def build_settings(*, bot_token: str) -> Settings:
     return Settings.model_validate(
         {
             "app": {"dry_run": True},
-            "bot": {"token": bot_token},
+            "TELEGRAM_BOT_TOKEN": bot_token,
             "authorization": {"super_admin_telegram_user_ids": [42]},
             "backend_auth": {"token": "internal-test-token"},
             "postgres_expose_port": None,
@@ -209,7 +209,7 @@ async def test_build_runtime_rejects_missing_bot_token_when_dry_run_is_disabled(
     try:
         await bootstrap.build_runtime(settings)
     except RuntimeError as exc:
-        assert str(exc) == "Невозможно запустить polling: BOT__TOKEN не задан."
+        assert str(exc) == "Невозможно запустить polling: TELEGRAM_BOT_TOKEN не задан."
     else:
         raise AssertionError("expected RuntimeError")
 

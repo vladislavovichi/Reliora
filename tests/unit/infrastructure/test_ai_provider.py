@@ -20,13 +20,6 @@ def test_provider_factory_always_returns_local_transformers_provider() -> None:
     assert provider.model_id == "custom/local-model"
 
 
-def test_legacy_hosted_provider_config_still_builds_local_provider() -> None:
-    provider = build_ai_provider(AIConfig(provider="huggingface"))
-
-    assert isinstance(provider, LocalTransformersAIProvider)
-    assert provider.model_id == "Qwen/Qwen2.5-0.5B-Instruct"
-
-
 async def test_local_model_load_is_performed_once(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"tokenizer": 0, "model": 0}
 

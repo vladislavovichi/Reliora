@@ -15,7 +15,7 @@
 ## Локальная настройка
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 poetry env use python3.12
 make install
 ```
@@ -78,7 +78,7 @@ curl http://127.0.0.1:8088/healthz
 make full-cloudflared
 ```
 
-Команда обновит `MINI_APP__PUBLIC_URL` в `.env`. После ручного изменения этого URL перезапустите `bot` и `mini-app`, чтобы кнопка меню и health checks увидели новое значение.
+Команда обновит `MINI_APP__PUBLIC_URL` в `.env.local`. После ручного изменения этого URL перезапустите `bot` и `mini-app`, чтобы кнопка меню и health checks увидели новое значение.
 
 ## AI локально
 
@@ -194,7 +194,7 @@ make proto-check
 | --- | --- |
 | `make install` не стартует | установлен ли `python3.12`, выполнен ли `poetry env use python3.12` |
 | backend не готов | `make logs-backend`, настройки `DATABASE__*`, `REDIS__*`, `AI_SERVICE__*` |
-| bot не запускает polling | `APP__DRY_RUN=false` и заданный `BOT__TOKEN` |
+| bot не запускает polling | `APP__DRY_RUN=false` и заданный `TELEGRAM_BOT_TOKEN` |
 | Mini App не открывается из Telegram | публичный `HTTPS` в `MINI_APP__PUBLIC_URL`, не `localhost` |
 | AI не отвечает | `make logs-ai`, `AI__MODEL_ID`, `AI__LOCAL_MODEL_PATH`, cache volumes |
 | `proto-check` падает | выполните `make proto`, затем посмотрите diff generated files |
