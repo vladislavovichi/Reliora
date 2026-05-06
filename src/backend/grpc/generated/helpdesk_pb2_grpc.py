@@ -129,10 +129,115 @@ class HelpdeskBackendServiceStub(object):
                 request_serializer=helpdesk__pb2.CreateOperatorInviteRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.OperatorInviteCodeSummary.FromString,
                 _registered_method=True)
+        self.PreviewOperatorInvite = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/PreviewOperatorInvite',
+                request_serializer=helpdesk__pb2.PreviewOperatorInviteRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorInviteCodePreview.FromString,
+                _registered_method=True)
+        self.RedeemOperatorInvite = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/RedeemOperatorInvite',
+                request_serializer=helpdesk__pb2.RedeemOperatorInviteRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorInviteCodeRedemptionResult.FromString,
+                _registered_method=True)
+        self.PromoteOperator = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/PromoteOperator',
+                request_serializer=helpdesk__pb2.PromoteOperatorRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorRoleMutationResult.FromString,
+                _registered_method=True)
+        self.RevokeOperator = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/RevokeOperator',
+                request_serializer=helpdesk__pb2.RevokeOperatorRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorRoleMutationResult.FromString,
+                _registered_method=True)
         self.ListMacros = channel.unary_stream(
                 '/helpdesk.backend.v1.HelpdeskBackendService/ListMacros',
                 request_serializer=helpdesk__pb2.ListMacrosRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.GetMacro = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/GetMacro',
+                request_serializer=helpdesk__pb2.GetMacroRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.CreateMacro = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/CreateMacro',
+                request_serializer=helpdesk__pb2.CreateMacroRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.UpdateMacroTitle = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/UpdateMacroTitle',
+                request_serializer=helpdesk__pb2.UpdateMacroTitleRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.UpdateMacroBody = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/UpdateMacroBody',
+                request_serializer=helpdesk__pb2.UpdateMacroBodyRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.DeleteMacro = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/DeleteMacro',
+                request_serializer=helpdesk__pb2.DeleteMacroRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.MacroSummary.FromString,
+                _registered_method=True)
+        self.ListTicketCategories = channel.unary_stream(
+                '/helpdesk.backend.v1.HelpdeskBackendService/ListTicketCategories',
+                request_serializer=helpdesk__pb2.ListTicketCategoriesRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketCategorySummary.FromString,
+                _registered_method=True)
+        self.GetTicketCategory = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/GetTicketCategory',
+                request_serializer=helpdesk__pb2.GetTicketCategoryRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketCategorySummary.FromString,
+                _registered_method=True)
+        self.CreateTicketCategory = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/CreateTicketCategory',
+                request_serializer=helpdesk__pb2.CreateTicketCategoryRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketCategorySummary.FromString,
+                _registered_method=True)
+        self.UpdateTicketCategoryTitle = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/UpdateTicketCategoryTitle',
+                request_serializer=helpdesk__pb2.UpdateTicketCategoryTitleRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketCategorySummary.FromString,
+                _registered_method=True)
+        self.SetTicketCategoryActive = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/SetTicketCategoryActive',
+                request_serializer=helpdesk__pb2.SetTicketCategoryActiveRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketCategorySummary.FromString,
+                _registered_method=True)
+        self.ListTicketTags = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/ListTicketTags',
+                request_serializer=helpdesk__pb2.ListTicketTagsRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketTagsSummary.FromString,
+                _registered_method=True)
+        self.ListAvailableTags = channel.unary_stream(
+                '/helpdesk.backend.v1.HelpdeskBackendService/ListAvailableTags',
+                request_serializer=helpdesk__pb2.ListAvailableTagsRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TagSummary.FromString,
+                _registered_method=True)
+        self.AddTagToTicket = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/AddTagToTicket',
+                request_serializer=helpdesk__pb2.AddTagToTicketRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketTagMutationResult.FromString,
+                _registered_method=True)
+        self.RemoveTagFromTicket = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/RemoveTagFromTicket',
+                request_serializer=helpdesk__pb2.RemoveTagFromTicketRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketTagMutationResult.FromString,
+                _registered_method=True)
+        self.SubmitTicketFeedbackRating = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/SubmitTicketFeedbackRating',
+                request_serializer=helpdesk__pb2.SubmitTicketFeedbackRatingRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketFeedbackMutationResult.FromString,
+                _registered_method=True)
+        self.GetTicketFeedback = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/GetTicketFeedback',
+                request_serializer=helpdesk__pb2.GetTicketFeedbackRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketFeedbackSummary.FromString,
+                _registered_method=True)
+        self.AddTicketFeedbackComment = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/AddTicketFeedbackComment',
+                request_serializer=helpdesk__pb2.AddTicketFeedbackCommentRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketFeedbackMutationResult.FromString,
                 _registered_method=True)
         self.ApplyMacroToTicket = channel.unary_unary(
                 '/helpdesk.backend.v1.HelpdeskBackendService/ApplyMacroToTicket',
@@ -288,7 +393,133 @@ class HelpdeskBackendServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PreviewOperatorInvite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RedeemOperatorInvite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PromoteOperator(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RevokeOperator(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListMacros(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetMacro(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateMacro(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateMacroTitle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateMacroBody(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteMacro(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListTicketCategories(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTicketCategory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateTicketCategory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateTicketCategoryTitle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetTicketCategoryActive(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListTicketTags(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAvailableTags(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddTagToTicket(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveTagFromTicket(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SubmitTicketFeedbackRating(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTicketFeedback(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddTicketFeedbackComment(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -434,10 +665,115 @@ def add_HelpdeskBackendServiceServicer_to_server(servicer, server):
                     request_deserializer=helpdesk__pb2.CreateOperatorInviteRequest.FromString,
                     response_serializer=helpdesk__pb2.OperatorInviteCodeSummary.SerializeToString,
             ),
+            'PreviewOperatorInvite': grpc.unary_unary_rpc_method_handler(
+                    servicer.PreviewOperatorInvite,
+                    request_deserializer=helpdesk__pb2.PreviewOperatorInviteRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorInviteCodePreview.SerializeToString,
+            ),
+            'RedeemOperatorInvite': grpc.unary_unary_rpc_method_handler(
+                    servicer.RedeemOperatorInvite,
+                    request_deserializer=helpdesk__pb2.RedeemOperatorInviteRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorInviteCodeRedemptionResult.SerializeToString,
+            ),
+            'PromoteOperator': grpc.unary_unary_rpc_method_handler(
+                    servicer.PromoteOperator,
+                    request_deserializer=helpdesk__pb2.PromoteOperatorRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorRoleMutationResult.SerializeToString,
+            ),
+            'RevokeOperator': grpc.unary_unary_rpc_method_handler(
+                    servicer.RevokeOperator,
+                    request_deserializer=helpdesk__pb2.RevokeOperatorRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorRoleMutationResult.SerializeToString,
+            ),
             'ListMacros': grpc.unary_stream_rpc_method_handler(
                     servicer.ListMacros,
                     request_deserializer=helpdesk__pb2.ListMacrosRequest.FromString,
                     response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'GetMacro': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMacro,
+                    request_deserializer=helpdesk__pb2.GetMacroRequest.FromString,
+                    response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'CreateMacro': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateMacro,
+                    request_deserializer=helpdesk__pb2.CreateMacroRequest.FromString,
+                    response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'UpdateMacroTitle': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateMacroTitle,
+                    request_deserializer=helpdesk__pb2.UpdateMacroTitleRequest.FromString,
+                    response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'UpdateMacroBody': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateMacroBody,
+                    request_deserializer=helpdesk__pb2.UpdateMacroBodyRequest.FromString,
+                    response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'DeleteMacro': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteMacro,
+                    request_deserializer=helpdesk__pb2.DeleteMacroRequest.FromString,
+                    response_serializer=helpdesk__pb2.MacroSummary.SerializeToString,
+            ),
+            'ListTicketCategories': grpc.unary_stream_rpc_method_handler(
+                    servicer.ListTicketCategories,
+                    request_deserializer=helpdesk__pb2.ListTicketCategoriesRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketCategorySummary.SerializeToString,
+            ),
+            'GetTicketCategory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTicketCategory,
+                    request_deserializer=helpdesk__pb2.GetTicketCategoryRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketCategorySummary.SerializeToString,
+            ),
+            'CreateTicketCategory': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateTicketCategory,
+                    request_deserializer=helpdesk__pb2.CreateTicketCategoryRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketCategorySummary.SerializeToString,
+            ),
+            'UpdateTicketCategoryTitle': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateTicketCategoryTitle,
+                    request_deserializer=helpdesk__pb2.UpdateTicketCategoryTitleRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketCategorySummary.SerializeToString,
+            ),
+            'SetTicketCategoryActive': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetTicketCategoryActive,
+                    request_deserializer=helpdesk__pb2.SetTicketCategoryActiveRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketCategorySummary.SerializeToString,
+            ),
+            'ListTicketTags': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListTicketTags,
+                    request_deserializer=helpdesk__pb2.ListTicketTagsRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketTagsSummary.SerializeToString,
+            ),
+            'ListAvailableTags': grpc.unary_stream_rpc_method_handler(
+                    servicer.ListAvailableTags,
+                    request_deserializer=helpdesk__pb2.ListAvailableTagsRequest.FromString,
+                    response_serializer=helpdesk__pb2.TagSummary.SerializeToString,
+            ),
+            'AddTagToTicket': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddTagToTicket,
+                    request_deserializer=helpdesk__pb2.AddTagToTicketRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketTagMutationResult.SerializeToString,
+            ),
+            'RemoveTagFromTicket': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveTagFromTicket,
+                    request_deserializer=helpdesk__pb2.RemoveTagFromTicketRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketTagMutationResult.SerializeToString,
+            ),
+            'SubmitTicketFeedbackRating': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitTicketFeedbackRating,
+                    request_deserializer=helpdesk__pb2.SubmitTicketFeedbackRatingRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketFeedbackMutationResult.SerializeToString,
+            ),
+            'GetTicketFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTicketFeedback,
+                    request_deserializer=helpdesk__pb2.GetTicketFeedbackRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketFeedbackSummary.SerializeToString,
+            ),
+            'AddTicketFeedbackComment': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddTicketFeedbackComment,
+                    request_deserializer=helpdesk__pb2.AddTicketFeedbackCommentRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketFeedbackMutationResult.SerializeToString,
             ),
             'ApplyMacroToTicket': grpc.unary_unary_rpc_method_handler(
                     servicer.ApplyMacroToTicket,
@@ -999,6 +1335,114 @@ class HelpdeskBackendService(object):
             _registered_method=True)
 
     @staticmethod
+    def PreviewOperatorInvite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/PreviewOperatorInvite',
+            helpdesk__pb2.PreviewOperatorInviteRequest.SerializeToString,
+            helpdesk__pb2.OperatorInviteCodePreview.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RedeemOperatorInvite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/RedeemOperatorInvite',
+            helpdesk__pb2.RedeemOperatorInviteRequest.SerializeToString,
+            helpdesk__pb2.OperatorInviteCodeRedemptionResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PromoteOperator(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/PromoteOperator',
+            helpdesk__pb2.PromoteOperatorRequest.SerializeToString,
+            helpdesk__pb2.OperatorRoleMutationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RevokeOperator(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/RevokeOperator',
+            helpdesk__pb2.RevokeOperatorRequest.SerializeToString,
+            helpdesk__pb2.OperatorRoleMutationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ListMacros(request,
             target,
             options=(),
@@ -1015,6 +1459,465 @@ class HelpdeskBackendService(object):
             '/helpdesk.backend.v1.HelpdeskBackendService/ListMacros',
             helpdesk__pb2.ListMacrosRequest.SerializeToString,
             helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMacro(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/GetMacro',
+            helpdesk__pb2.GetMacroRequest.SerializeToString,
+            helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateMacro(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/CreateMacro',
+            helpdesk__pb2.CreateMacroRequest.SerializeToString,
+            helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateMacroTitle(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/UpdateMacroTitle',
+            helpdesk__pb2.UpdateMacroTitleRequest.SerializeToString,
+            helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateMacroBody(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/UpdateMacroBody',
+            helpdesk__pb2.UpdateMacroBodyRequest.SerializeToString,
+            helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteMacro(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/DeleteMacro',
+            helpdesk__pb2.DeleteMacroRequest.SerializeToString,
+            helpdesk__pb2.MacroSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListTicketCategories(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/ListTicketCategories',
+            helpdesk__pb2.ListTicketCategoriesRequest.SerializeToString,
+            helpdesk__pb2.TicketCategorySummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTicketCategory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/GetTicketCategory',
+            helpdesk__pb2.GetTicketCategoryRequest.SerializeToString,
+            helpdesk__pb2.TicketCategorySummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateTicketCategory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/CreateTicketCategory',
+            helpdesk__pb2.CreateTicketCategoryRequest.SerializeToString,
+            helpdesk__pb2.TicketCategorySummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateTicketCategoryTitle(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/UpdateTicketCategoryTitle',
+            helpdesk__pb2.UpdateTicketCategoryTitleRequest.SerializeToString,
+            helpdesk__pb2.TicketCategorySummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetTicketCategoryActive(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/SetTicketCategoryActive',
+            helpdesk__pb2.SetTicketCategoryActiveRequest.SerializeToString,
+            helpdesk__pb2.TicketCategorySummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListTicketTags(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/ListTicketTags',
+            helpdesk__pb2.ListTicketTagsRequest.SerializeToString,
+            helpdesk__pb2.TicketTagsSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAvailableTags(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/ListAvailableTags',
+            helpdesk__pb2.ListAvailableTagsRequest.SerializeToString,
+            helpdesk__pb2.TagSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddTagToTicket(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/AddTagToTicket',
+            helpdesk__pb2.AddTagToTicketRequest.SerializeToString,
+            helpdesk__pb2.TicketTagMutationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveTagFromTicket(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/RemoveTagFromTicket',
+            helpdesk__pb2.RemoveTagFromTicketRequest.SerializeToString,
+            helpdesk__pb2.TicketTagMutationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SubmitTicketFeedbackRating(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/SubmitTicketFeedbackRating',
+            helpdesk__pb2.SubmitTicketFeedbackRatingRequest.SerializeToString,
+            helpdesk__pb2.TicketFeedbackMutationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTicketFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/GetTicketFeedback',
+            helpdesk__pb2.GetTicketFeedbackRequest.SerializeToString,
+            helpdesk__pb2.TicketFeedbackSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddTicketFeedbackComment(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/AddTicketFeedbackComment',
+            helpdesk__pb2.AddTicketFeedbackCommentRequest.SerializeToString,
+            helpdesk__pb2.TicketFeedbackMutationResult.FromString,
             options,
             channel_credentials,
             insecure,

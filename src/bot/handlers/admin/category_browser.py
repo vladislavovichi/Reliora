@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminCategoryCallback
 from bot.handlers.admin.category_surfaces import (
@@ -30,7 +30,7 @@ router = Router(name="admin_category_browser")
 async def handle_admin_categories(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -41,8 +41,8 @@ async def handle_admin_categories(
         await operator_presence.touch(operator_id=message.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        categories = await helpdesk_service.list_ticket_categories(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_ticket_categories(
             actor=build_request_actor(message.from_user)
         )
 
@@ -55,7 +55,7 @@ async def handle_admin_category_page(
     callback: CallbackQuery,
     callback_data: AdminCategoryCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -66,8 +66,8 @@ async def handle_admin_category_page(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        categories = await helpdesk_service.list_ticket_categories(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_ticket_categories(
             actor=build_request_actor(callback.from_user)
         )
 
@@ -92,7 +92,7 @@ async def handle_admin_category_view(
     callback: CallbackQuery,
     callback_data: AdminCategoryCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -103,15 +103,15 @@ async def handle_admin_category_view(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        category = await helpdesk_service.get_ticket_category(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        category = await helpdesk_backend.get_ticket_category(
             category_id=callback_data.category_id,
             actor=build_request_actor(callback.from_user),
         )
 
     if category is None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            categories = await helpdesk_service.list_ticket_categories(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            categories = await helpdesk_backend.list_ticket_categories(
                 actor=build_request_actor(callback.from_user)
             )
         await edit_admin_category_list(
@@ -135,7 +135,7 @@ async def handle_admin_category_back_list(
     callback: CallbackQuery,
     callback_data: AdminCategoryCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -146,8 +146,8 @@ async def handle_admin_category_back_list(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        categories = await helpdesk_service.list_ticket_categories(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_ticket_categories(
             actor=build_request_actor(callback.from_user)
         )
 
@@ -163,7 +163,7 @@ async def handle_admin_category_back_list(
 async def handle_admin_category_toggle(
     callback: CallbackQuery,
     callback_data: AdminCategoryCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -174,16 +174,16 @@ async def handle_admin_category_toggle(
     await operator_presence.touch(operator_id=callback.from_user.id)
     is_active = callback_data.action == "enable"
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        category = await helpdesk_service.set_ticket_category_active(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        category = await helpdesk_backend.set_ticket_category_active(
             category_id=callback_data.category_id,
             is_active=is_active,
             actor=build_request_actor(callback.from_user),
         )
 
     if category is None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            categories = await helpdesk_service.list_ticket_categories(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            categories = await helpdesk_backend.list_ticket_categories(
                 actor=build_request_actor(callback.from_user)
             )
         await edit_admin_category_list(

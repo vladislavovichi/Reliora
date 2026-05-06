@@ -1,8 +1,16 @@
 # mypy: disable-error-code="attr-defined,name-defined"
 from __future__ import annotations
 
-from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
-from application.use_cases.tickets.summaries import AccessContextSummary, OperatorSummary
+from application.use_cases.tickets.operator_invites import (
+    OperatorInviteCodePreview,
+    OperatorInviteCodeRedemptionResult,
+    OperatorInviteCodeSummary,
+)
+from application.use_cases.tickets.summaries import (
+    AccessContextSummary,
+    OperatorRoleMutationResult,
+    OperatorSummary,
+)
 from backend.grpc.generated import helpdesk_pb2
 from backend.grpc.translators_shared import _deserialize_timestamp, _has, _serialize_timestamp
 from domain.enums.roles import UserRole
@@ -48,6 +56,23 @@ def deserialize_operator_summary(
     )
 
 
+def serialize_operator_role_mutation_result(
+    result: OperatorRoleMutationResult,
+) -> helpdesk_pb2.OperatorRoleMutationResult:
+    message = helpdesk_pb2.OperatorRoleMutationResult(changed=result.changed)
+    message.operator.CopyFrom(serialize_operator_summary(result.operator))
+    return message
+
+
+def deserialize_operator_role_mutation_result(
+    result: helpdesk_pb2.OperatorRoleMutationResult,
+) -> OperatorRoleMutationResult:
+    return OperatorRoleMutationResult(
+        operator=deserialize_operator_summary(result.operator),
+        changed=result.changed,
+    )
+
+
 def serialize_operator_invite_summary(
     invite: OperatorInviteCodeSummary,
 ) -> helpdesk_pb2.OperatorInviteCodeSummary:
@@ -55,6 +80,43 @@ def serialize_operator_invite_summary(
         code=invite.code,
         expires_at=_serialize_timestamp(invite.expires_at),
         max_uses=invite.max_uses,
+    )
+
+
+def serialize_operator_invite_preview(
+    invite: OperatorInviteCodePreview,
+) -> helpdesk_pb2.OperatorInviteCodePreview:
+    return helpdesk_pb2.OperatorInviteCodePreview(
+        expires_at=_serialize_timestamp(invite.expires_at),
+        remaining_uses=invite.remaining_uses,
+    )
+
+
+def deserialize_operator_invite_preview(
+    invite: helpdesk_pb2.OperatorInviteCodePreview,
+) -> OperatorInviteCodePreview:
+    return OperatorInviteCodePreview(
+        expires_at=_deserialize_timestamp(invite.expires_at),
+        remaining_uses=invite.remaining_uses,
+    )
+
+
+def serialize_operator_invite_redemption_result(
+    result: OperatorInviteCodeRedemptionResult,
+) -> helpdesk_pb2.OperatorInviteCodeRedemptionResult:
+    message = helpdesk_pb2.OperatorInviteCodeRedemptionResult(
+        expires_at=_serialize_timestamp(result.expires_at)
+    )
+    message.operator.CopyFrom(serialize_operator_role_mutation_result(result.operator))
+    return message
+
+
+def deserialize_operator_invite_redemption_result(
+    result: helpdesk_pb2.OperatorInviteCodeRedemptionResult,
+) -> OperatorInviteCodeRedemptionResult:
+    return OperatorInviteCodeRedemptionResult(
+        operator=deserialize_operator_role_mutation_result(result.operator),
+        expires_at=_deserialize_timestamp(result.expires_at),
     )
 
 

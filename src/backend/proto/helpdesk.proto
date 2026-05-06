@@ -26,6 +26,11 @@ message OperatorSummary {
   bool is_active = 4;
 }
 
+message OperatorRoleMutationResult {
+  OperatorSummary operator = 1;
+  bool changed = 2;
+}
+
 message TicketAttachment {
   string kind = 1;
   string telegram_file_id = 2;
@@ -174,10 +179,52 @@ message MacroSummary {
   string body = 3;
 }
 
+message TagSummary {
+  int32 id = 1;
+  string name = 2;
+}
+
+message TicketTagsSummary {
+  string public_id = 1;
+  string public_number = 2;
+  repeated string tags = 3;
+}
+
+message TicketTagMutationResult {
+  TicketSummary ticket = 1;
+  string tag = 2;
+  bool changed = 3;
+  repeated string tags = 4;
+}
+
 message OperatorInviteCodeSummary {
   string code = 1;
   google.protobuf.Timestamp expires_at = 2;
   int32 max_uses = 3;
+}
+
+message OperatorInviteCodePreview {
+  google.protobuf.Timestamp expires_at = 1;
+  int32 remaining_uses = 2;
+}
+
+message OperatorInviteCodeRedemptionResult {
+  OperatorRoleMutationResult operator = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message TicketFeedbackSummary {
+  string public_id = 1;
+  string public_number = 2;
+  int64 client_chat_id = 3;
+  int32 rating = 4;
+  optional string comment = 5;
+  google.protobuf.Timestamp submitted_at = 6;
+}
+
+message TicketFeedbackMutationResult {
+  string status = 1;
+  TicketFeedbackSummary feedback = 2;
 }
 
 message OperatorReplyResult {
@@ -403,8 +450,118 @@ message CreateOperatorInviteRequest {
   RequestActor actor = 1;
 }
 
+message PreviewOperatorInviteRequest {
+  string code = 1;
+}
+
+message RedeemOperatorInviteRequest {
+  string code = 1;
+  OperatorIdentity operator = 2;
+}
+
+message PromoteOperatorRequest {
+  OperatorIdentity operator = 1;
+  RequestActor actor = 2;
+}
+
+message RevokeOperatorRequest {
+  int64 telegram_user_id = 1;
+  RequestActor actor = 2;
+}
+
 message ListMacrosRequest {
   RequestActor actor = 1;
+}
+
+message GetMacroRequest {
+  int32 macro_id = 1;
+  RequestActor actor = 2;
+}
+
+message CreateMacroRequest {
+  string title = 1;
+  string body = 2;
+  RequestActor actor = 3;
+}
+
+message UpdateMacroTitleRequest {
+  int32 macro_id = 1;
+  string title = 2;
+  RequestActor actor = 3;
+}
+
+message UpdateMacroBodyRequest {
+  int32 macro_id = 1;
+  string body = 2;
+  RequestActor actor = 3;
+}
+
+message DeleteMacroRequest {
+  int32 macro_id = 1;
+  RequestActor actor = 2;
+}
+
+message ListTicketCategoriesRequest {
+  RequestActor actor = 1;
+}
+
+message GetTicketCategoryRequest {
+  int32 category_id = 1;
+  RequestActor actor = 2;
+}
+
+message CreateTicketCategoryRequest {
+  string title = 1;
+  RequestActor actor = 2;
+}
+
+message UpdateTicketCategoryTitleRequest {
+  int32 category_id = 1;
+  string title = 2;
+  RequestActor actor = 3;
+}
+
+message SetTicketCategoryActiveRequest {
+  int32 category_id = 1;
+  bool is_active = 2;
+  RequestActor actor = 3;
+}
+
+message ListTicketTagsRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
+message ListAvailableTagsRequest {
+  RequestActor actor = 1;
+}
+
+message AddTagToTicketRequest {
+  string ticket_public_id = 1;
+  string tag_name = 2;
+  RequestActor actor = 3;
+}
+
+message RemoveTagFromTicketRequest {
+  string ticket_public_id = 1;
+  string tag_name = 2;
+  RequestActor actor = 3;
+}
+
+message SubmitTicketFeedbackRatingRequest {
+  string ticket_public_id = 1;
+  int64 client_chat_id = 2;
+  int32 rating = 3;
+}
+
+message GetTicketFeedbackRequest {
+  string ticket_public_id = 1;
+}
+
+message AddTicketFeedbackCommentRequest {
+  string ticket_public_id = 1;
+  int64 client_chat_id = 2;
+  string comment = 3;
 }
 
 message ApplyMacroToTicketRequest {
@@ -466,7 +623,28 @@ service HelpdeskBackendService {
   rpc AddInternalNoteToTicket(AddInternalNoteToTicketRequest) returns (TicketSummary);
   rpc ListOperators(ListOperatorsRequest) returns (stream OperatorSummary);
   rpc CreateOperatorInvite(CreateOperatorInviteRequest) returns (OperatorInviteCodeSummary);
+  rpc PreviewOperatorInvite(PreviewOperatorInviteRequest) returns (OperatorInviteCodePreview);
+  rpc RedeemOperatorInvite(RedeemOperatorInviteRequest) returns (OperatorInviteCodeRedemptionResult);
+  rpc PromoteOperator(PromoteOperatorRequest) returns (OperatorRoleMutationResult);
+  rpc RevokeOperator(RevokeOperatorRequest) returns (OperatorRoleMutationResult);
   rpc ListMacros(ListMacrosRequest) returns (stream MacroSummary);
+  rpc GetMacro(GetMacroRequest) returns (MacroSummary);
+  rpc CreateMacro(CreateMacroRequest) returns (MacroSummary);
+  rpc UpdateMacroTitle(UpdateMacroTitleRequest) returns (MacroSummary);
+  rpc UpdateMacroBody(UpdateMacroBodyRequest) returns (MacroSummary);
+  rpc DeleteMacro(DeleteMacroRequest) returns (MacroSummary);
+  rpc ListTicketCategories(ListTicketCategoriesRequest) returns (stream TicketCategorySummary);
+  rpc GetTicketCategory(GetTicketCategoryRequest) returns (TicketCategorySummary);
+  rpc CreateTicketCategory(CreateTicketCategoryRequest) returns (TicketCategorySummary);
+  rpc UpdateTicketCategoryTitle(UpdateTicketCategoryTitleRequest) returns (TicketCategorySummary);
+  rpc SetTicketCategoryActive(SetTicketCategoryActiveRequest) returns (TicketCategorySummary);
+  rpc ListTicketTags(ListTicketTagsRequest) returns (TicketTagsSummary);
+  rpc ListAvailableTags(ListAvailableTagsRequest) returns (stream TagSummary);
+  rpc AddTagToTicket(AddTagToTicketRequest) returns (TicketTagMutationResult);
+  rpc RemoveTagFromTicket(RemoveTagFromTicketRequest) returns (TicketTagMutationResult);
+  rpc SubmitTicketFeedbackRating(SubmitTicketFeedbackRatingRequest) returns (TicketFeedbackMutationResult);
+  rpc GetTicketFeedback(GetTicketFeedbackRequest) returns (TicketFeedbackSummary);
+  rpc AddTicketFeedbackComment(AddTicketFeedbackCommentRequest) returns (TicketFeedbackMutationResult);
   rpc ApplyMacroToTicket(ApplyMacroToTicketRequest) returns (MacroApplicationResult);
   rpc GetTicketAssistSnapshot(GetTicketAssistSnapshotRequest) returns (TicketAssistSnapshot);
   rpc GenerateTicketReplyDraft(GenerateTicketReplyDraftRequest) returns (TicketReplyDraft);

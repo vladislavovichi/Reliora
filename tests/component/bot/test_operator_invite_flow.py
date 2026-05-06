@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
@@ -10,18 +10,19 @@ from unittest.mock import AsyncMock
 from aiogram.filters.command import CommandObject
 from aiogram.types import CallbackQuery, Chat, Message, User
 
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.common.system import handle_start
 from bot.handlers.user.operator_invites import handle_operator_invite_confirm
 from bot.texts.operator_invites import INVITE_ONBOARDING_CONFIRMED_TEXT
 from domain.enums.roles import UserRole
 
 
-def _build_helpdesk_service_factory(
+def _build_helpdesk_backend_client_factory(
     service: object,
-) -> Callable[[], AbstractAsyncContextManager[object]]:
+) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[object]:
-        yield service
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -81,7 +82,7 @@ async def test_handle_start_with_invite_code_opens_onboarding_prompt() -> None:
         message=message,
         command=CommandObject(prefix="/", command="start", mention=None, args="opr_test"),
         state=state,
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         settings=SimpleNamespace(
             mini_app=SimpleNamespace(
                 telegram_launch_url=None,
@@ -121,7 +122,7 @@ async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_
     await handle_operator_invite_confirm(
         callback=callback,
         state=state,
-        helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         settings=SimpleNamespace(
             mini_app=SimpleNamespace(
                 telegram_launch_url=None,

@@ -10,13 +10,13 @@ from uuid import UUID, uuid4
 
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     TicketFeedbackMutationResult,
     TicketFeedbackMutationStatus,
     TicketFeedbackSummary,
 )
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.user.feedback import (
     handle_ticket_feedback_comment,
     handle_ticket_feedback_comment_prompt,
@@ -34,10 +34,10 @@ from bot.texts.feedback import (
 from domain.enums.tickets import TicketStatus
 
 
-def build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
+def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskService]:
-        yield cast(HelpdeskService, service)
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -145,7 +145,7 @@ async def test_handle_ticket_feedback_rating_saves_rating_and_offers_comment() -
     await handle_ticket_feedback_rating(
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id), rating=5),
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
@@ -178,7 +178,7 @@ async def test_handle_ticket_feedback_comment_prompt_sets_state_and_edits_messag
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         state=state,
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
@@ -205,7 +205,7 @@ async def test_handle_ticket_feedback_skip_closes_prompt_cleanly() -> None:
     await handle_ticket_feedback_skip(
         callback=callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
@@ -249,7 +249,7 @@ async def test_handle_ticket_feedback_comment_persists_comment_and_clears_state(
     await handle_ticket_feedback_comment(
         message=message,
         state=state,
-        helpdesk_service_factory=build_helpdesk_service_factory(service),
+        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         chat_rate_limiter=chat_rate_limiter,
     )

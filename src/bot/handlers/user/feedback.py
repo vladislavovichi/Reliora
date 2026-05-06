@@ -8,8 +8,8 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketFeedbackMutationStatus
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.callbacks import ClientFeedbackCallback
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.user.states import UserFeedbackStates
@@ -41,7 +41,7 @@ router = Router(name="client_feedback")
 async def handle_ticket_feedback_rating(
     callback: CallbackQuery,
     callback_data: ClientFeedbackCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
 ) -> None:
     ticket_public_id = _parse_feedback_ticket_id(callback_data.ticket_public_id)
@@ -52,8 +52,8 @@ async def handle_ticket_feedback_rating(
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        result = await helpdesk_service.submit_ticket_feedback_rating(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        result = await helpdesk_backend.submit_ticket_feedback_rating(
             ticket_public_id=ticket_public_id,
             client_chat_id=callback.from_user.id,
             rating=callback_data.rating,
@@ -88,7 +88,7 @@ async def handle_ticket_feedback_comment_prompt(
     callback: CallbackQuery,
     callback_data: ClientFeedbackCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
 ) -> None:
     ticket_public_id = _parse_feedback_ticket_id(callback_data.ticket_public_id)
@@ -99,9 +99,9 @@ async def handle_ticket_feedback_comment_prompt(
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        feedback = await helpdesk_service.get_ticket_feedback(ticket_public_id=ticket_public_id)
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        feedback = await helpdesk_backend.get_ticket_feedback(ticket_public_id=ticket_public_id)
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id
         )
 
@@ -134,7 +134,7 @@ async def handle_ticket_feedback_comment_prompt(
 async def handle_ticket_feedback_skip(
     callback: CallbackQuery,
     callback_data: ClientFeedbackCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
 ) -> None:
     ticket_public_id = _parse_feedback_ticket_id(callback_data.ticket_public_id)
@@ -145,9 +145,9 @@ async def handle_ticket_feedback_skip(
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        feedback = await helpdesk_service.get_ticket_feedback(ticket_public_id=ticket_public_id)
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        feedback = await helpdesk_backend.get_ticket_feedback(ticket_public_id=ticket_public_id)
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id
         )
 
@@ -176,7 +176,7 @@ async def handle_ticket_feedback_skip(
 async def handle_ticket_feedback_comment(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     chat_rate_limiter: ChatRateLimiter,
 ) -> None:
@@ -204,8 +204,8 @@ async def handle_ticket_feedback_comment(
         await message.answer(TICKET_FEEDBACK_STALE_TEXT)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        result = await helpdesk_service.add_ticket_feedback_comment(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        result = await helpdesk_backend.add_ticket_feedback_comment(
             ticket_public_id=ticket_public_id,
             client_chat_id=message.chat.id,
             comment=comment,

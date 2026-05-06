@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.handlers.admin.macro_surfaces import (
@@ -32,7 +32,7 @@ router = Router(name="admin_macro_browser")
 async def handle_admin_macros(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -43,8 +43,8 @@ async def handle_admin_macros(
         await operator_presence.touch(operator_id=message.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(message.from_user))
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(message.from_user))
 
     text, markup = build_admin_macro_list_response(macros=macros, page=1)
     await message.answer(text, reply_markup=markup)
@@ -55,7 +55,7 @@ async def handle_admin_macro_page(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -66,8 +66,8 @@ async def handle_admin_macro_page(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,
@@ -90,7 +90,7 @@ async def handle_admin_macro_view(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -101,15 +101,15 @@ async def handle_admin_macro_view(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macro = await helpdesk_service.get_macro(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macro = await helpdesk_backend.get_macro(
             macro_id=callback_data.macro_id,
             actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macros = await helpdesk_service.list_macros(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macros = await helpdesk_backend.list_macros(
                 actor=build_request_actor(callback.from_user)
             )
 
@@ -134,7 +134,7 @@ async def handle_admin_macro_back_list(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -145,8 +145,8 @@ async def handle_admin_macro_back_list(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,
@@ -161,7 +161,7 @@ async def handle_admin_macro_delete_prompt(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -172,15 +172,15 @@ async def handle_admin_macro_delete_prompt(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macro = await helpdesk_service.get_macro(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macro = await helpdesk_backend.get_macro(
             macro_id=callback_data.macro_id,
             actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macros = await helpdesk_service.list_macros(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macros = await helpdesk_backend.list_macros(
                 actor=build_request_actor(callback.from_user)
             )
 
@@ -210,7 +210,7 @@ async def handle_admin_macro_delete_cancel(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -221,15 +221,15 @@ async def handle_admin_macro_delete_cancel(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macro = await helpdesk_service.get_macro(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macro = await helpdesk_backend.get_macro(
             macro_id=callback_data.macro_id,
             actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macros = await helpdesk_service.list_macros(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macros = await helpdesk_backend.list_macros(
                 actor=build_request_actor(callback.from_user)
             )
 
@@ -253,7 +253,7 @@ async def handle_admin_macro_delete_cancel(
 async def handle_admin_macro_delete(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -263,12 +263,12 @@ async def handle_admin_macro_delete(
 
     await operator_presence.touch(operator_id=callback.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macro = await helpdesk_service.delete_macro(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macro = await helpdesk_backend.delete_macro(
             macro_id=callback_data.macro_id,
             actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     if macro is None:
         await edit_admin_macro_list(

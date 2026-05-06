@@ -42,7 +42,7 @@ define port_is_available
 python3 -c 'import socket, sys; sock = socket.socket(); sock.settimeout(0.2); result = sock.connect_ex(("127.0.0.1", int(sys.argv[1]))); sock.close(); sys.exit(0 if result != 0 else 1)' "$(1)"
 endef
 
-.PHONY: help install lint format typecheck test repo-hygiene proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test repo-hygiene architecture-boundaries proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
 COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
 
@@ -54,6 +54,7 @@ help:
 	@printf "  typecheck          Run mypy\n"
 	@printf "  test               Run the test suite\n"
 	@printf "  repo-hygiene       Verify generated/cache artifacts are not tracked\n"
+	@printf "  architecture-boundaries  Verify bot/backend import boundaries\n"
 	@printf "  proto              Regenerate gRPC Python stubs from proto\n"
 	@printf "  proto-check        Verify that generated gRPC stubs are up to date\n"
 	@printf "  check              Run lint, typing, and tests\n"
@@ -114,6 +115,10 @@ test:
 repo-hygiene:
 	$(call ensure_poetry_env)
 	$(POETRY) run python ops/scripts/check_repo_hygiene.py
+
+architecture-boundaries:
+	$(call ensure_poetry_env)
+	$(POETRY) run python ops/scripts/check_architecture_boundaries.py
 
 proto:
 	$(call ensure_poetry_env)
@@ -243,7 +248,7 @@ make-migration:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) revision --autogenerate -m "$(name)"
 
-check: repo-hygiene lint typecheck test
+check: repo-hygiene architecture-boundaries lint typecheck test
 
 ci: check proto-check migration-check
 

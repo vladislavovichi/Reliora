@@ -5,8 +5,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import CategoryManagementError
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminCategoryCallback
 from bot.formatters.categories import format_admin_category_details
@@ -69,7 +70,7 @@ async def handle_admin_category_edit_title(
 async def handle_admin_category_create_title(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -85,20 +86,20 @@ async def handle_admin_category_create_title(
     await operator_presence.touch(operator_id=message.from_user.id)
     page = int((await state.get_data()).get("page", 1))
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            category = await helpdesk_service.create_ticket_category(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            category = await helpdesk_backend.create_ticket_category(
                 title=message.text,
                 actor=build_request_actor(message.from_user),
             )
-    except CategoryManagementError as exc:
+    except (CategoryManagementError, ValidationAppError) as exc:
         await message.answer(str(exc))
         return
 
     await state.clear()
     await message.answer(CATEGORY_CREATE_SAVED_TEXT)
     await message.answer(format_admin_category_details(category))
-    async with helpdesk_service_factory() as helpdesk_service:
-        categories = await helpdesk_service.list_ticket_categories(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_ticket_categories(
             actor=build_request_actor(message.from_user)
         )
     text, markup = build_admin_category_list_response(categories=categories, page=page)
@@ -110,7 +111,7 @@ async def handle_admin_category_edit_title_message(
     message: Message,
     state: FSMContext,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -133,13 +134,13 @@ async def handle_admin_category_edit_title_message(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            category = await helpdesk_service.update_ticket_category_title(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            category = await helpdesk_backend.update_ticket_category_title(
                 category_id=category_id,
                 title=message.text,
                 actor=build_request_actor(message.from_user),
             )
-    except CategoryManagementError as exc:
+    except (CategoryManagementError, ValidationAppError) as exc:
         await message.answer(str(exc))
         return
 

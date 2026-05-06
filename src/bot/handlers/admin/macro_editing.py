@@ -5,8 +5,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import MacroManagementError
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.handlers.admin.macro_surfaces import update_admin_source_message
@@ -58,7 +59,7 @@ async def handle_admin_macro_edit_title_message(
     message: Message,
     state: FSMContext,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -81,13 +82,13 @@ async def handle_admin_macro_edit_title_message(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macro = await helpdesk_service.update_macro_title(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macro = await helpdesk_backend.update_macro_title(
                 macro_id=macro_id,
                 title=message.text,
                 actor=build_request_actor(message.from_user),
             )
-    except MacroManagementError as exc:
+    except (MacroManagementError, ValidationAppError) as exc:
         await message.answer(str(exc))
         return
 
@@ -111,7 +112,7 @@ async def handle_admin_macro_edit_body_message(
     message: Message,
     state: FSMContext,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -134,13 +135,13 @@ async def handle_admin_macro_edit_body_message(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macro = await helpdesk_service.update_macro_body(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macro = await helpdesk_backend.update_macro_body(
                 macro_id=macro_id,
                 body=message.text,
                 actor=build_request_actor(message.from_user),
             )
-    except MacroManagementError as exc:
+    except (MacroManagementError, ValidationAppError) as exc:
         await message.answer(str(exc))
         return
 

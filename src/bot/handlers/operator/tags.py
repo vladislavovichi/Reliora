@@ -5,8 +5,8 @@ from collections.abc import Sequence
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TagSummary, TicketTagsSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback, OperatorTagCallback
 from bot.formatters.operator_admin_views import format_ticket_tags_response
@@ -43,7 +43,7 @@ router = Router(name="operator_tags")
 async def handle_open_tags(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -58,12 +58,12 @@ async def handle_open_tags(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_tags = await helpdesk_service.list_ticket_tags(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_tags = await helpdesk_backend.list_ticket_tags(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
-        available_tags = await helpdesk_service.list_available_tags(
+        available_tags = await helpdesk_backend.list_available_tags(
             actor=build_request_actor(callback.from_user),
         )
 
@@ -71,8 +71,8 @@ async def handle_open_tags(
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -95,7 +95,7 @@ async def handle_open_tags(
 async def handle_toggle_tag(
     callback: CallbackQuery,
     callback_data: OperatorTagCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -118,12 +118,12 @@ async def handle_toggle_tag(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            ticket_tags = await helpdesk_service.list_ticket_tags(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            ticket_tags = await helpdesk_backend.list_ticket_tags(
                 ticket_public_id=ticket_public_id,
                 actor=build_request_actor(callback.from_user),
             )
-            available_tags = await helpdesk_service.list_available_tags(
+            available_tags = await helpdesk_backend.list_available_tags(
                 actor=build_request_actor(callback.from_user),
             )
             tag = _find_tag(available_tags, callback_data.tag_id)
@@ -140,23 +140,23 @@ async def handle_toggle_tag(
                 return
 
             if tag.name in ticket_tags.tags:
-                await helpdesk_service.remove_tag_from_ticket(
+                await helpdesk_backend.remove_tag_from_ticket(
                     ticket_public_id=ticket_public_id,
                     tag_name=tag.name,
                     actor=build_request_actor(callback.from_user),
                 )
             else:
-                await helpdesk_service.add_tag_to_ticket(
+                await helpdesk_backend.add_tag_to_ticket(
                     ticket_public_id=ticket_public_id,
                     tag_name=tag.name,
                     actor=build_request_actor(callback.from_user),
                 )
 
-            refreshed_tags = await helpdesk_service.list_ticket_tags(
+            refreshed_tags = await helpdesk_backend.list_ticket_tags(
                 ticket_public_id=ticket_public_id,
                 actor=build_request_actor(callback.from_user),
             )
-            refreshed_available_tags = await helpdesk_service.list_available_tags(
+            refreshed_available_tags = await helpdesk_backend.list_available_tags(
                 actor=build_request_actor(callback.from_user),
             )
     finally:
@@ -166,8 +166,8 @@ async def handle_toggle_tag(
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -190,7 +190,7 @@ async def handle_toggle_tag(
 async def handle_back_to_ticket(
     callback: CallbackQuery,
     callback_data: OperatorTagCallback,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -205,8 +205,8 @@ async def handle_back_to_ticket(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )

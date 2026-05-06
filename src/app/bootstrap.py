@@ -11,12 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.runtime import AppRuntime, RedisWorkflowRuntime
 from app.runtime_factories import (
-    build_ai_settings_repository,
     build_authorization_service_factory,
     build_diagnostics_service,
-    build_helpdesk_ai_client_factory,
     build_helpdesk_backend_client_factory,
-    build_helpdesk_service_factory,
     build_redis_workflow_runtime,
 )
 from backend.grpc.client import ping_helpdesk_backend
@@ -141,7 +138,6 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     redis: Redis | None = None
     fsm_storage: BaseStorage | None = None
     redis_workflow: RedisWorkflowRuntime | None = None
-    helpdesk_service_factory = None
     helpdesk_backend_client_factory = None
     diagnostics_service = None
     bot: Bot | None = None
@@ -178,18 +174,6 @@ async def build_runtime(settings: Settings) -> AppRuntime:
 
         fsm_storage = build_fsm_storage(redis)
         redis_workflow = build_redis_workflow_runtime(redis)
-        ai_client_factory = build_helpdesk_ai_client_factory(settings)
-        ai_settings_repository = build_ai_settings_repository(settings)
-        helpdesk_service_factory = build_helpdesk_service_factory(
-            db_session_factory,
-            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-            ai_client_factory=ai_client_factory,
-            ai_settings_provider=ai_settings_repository,
-            include_internal_notes_in_ticket_reports=(
-                settings.exports.include_internal_notes_in_ticket_reports
-            ),
-            sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
-        )
         helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(settings)
 
         if settings.bot.token.strip():
@@ -199,7 +183,6 @@ async def build_runtime(settings: Settings) -> AppRuntime:
                 storage=fsm_storage,
                 settings=settings,
                 authorization_service_factory=authorization_service_factory,
-                helpdesk_service_factory=helpdesk_service_factory,
                 helpdesk_backend_client_factory=helpdesk_backend_client_factory,
                 global_rate_limiter=redis_workflow.global_rate_limiter,
                 chat_rate_limiter=redis_workflow.chat_rate_limiter,
@@ -241,7 +224,6 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             fsm_storage=fsm_storage,
             redis_workflow=redis_workflow,
             authorization_service_factory=authorization_service_factory,
-            helpdesk_service_factory=helpdesk_service_factory,
             helpdesk_backend_client_factory=helpdesk_backend_client_factory,
             diagnostics_service=diagnostics_service,
             dispatcher=dispatcher,

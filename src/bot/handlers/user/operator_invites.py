@@ -7,8 +7,8 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
-from application.use_cases.tickets.operator_invites import OperatorInviteCodeError
+from application.errors import ValidationAppError
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_operator_identity_from_parts
 from bot.callbacks import OperatorInviteCallback
 from bot.formatters.operator_admin_views import (
@@ -36,13 +36,13 @@ async def start_operator_invite_onboarding(
     *,
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     code: str,
 ) -> bool:
-    async with helpdesk_service_factory() as helpdesk_service:
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
         try:
-            invite = await helpdesk_service.preview_operator_invite(code=code)
-        except OperatorInviteCodeError as exc:
+            invite = await helpdesk_backend.preview_operator_invite(code=code)
+        except ValidationAppError as exc:
             await message.answer(build_invite_invalid_text(str(exc)))
             return False
 
@@ -118,7 +118,7 @@ async def handle_operator_invite_edit(
 async def handle_operator_invite_confirm(
     callback: CallbackQuery,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     settings: Settings,
 ) -> None:
     if callback.from_user is None:
@@ -132,9 +132,9 @@ async def handle_operator_invite_confirm(
         await callback.answer("Сеанс приглашения устарел.", show_alert=True)
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
         try:
-            result = await helpdesk_service.redeem_operator_invite(
+            result = await helpdesk_backend.redeem_operator_invite(
                 code=code,
                 operator=build_operator_identity_from_parts(
                     telegram_user_id=callback.from_user.id,
@@ -142,7 +142,7 @@ async def handle_operator_invite_confirm(
                     username=callback.from_user.username,
                 ),
             )
-        except OperatorInviteCodeError as exc:
+        except ValidationAppError as exc:
             await state.clear()
             await callback.answer(build_invite_invalid_text(str(exc)), show_alert=True)
             return

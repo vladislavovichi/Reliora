@@ -5,8 +5,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import MacroManagementError
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.formatters.macros import format_admin_macro_create_preview, format_admin_macro_details
@@ -56,7 +57,7 @@ async def handle_admin_macro_preview_save(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -74,13 +75,13 @@ async def handle_admin_macro_preview_save(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
-            macro = await helpdesk_service.create_macro(
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
+            macro = await helpdesk_backend.create_macro(
                 title=title,
                 body=body,
                 actor=build_request_actor(callback.from_user),
             )
-    except MacroManagementError as exc:
+    except (MacroManagementError, ValidationAppError) as exc:
         await respond_to_operator(callback, str(exc))
         return
 
@@ -115,7 +116,7 @@ async def handle_admin_macro_preview_cancel(
     callback: CallbackQuery,
     callback_data: AdminMacroCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -126,8 +127,8 @@ async def handle_admin_macro_preview_cancel(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,

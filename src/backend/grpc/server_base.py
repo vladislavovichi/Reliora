@@ -22,6 +22,12 @@ from application.errors import (
 )
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
+from application.use_cases.tickets.operator_invites import OperatorInviteCodeError
+from application.use_cases.tickets.summaries import (
+    CategoryManagementError,
+    MacroManagementError,
+    OperatorManagementError,
+)
 from backend.grpc.auth import BackendRequestContext, resolve_backend_request_context
 from backend.grpc.translators import deserialize_request_actor
 from domain.tickets import InvalidTicketTransitionError
@@ -179,7 +185,18 @@ async def abort_for_exception(
 ) -> None:
     level = (
         logging.WARNING
-        if isinstance(exc, (InvalidTicketTransitionError, AuthorizationError, ApplicationError))
+        if isinstance(
+            exc,
+            (
+                InvalidTicketTransitionError,
+                AuthorizationError,
+                ApplicationError,
+                CategoryManagementError,
+                MacroManagementError,
+                OperatorInviteCodeError,
+                OperatorManagementError,
+            ),
+        )
         else logging.ERROR
     )
     logger.log(
@@ -199,6 +216,16 @@ async def abort_for_exception(
     if isinstance(exc, ForbiddenError):
         await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
     if isinstance(exc, ValidationAppError):
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    if isinstance(
+        exc,
+        (
+            CategoryManagementError,
+            MacroManagementError,
+            OperatorInviteCodeError,
+            OperatorManagementError,
+        ),
+    ):
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
     if isinstance(exc, RateLimitError):
         await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, str(exc))

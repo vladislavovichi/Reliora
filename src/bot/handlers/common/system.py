@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from application.services.diagnostics import DiagnosticsService
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.formatters.system import build_help_text, build_start_text, format_diagnostics_report
 from bot.handlers.user.operator_invites import start_operator_invite_onboarding
 from bot.keyboards.reply.main_menu import build_main_menu
@@ -24,7 +24,7 @@ async def handle_start(
     message: Message,
     command: CommandObject | None,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
@@ -39,7 +39,7 @@ async def handle_start(
         started = await start_operator_invite_onboarding(
             message=message,
             state=state,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
             code=command.args.strip(),
         )
         if started:

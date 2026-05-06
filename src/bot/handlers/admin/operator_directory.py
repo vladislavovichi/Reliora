@@ -6,8 +6,8 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_admin_views import (
@@ -33,7 +33,7 @@ async def handle_operators(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -44,8 +44,8 @@ async def handle_operators(
         await operator_presence.touch(operator_id=message.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(message.from_user)
         )
 
@@ -60,7 +60,7 @@ async def handle_refresh_operators(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -71,8 +71,8 @@ async def handle_refresh_operators(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(callback.from_user)
         )
 
@@ -90,7 +90,7 @@ async def handle_operator_view(
     callback_data: AdminOperatorCallback,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -101,8 +101,8 @@ async def handle_operator_view(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(callback.from_user)
         )
 
@@ -136,7 +136,7 @@ async def handle_back_to_operator_list(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -147,8 +147,8 @@ async def handle_back_to_operator_list(
     await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(callback.from_user)
         )
 

@@ -31,8 +31,25 @@ from application.services.stats import (
     HelpdeskAnalyticsSnapshot,
     OperatorTicketLoad,
 )
-from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
-from application.use_cases.tickets.summaries import HistoricalTicketSummary, TicketSummary
+from application.use_cases.tickets.operator_invites import (
+    OperatorInviteCodePreview,
+    OperatorInviteCodeRedemptionResult,
+    OperatorInviteCodeSummary,
+)
+from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
+    MacroSummary,
+    OperatorRoleMutationResult,
+    OperatorSummary,
+    TagSummary,
+    TicketCategorySummary,
+    TicketFeedbackMutationResult,
+    TicketFeedbackMutationStatus,
+    TicketFeedbackSummary,
+    TicketSummary,
+    TicketTagMutationResult,
+    TicketTagsSummary,
+)
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from backend.grpc.server import build_helpdesk_backend_server
 from domain.entities.ticket import TicketAttachmentDetails
@@ -59,6 +76,28 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
         list_archived_tickets=_build_archived_tickets_call(ticket_public_id),
         list_operators=_build_operators_call(),
         create_operator_invite=_build_operator_invite_call(),
+        preview_operator_invite=_build_operator_invite_preview_call(),
+        redeem_operator_invite=_build_operator_invite_redemption_call(),
+        promote_operator=_build_promote_operator_call(),
+        revoke_operator=_build_revoke_operator_call(),
+        list_macros=_build_macros_call(),
+        get_macro=_build_get_macro_call(),
+        create_macro=_build_create_macro_call(),
+        update_macro_title=_build_update_macro_title_call(),
+        update_macro_body=_build_update_macro_body_call(),
+        delete_macro=_build_delete_macro_call(),
+        list_ticket_categories=_build_ticket_categories_call(),
+        get_ticket_category=_build_get_ticket_category_call(),
+        create_ticket_category=_build_create_ticket_category_call(),
+        update_ticket_category_title=_build_update_ticket_category_title_call(),
+        set_ticket_category_active=_build_set_ticket_category_active_call(),
+        list_ticket_tags=_build_ticket_tags_call(ticket_public_id),
+        list_available_tags=_build_available_tags_call(),
+        add_tag_to_ticket=_build_add_tag_call(ticket_public_id),
+        remove_tag_from_ticket=_build_remove_tag_call(ticket_public_id),
+        submit_ticket_feedback_rating=_build_feedback_rating_call(ticket_public_id),
+        get_ticket_feedback=_build_get_feedback_call(ticket_public_id),
+        add_ticket_feedback_comment=_build_feedback_comment_call(ticket_public_id),
         escalate_ticket_as_operator=_build_escalate_call(ticket_public_id),
         add_internal_note_to_ticket=_build_add_note_call(ticket_public_id),
     )
@@ -124,6 +163,97 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
             )
             operators = await client.list_operators(actor=RequestActor(telegram_user_id=42))
             invite = await client.create_operator_invite(actor=RequestActor(telegram_user_id=42))
+            invite_preview = await client.preview_operator_invite(code="opr_test")
+            invite_redemption = await client.redeem_operator_invite(
+                code="opr_test",
+                operator=OperatorIdentity(
+                    telegram_user_id=3001,
+                    display_name="New Operator",
+                    username="new.operator",
+                ),
+            )
+            promoted = await client.promote_operator(
+                OperatorIdentity(
+                    telegram_user_id=3002,
+                    display_name="Promoted Operator",
+                    username=None,
+                ),
+                actor=RequestActor(telegram_user_id=42),
+            )
+            revoked = await client.revoke_operator(
+                telegram_user_id=3002,
+                actor=RequestActor(telegram_user_id=42),
+            )
+            macros = await client.list_macros(actor=RequestActor(telegram_user_id=42))
+            macro = await client.get_macro(macro_id=11, actor=RequestActor(telegram_user_id=42))
+            created_macro = await client.create_macro(
+                title="Greeting",
+                body="Hello",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            updated_macro_title = await client.update_macro_title(
+                macro_id=11,
+                title="Updated",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            updated_macro_body = await client.update_macro_body(
+                macro_id=11,
+                body="Updated body",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            deleted_macro = await client.delete_macro(
+                macro_id=11,
+                actor=RequestActor(telegram_user_id=42),
+            )
+            categories = await client.list_ticket_categories(
+                actor=RequestActor(telegram_user_id=42),
+            )
+            category = await client.get_ticket_category(
+                category_id=2,
+                actor=RequestActor(telegram_user_id=42),
+            )
+            created_category = await client.create_ticket_category(
+                title="Access",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            updated_category = await client.update_ticket_category_title(
+                category_id=2,
+                title="Access updated",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            toggled_category = await client.set_ticket_category_active(
+                category_id=2,
+                is_active=False,
+                actor=RequestActor(telegram_user_id=42),
+            )
+            ticket_tags = await client.list_ticket_tags(
+                ticket_public_id=ticket_public_id,
+                actor=RequestActor(telegram_user_id=42),
+            )
+            available_tags = await client.list_available_tags(
+                actor=RequestActor(telegram_user_id=42)
+            )
+            added_tag = await client.add_tag_to_ticket(
+                ticket_public_id=ticket_public_id,
+                tag_name="vip",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            removed_tag = await client.remove_tag_from_ticket(
+                ticket_public_id=ticket_public_id,
+                tag_name="vip",
+                actor=RequestActor(telegram_user_id=42),
+            )
+            feedback_rating = await client.submit_ticket_feedback_rating(
+                ticket_public_id=ticket_public_id,
+                client_chat_id=2002,
+                rating=5,
+            )
+            feedback = await client.get_ticket_feedback(ticket_public_id=ticket_public_id)
+            feedback_comment = await client.add_ticket_feedback_comment(
+                ticket_public_id=ticket_public_id,
+                client_chat_id=2002,
+                comment="Спасибо",
+            )
             escalated_ticket = await client.escalate_ticket_as_operator(
                 ticket_public_id=ticket_public_id,
                 actor=RequestActor(telegram_user_id=1001),
@@ -166,6 +296,40 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert archived_tickets[0].mini_title == "Не могу войти в кабинет после обновления пароля"
     assert operators[0].display_name == "Operator One"
     assert invite.code.startswith("opr_")
+    assert invite_preview.remaining_uses == 1
+    assert invite_redemption.operator.operator.telegram_user_id == 3001
+    assert promoted.changed is True
+    assert revoked is not None
+    assert revoked.operator.telegram_user_id == 3002
+    assert macros[0].title == "Password reset"
+    assert macro is not None
+    assert macro.id == 11
+    assert created_macro.title == "Greeting"
+    assert updated_macro_title is not None
+    assert updated_macro_title.title == "Updated"
+    assert updated_macro_body is not None
+    assert updated_macro_body.body == "Updated body"
+    assert deleted_macro is not None
+    assert deleted_macro.id == 11
+    assert categories[0].title == "Access"
+    assert category is not None
+    assert category.id == 2
+    assert created_category.title == "Access"
+    assert updated_category is not None
+    assert updated_category.title == "Access updated"
+    assert toggled_category is not None
+    assert toggled_category.is_active is False
+    assert ticket_tags is not None
+    assert ticket_tags.tags == ("vip",)
+    assert available_tags[0].name == "vip"
+    assert added_tag is not None
+    assert added_tag.changed is True
+    assert removed_tag is not None
+    assert removed_tag.changed is True
+    assert feedback_rating.status is TicketFeedbackMutationStatus.CREATED
+    assert feedback is not None
+    assert feedback.rating == 5
+    assert feedback_comment.status is TicketFeedbackMutationStatus.UPDATED
     assert escalated_ticket is not None
     assert escalated_ticket.status is TicketStatus.ESCALATED
     assert noted_ticket is not None
@@ -395,10 +559,10 @@ def _build_operators_call() -> Any:
     async def call(
         *,
         actor: RequestActor | None = None,
-    ) -> tuple[SimpleNamespace, ...]:
+    ) -> tuple[OperatorSummary, ...]:
         assert actor == RequestActor(telegram_user_id=42)
         return (
-            SimpleNamespace(
+            OperatorSummary(
                 telegram_user_id=1001,
                 display_name="Operator One",
                 username="operator.one",
@@ -407,6 +571,19 @@ def _build_operators_call() -> Any:
         )
 
     return call
+
+
+def _operator_summary(
+    *,
+    telegram_user_id: int,
+    display_name: str,
+) -> OperatorSummary:
+    return OperatorSummary(
+        telegram_user_id=telegram_user_id,
+        display_name=display_name,
+        username=None,
+        is_active=True,
+    )
 
 
 def _build_operator_invite_call() -> Any:
@@ -419,6 +596,351 @@ def _build_operator_invite_call() -> Any:
             code="opr_test_invite",
             expires_at=datetime(2026, 4, 17, 12, 0, tzinfo=UTC),
             max_uses=1,
+        )
+
+    return call
+
+
+def _build_operator_invite_preview_call() -> Any:
+    async def call(*, code: str) -> OperatorInviteCodePreview:
+        assert code == "opr_test"
+        return OperatorInviteCodePreview(
+            expires_at=datetime(2026, 4, 17, 12, 0, tzinfo=UTC),
+            remaining_uses=1,
+        )
+
+    return call
+
+
+def _build_operator_invite_redemption_call() -> Any:
+    async def call(
+        *,
+        code: str,
+        operator: OperatorIdentity,
+    ) -> OperatorInviteCodeRedemptionResult:
+        assert code == "opr_test"
+        return OperatorInviteCodeRedemptionResult(
+            operator=OperatorRoleMutationResult(
+                operator=OperatorSummary(
+                    telegram_user_id=operator.telegram_user_id,
+                    display_name=operator.display_name,
+                    username=operator.username,
+                    is_active=True,
+                ),
+                changed=True,
+            ),
+            expires_at=datetime(2026, 4, 17, 12, 0, tzinfo=UTC),
+        )
+
+    return call
+
+
+def _build_promote_operator_call() -> Any:
+    async def call(
+        operator: OperatorIdentity,
+        actor: RequestActor | None = None,
+    ) -> OperatorRoleMutationResult:
+        assert actor == RequestActor(telegram_user_id=42)
+        return OperatorRoleMutationResult(
+            operator=OperatorSummary(
+                telegram_user_id=operator.telegram_user_id,
+                display_name=operator.display_name,
+                username=operator.username,
+                is_active=True,
+            ),
+            changed=True,
+        )
+
+    return call
+
+
+def _build_revoke_operator_call() -> Any:
+    async def call(
+        *,
+        telegram_user_id: int,
+        actor: RequestActor | None = None,
+    ) -> OperatorRoleMutationResult:
+        assert actor == RequestActor(telegram_user_id=42)
+        return OperatorRoleMutationResult(
+            operator=_operator_summary(
+                telegram_user_id=telegram_user_id,
+                display_name="Promoted Operator",
+            ),
+            changed=True,
+        )
+
+    return call
+
+
+def _macro_summary(*, title: str = "Password reset", body: str = "Reset body") -> MacroSummary:
+    return MacroSummary(id=11, title=title, body=body)
+
+
+def _build_macros_call() -> Any:
+    async def call(*, actor: RequestActor | None = None) -> tuple[MacroSummary, ...]:
+        assert actor == RequestActor(telegram_user_id=42)
+        return (_macro_summary(),)
+
+    return call
+
+
+def _build_get_macro_call() -> Any:
+    async def call(
+        *,
+        macro_id: int,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return _macro_summary() if macro_id == 11 else None
+
+    return call
+
+
+def _build_create_macro_call() -> Any:
+    async def call(
+        *,
+        title: str,
+        body: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary:
+        assert actor == RequestActor(telegram_user_id=42)
+        return _macro_summary(title=title, body=body)
+
+    return call
+
+
+def _build_update_macro_title_call() -> Any:
+    async def call(
+        *,
+        macro_id: int,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        assert macro_id == 11
+        assert actor == RequestActor(telegram_user_id=42)
+        return _macro_summary(title=title)
+
+    return call
+
+
+def _build_update_macro_body_call() -> Any:
+    async def call(
+        *,
+        macro_id: int,
+        body: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        assert macro_id == 11
+        assert actor == RequestActor(telegram_user_id=42)
+        return _macro_summary(body=body)
+
+    return call
+
+
+def _build_delete_macro_call() -> Any:
+    async def call(
+        *,
+        macro_id: int,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return _macro_summary() if macro_id == 11 else None
+
+    return call
+
+
+def _category_summary(
+    *,
+    title: str = "Access",
+    is_active: bool = True,
+) -> TicketCategorySummary:
+    return TicketCategorySummary(
+        id=2,
+        code="access",
+        title=title,
+        is_active=is_active,
+        sort_order=20,
+    )
+
+
+def _build_ticket_categories_call() -> Any:
+    async def call(*, actor: RequestActor | None = None) -> tuple[TicketCategorySummary, ...]:
+        assert actor == RequestActor(telegram_user_id=42)
+        return (_category_summary(),)
+
+    return call
+
+
+def _build_get_ticket_category_call() -> Any:
+    async def call(
+        *,
+        category_id: int,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return _category_summary() if category_id == 2 else None
+
+    return call
+
+
+def _build_create_ticket_category_call() -> Any:
+    async def call(
+        *,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary:
+        assert actor == RequestActor(telegram_user_id=42)
+        return _category_summary(title=title)
+
+    return call
+
+
+def _build_update_ticket_category_title_call() -> Any:
+    async def call(
+        *,
+        category_id: int,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        assert category_id == 2
+        assert actor == RequestActor(telegram_user_id=42)
+        return _category_summary(title=title)
+
+    return call
+
+
+def _build_set_ticket_category_active_call() -> Any:
+    async def call(
+        *,
+        category_id: int,
+        is_active: bool,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        assert category_id == 2
+        assert actor == RequestActor(telegram_user_id=42)
+        return _category_summary(is_active=is_active)
+
+    return call
+
+
+def _build_ticket_tags_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        actor: RequestActor | None = None,
+    ) -> TicketTagsSummary | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return TicketTagsSummary(
+            public_id=ticket_public_id,
+            public_number="HD-AAAA1111",
+            tags=("vip",),
+        )
+
+    return call
+
+
+def _build_available_tags_call() -> Any:
+    async def call(*, actor: RequestActor | None = None) -> tuple[TagSummary, ...]:
+        assert actor == RequestActor(telegram_user_id=42)
+        return (TagSummary(id=1, name="vip"),)
+
+    return call
+
+
+def _build_add_tag_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        tag_name: str,
+        actor: RequestActor | None = None,
+    ) -> TicketTagMutationResult | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return TicketTagMutationResult(
+            ticket=TicketSummary(
+                public_id=ticket_public_id,
+                public_number="HD-AAAA1111",
+                status=TicketStatus.ASSIGNED,
+            ),
+            tag=tag_name,
+            changed=True,
+            tags=(tag_name,),
+        )
+
+    return call
+
+
+def _build_remove_tag_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        tag_name: str,
+        actor: RequestActor | None = None,
+    ) -> TicketTagMutationResult | None:
+        assert actor == RequestActor(telegram_user_id=42)
+        return TicketTagMutationResult(
+            ticket=TicketSummary(
+                public_id=ticket_public_id,
+                public_number="HD-AAAA1111",
+                status=TicketStatus.ASSIGNED,
+            ),
+            tag=tag_name,
+            changed=True,
+            tags=(),
+        )
+
+    return call
+
+
+def _feedback_summary(
+    ticket_public_id: Any,
+    *,
+    comment: str | None = None,
+) -> TicketFeedbackSummary:
+    return TicketFeedbackSummary(
+        public_id=ticket_public_id,
+        public_number="HD-AAAA1111",
+        client_chat_id=2002,
+        rating=5,
+        comment=comment,
+        submitted_at=datetime(2026, 4, 8, 12, 30, tzinfo=UTC),
+    )
+
+
+def _build_feedback_rating_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        client_chat_id: int,
+        rating: int,
+    ) -> TicketFeedbackMutationResult:
+        assert client_chat_id == 2002
+        assert rating == 5
+        return TicketFeedbackMutationResult(
+            status=TicketFeedbackMutationStatus.CREATED,
+            feedback=_feedback_summary(ticket_public_id),
+        )
+
+    return call
+
+
+def _build_get_feedback_call(ticket_public_id: Any) -> Any:
+    async def call(*, ticket_public_id: Any) -> TicketFeedbackSummary | None:
+        return _feedback_summary(ticket_public_id)
+
+    return call
+
+
+def _build_feedback_comment_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        client_chat_id: int,
+        comment: str,
+    ) -> TicketFeedbackMutationResult:
+        assert client_chat_id == 2002
+        return TicketFeedbackMutationResult(
+            status=TicketFeedbackMutationStatus.UPDATED,
+            feedback=_feedback_summary(ticket_public_id, comment=comment),
         )
 
     return call

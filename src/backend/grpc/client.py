@@ -16,7 +16,7 @@ from application.ai.summaries import (
     TicketCategoryPrediction,
     TicketReplyDraft,
 )
-from application.contracts.actors import RequestActor
+from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     AddInternalNoteCommand,
@@ -42,19 +42,29 @@ from application.use_cases.analytics.exports import (
     AnalyticsSnapshotExport,
 )
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
-from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
+from application.use_cases.tickets.operator_invites import (
+    OperatorInviteCodePreview,
+    OperatorInviteCodeRedemptionResult,
+    OperatorInviteCodeSummary,
+)
 from application.use_cases.tickets.summaries import (
     AccessContextSummary,
     HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
+    OperatorRoleMutationResult,
     OperatorSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
+    TagSummary,
     TicketCategorySummary,
     TicketDetailsSummary,
+    TicketFeedbackMutationResult,
+    TicketFeedbackSummary,
     TicketSummary,
+    TicketTagMutationResult,
+    TicketTagsSummary,
 )
 from backend.grpc.auth import build_call_metadata
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
@@ -68,20 +78,29 @@ from backend.grpc.translators import (
     deserialize_export,
     deserialize_macro,
     deserialize_macro_application_result,
+    deserialize_operator_invite_preview,
+    deserialize_operator_invite_redemption_result,
     deserialize_operator_invite_summary,
     deserialize_operator_reply_result,
+    deserialize_operator_role_mutation_result,
     deserialize_operator_summary,
     deserialize_operator_ticket,
     deserialize_queued_ticket,
+    deserialize_tag,
     deserialize_ticket_assist_snapshot,
     deserialize_ticket_category_prediction,
     deserialize_ticket_details,
+    deserialize_ticket_feedback,
+    deserialize_ticket_feedback_mutation_result,
     deserialize_ticket_reply_draft,
     deserialize_ticket_summary,
+    deserialize_ticket_tag_mutation_result,
+    deserialize_ticket_tags,
     serialize_add_internal_note_command,
     serialize_apply_macro_command,
     serialize_assign_next_command,
     serialize_client_ticket_message_command,
+    serialize_operator_identity,
     serialize_operator_reply_command,
     serialize_predict_ticket_category_command,
     serialize_request_actor,
@@ -433,6 +452,74 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             raise _translate_rpc_error(exc) from exc
         return deserialize_operator_invite_summary(result)
 
+    async def preview_operator_invite(
+        self,
+        *,
+        code: str,
+    ) -> OperatorInviteCodePreview:
+        try:
+            result = await self._invoke_unary(
+                self.stub.PreviewOperatorInvite,
+                helpdesk_pb2.PreviewOperatorInviteRequest(code=code),
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_operator_invite_preview(result)
+
+    async def redeem_operator_invite(
+        self,
+        *,
+        code: str,
+        operator: OperatorIdentity,
+    ) -> OperatorInviteCodeRedemptionResult:
+        request = helpdesk_pb2.RedeemOperatorInviteRequest(code=code)
+        request.operator.CopyFrom(serialize_operator_identity(operator))
+        try:
+            result = await self._invoke_unary(
+                self.stub.RedeemOperatorInvite,
+                request,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_operator_invite_redemption_result(result)
+
+    async def promote_operator(
+        self,
+        operator: OperatorIdentity,
+        actor: RequestActor | None = None,
+    ) -> OperatorRoleMutationResult:
+        request = helpdesk_pb2.PromoteOperatorRequest()
+        request.operator.CopyFrom(serialize_operator_identity(operator))
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.PromoteOperator,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_operator_role_mutation_result(result)
+
+    async def revoke_operator(
+        self,
+        *,
+        telegram_user_id: int,
+        actor: RequestActor | None = None,
+    ) -> OperatorRoleMutationResult | None:
+        request = helpdesk_pb2.RevokeOperatorRequest(telegram_user_id=telegram_user_id)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.RevokeOperator,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_operator_role_mutation_result(result)
+
     async def list_macros(
         self,
         *,
@@ -450,6 +537,317 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             retryable=True,
         )
         return tuple(deserialize_macro(item) for item in response)
+
+    async def get_macro(
+        self,
+        *,
+        macro_id: int,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        request = helpdesk_pb2.GetMacroRequest(macro_id=macro_id)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.GetMacro, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_macro(result)
+
+    async def create_macro(
+        self,
+        *,
+        title: str,
+        body: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary:
+        request = helpdesk_pb2.CreateMacroRequest(title=title, body=body)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.CreateMacro, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_macro(result)
+
+    async def update_macro_title(
+        self,
+        *,
+        macro_id: int,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        request = helpdesk_pb2.UpdateMacroTitleRequest(macro_id=macro_id, title=title)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.UpdateMacroTitle, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_macro(result)
+
+    async def update_macro_body(
+        self,
+        *,
+        macro_id: int,
+        body: str,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        request = helpdesk_pb2.UpdateMacroBodyRequest(macro_id=macro_id, body=body)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.UpdateMacroBody, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_macro(result)
+
+    async def delete_macro(
+        self,
+        *,
+        macro_id: int,
+        actor: RequestActor | None = None,
+    ) -> MacroSummary | None:
+        request = helpdesk_pb2.DeleteMacroRequest(macro_id=macro_id)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.DeleteMacro, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_macro(result)
+
+    async def list_ticket_categories(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> tuple[TicketCategorySummary, ...]:
+        request = helpdesk_pb2.ListTicketCategoriesRequest()
+        _apply_actor(request, actor)
+        response = await self._collect_stream(
+            lambda metadata: self.stub.ListTicketCategories(
+                request,
+                timeout=self.request_timeout_seconds,
+                metadata=metadata,
+            ),
+            actor=actor,
+            retryable=True,
+        )
+        return tuple(deserialize_category(item) for item in response)
+
+    async def get_ticket_category(
+        self,
+        *,
+        category_id: int,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        request = helpdesk_pb2.GetTicketCategoryRequest(category_id=category_id)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.GetTicketCategory,
+                request,
+                actor=actor,
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_category(result)
+
+    async def create_ticket_category(
+        self,
+        *,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary:
+        request = helpdesk_pb2.CreateTicketCategoryRequest(title=title)
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.CreateTicketCategory,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_category(result)
+
+    async def update_ticket_category_title(
+        self,
+        *,
+        category_id: int,
+        title: str,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        request = helpdesk_pb2.UpdateTicketCategoryTitleRequest(
+            category_id=category_id,
+            title=title,
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.UpdateTicketCategoryTitle,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_category(result)
+
+    async def set_ticket_category_active(
+        self,
+        *,
+        category_id: int,
+        is_active: bool,
+        actor: RequestActor | None = None,
+    ) -> TicketCategorySummary | None:
+        request = helpdesk_pb2.SetTicketCategoryActiveRequest(
+            category_id=category_id,
+            is_active=is_active,
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.SetTicketCategoryActive,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_category(result)
+
+    async def list_ticket_tags(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketTagsSummary | None:
+        request = helpdesk_pb2.ListTicketTagsRequest(ticket_public_id=str(ticket_public_id))
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.ListTicketTags,
+                request,
+                actor=actor,
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_tags(result)
+
+    async def list_available_tags(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> tuple[TagSummary, ...]:
+        request = helpdesk_pb2.ListAvailableTagsRequest()
+        _apply_actor(request, actor)
+        response = await self._collect_stream(
+            lambda metadata: self.stub.ListAvailableTags(
+                request,
+                timeout=self.request_timeout_seconds,
+                metadata=metadata,
+            ),
+            actor=actor,
+            retryable=True,
+        )
+        return tuple(deserialize_tag(item) for item in response)
+
+    async def add_tag_to_ticket(
+        self,
+        *,
+        ticket_public_id: UUID,
+        tag_name: str,
+        actor: RequestActor | None = None,
+    ) -> TicketTagMutationResult | None:
+        request = helpdesk_pb2.AddTagToTicketRequest(
+            ticket_public_id=str(ticket_public_id),
+            tag_name=tag_name,
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(self.stub.AddTagToTicket, request, actor=actor)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_tag_mutation_result(result)
+
+    async def remove_tag_from_ticket(
+        self,
+        *,
+        ticket_public_id: UUID,
+        tag_name: str,
+        actor: RequestActor | None = None,
+    ) -> TicketTagMutationResult | None:
+        request = helpdesk_pb2.RemoveTagFromTicketRequest(
+            ticket_public_id=str(ticket_public_id),
+            tag_name=tag_name,
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.RemoveTagFromTicket,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_tag_mutation_result(result)
+
+    async def submit_ticket_feedback_rating(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        rating: int,
+    ) -> TicketFeedbackMutationResult:
+        request = helpdesk_pb2.SubmitTicketFeedbackRatingRequest(
+            ticket_public_id=str(ticket_public_id),
+            client_chat_id=client_chat_id,
+            rating=rating,
+        )
+        try:
+            result = await self._invoke_unary(self.stub.SubmitTicketFeedbackRating, request)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_ticket_feedback_mutation_result(result)
+
+    async def get_ticket_feedback(
+        self,
+        *,
+        ticket_public_id: UUID,
+    ) -> TicketFeedbackSummary | None:
+        try:
+            result = await self._invoke_unary(
+                self.stub.GetTicketFeedback,
+                helpdesk_pb2.GetTicketFeedbackRequest(ticket_public_id=str(ticket_public_id)),
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_feedback(result)
+
+    async def add_ticket_feedback_comment(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        comment: str,
+    ) -> TicketFeedbackMutationResult:
+        request = helpdesk_pb2.AddTicketFeedbackCommentRequest(
+            ticket_public_id=str(ticket_public_id),
+            client_chat_id=client_chat_id,
+            comment=comment,
+        )
+        try:
+            result = await self._invoke_unary(self.stub.AddTicketFeedbackComment, request)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_ticket_feedback_mutation_result(result)
 
     async def apply_macro_to_ticket(
         self,

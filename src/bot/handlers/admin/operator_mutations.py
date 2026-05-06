@@ -9,9 +9,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
-from application.use_cases.tickets.operator_invites import OperatorInviteCodeError
+from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import OperatorManagementError, OperatorSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_operator_identity_from_parts, build_request_actor
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_admin_views import (
@@ -67,7 +67,7 @@ async def handle_add_operator_start(
 async def handle_create_operator_invite(
     callback: CallbackQuery,
     bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -76,12 +76,12 @@ async def handle_create_operator_invite(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
         try:
-            invite = await helpdesk_service.create_operator_invite(
+            invite = await helpdesk_backend.create_operator_invite(
                 actor=build_request_actor(callback.from_user)
             )
-        except OperatorInviteCodeError as exc:
+        except ValidationAppError as exc:
             await respond_to_operator(callback, str(exc))
             return
 
@@ -113,7 +113,7 @@ async def handle_add_operator_message(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -140,20 +140,20 @@ async def handle_add_operator_message(
     await operator_presence.touch(operator_id=message.from_user.id)
     telegram_user_id, display_name = parsed
 
-    async with helpdesk_service_factory() as helpdesk_service:
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
         try:
-            result = await helpdesk_service.promote_operator(
+            result = await helpdesk_backend.promote_operator(
                 build_operator_identity_from_parts(
                     telegram_user_id=telegram_user_id,
                     display_name=display_name,
                 ),
                 actor=build_request_actor(message.from_user),
             )
-        except OperatorManagementError as exc:
+        except (OperatorManagementError, ValidationAppError) as exc:
             await message.answer(str(exc))
             return
 
-        operators = await helpdesk_service.list_operators(
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(message.from_user),
         )
 
@@ -199,7 +199,7 @@ async def handle_confirm_revoke_operator(
     callback: CallbackQuery,
     callback_data: AdminOperatorCallback,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -209,17 +209,17 @@ async def handle_confirm_revoke_operator(
 
     await operator_presence.touch(operator_id=callback.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
         try:
-            result = await helpdesk_service.revoke_operator(
+            result = await helpdesk_backend.revoke_operator(
                 telegram_user_id=callback_data.telegram_user_id,
                 actor=build_request_actor(callback.from_user),
             )
-        except OperatorManagementError as exc:
+        except (OperatorManagementError, ValidationAppError) as exc:
             await respond_to_operator(callback, str(exc))
             return
 
-        operators = await helpdesk_service.list_operators(
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(callback.from_user)
         )
 
@@ -253,7 +253,7 @@ async def handle_cancel_revoke_operator(
     callback: CallbackQuery,
     callback_data: AdminOperatorCallback,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
 ) -> None:
@@ -262,8 +262,8 @@ async def handle_cancel_revoke_operator(
         return
 
     await operator_presence.touch(operator_id=callback.from_user.id)
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(callback.from_user)
         )
 

@@ -24,11 +24,17 @@ from application.use_cases.tickets.summaries import (
     OperatorReplyResult,
     OperatorTicketSummary,
     QueuedTicketSummary,
+    TagSummary,
     TicketCategorySummary,
     TicketDetailsSummary,
+    TicketFeedbackMutationResult,
+    TicketFeedbackMutationStatus,
+    TicketFeedbackSummary,
     TicketInternalNoteSummary,
     TicketMessageSummary,
     TicketSummary,
+    TicketTagMutationResult,
+    TicketTagsSummary,
 )
 from backend.grpc.generated import helpdesk_pb2
 from backend.grpc.translators_shared import (
@@ -559,6 +565,101 @@ def serialize_macro(macro: MacroSummary) -> helpdesk_pb2.MacroSummary:
 
 def deserialize_macro(macro: helpdesk_pb2.MacroSummary) -> MacroSummary:
     return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+
+
+def serialize_tag(tag: TagSummary) -> helpdesk_pb2.TagSummary:
+    return helpdesk_pb2.TagSummary(id=tag.id, name=tag.name)
+
+
+def deserialize_tag(tag: helpdesk_pb2.TagSummary) -> TagSummary:
+    return TagSummary(id=tag.id, name=tag.name)
+
+
+def serialize_ticket_tags(tags: TicketTagsSummary) -> helpdesk_pb2.TicketTagsSummary:
+    return helpdesk_pb2.TicketTagsSummary(
+        public_id=str(tags.public_id),
+        public_number=tags.public_number,
+        tags=tags.tags,
+    )
+
+
+def deserialize_ticket_tags(tags: helpdesk_pb2.TicketTagsSummary) -> TicketTagsSummary:
+    return TicketTagsSummary(
+        public_id=UUID(tags.public_id),
+        public_number=tags.public_number,
+        tags=tuple(tags.tags),
+    )
+
+
+def serialize_ticket_tag_mutation_result(
+    result: TicketTagMutationResult,
+) -> helpdesk_pb2.TicketTagMutationResult:
+    message = helpdesk_pb2.TicketTagMutationResult(
+        tag=result.tag,
+        changed=result.changed,
+        tags=result.tags,
+    )
+    message.ticket.CopyFrom(serialize_ticket_summary(result.ticket))
+    return message
+
+
+def deserialize_ticket_tag_mutation_result(
+    result: helpdesk_pb2.TicketTagMutationResult,
+) -> TicketTagMutationResult:
+    return TicketTagMutationResult(
+        ticket=deserialize_ticket_summary(result.ticket),
+        tag=result.tag,
+        changed=result.changed,
+        tags=tuple(result.tags),
+    )
+
+
+def serialize_ticket_feedback(
+    feedback: TicketFeedbackSummary,
+) -> helpdesk_pb2.TicketFeedbackSummary:
+    message = helpdesk_pb2.TicketFeedbackSummary(
+        public_id=str(feedback.public_id),
+        public_number=feedback.public_number,
+        client_chat_id=feedback.client_chat_id,
+        rating=feedback.rating,
+        submitted_at=_serialize_timestamp(feedback.submitted_at),
+    )
+    if feedback.comment is not None:
+        message.comment = feedback.comment
+    return message
+
+
+def deserialize_ticket_feedback(
+    feedback: helpdesk_pb2.TicketFeedbackSummary,
+) -> TicketFeedbackSummary:
+    return TicketFeedbackSummary(
+        public_id=UUID(feedback.public_id),
+        public_number=feedback.public_number,
+        client_chat_id=feedback.client_chat_id,
+        rating=feedback.rating,
+        comment=feedback.comment if _has(feedback, "comment") else None,
+        submitted_at=_deserialize_timestamp(feedback.submitted_at),
+    )
+
+
+def serialize_ticket_feedback_mutation_result(
+    result: TicketFeedbackMutationResult,
+) -> helpdesk_pb2.TicketFeedbackMutationResult:
+    message = helpdesk_pb2.TicketFeedbackMutationResult(status=result.status.value)
+    if result.feedback is not None:
+        message.feedback.CopyFrom(serialize_ticket_feedback(result.feedback))
+    return message
+
+
+def deserialize_ticket_feedback_mutation_result(
+    result: helpdesk_pb2.TicketFeedbackMutationResult,
+) -> TicketFeedbackMutationResult:
+    return TicketFeedbackMutationResult(
+        status=TicketFeedbackMutationStatus(result.status),
+        feedback=deserialize_ticket_feedback(result.feedback)
+        if result.HasField("feedback")
+        else None,
+    )
 
 
 def serialize_macro_application_result(

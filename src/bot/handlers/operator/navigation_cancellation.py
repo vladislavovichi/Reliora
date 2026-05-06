@@ -4,7 +4,6 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.formatters.categories import format_admin_category_details
@@ -61,7 +60,6 @@ async def handle_cancel(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
     helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     operator_active_ticket_store: OperatorActiveTicketStore,
     ticket_live_session_store: TicketLiveSessionStore,
@@ -89,35 +87,35 @@ async def handle_cancel(
         await _restore_operator_directory_after_cancel(
             message=message,
             settings=settings,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
     if state_name in MACRO_CREATE_STATE_NAMES:
         await _restore_macro_list_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
     if state_name in MACRO_EDIT_STATE_NAMES:
         await _restore_macro_details_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
     if state_name in CATEGORY_CREATE_STATE_NAMES:
         await _restore_category_list_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
     if state_name in CATEGORY_EDIT_STATE_NAMES:
         await _restore_category_details_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
 
 
@@ -162,13 +160,13 @@ async def _restore_operator_directory_after_cancel(
     *,
     message: Message,
     settings: Settings,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
 ) -> None:
     if message.from_user is None:
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        operators = await helpdesk_backend.list_operators(
             actor=build_request_actor(message.from_user),
         )
 
@@ -185,14 +183,14 @@ async def _restore_macro_list_after_cancel(
     *,
     message: Message,
     state_data: dict[str, object],
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
 ) -> None:
     if message.from_user is None:
         return
 
     page = _parse_page(state_data.get("page"))
-    async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor=build_request_actor(message.from_user))
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macros = await helpdesk_backend.list_macros(actor=build_request_actor(message.from_user))
 
     text, markup = build_admin_macro_list_response(macros=macros, page=page)
     await message.answer(text, reply_markup=markup)
@@ -202,7 +200,7 @@ async def _restore_macro_details_after_cancel(
     *,
     message: Message,
     state_data: dict[str, object],
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
 ) -> None:
     if message.from_user is None:
         return
@@ -213,17 +211,17 @@ async def _restore_macro_details_after_cancel(
         await _restore_macro_list_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        macro = await helpdesk_service.get_macro(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        macro = await helpdesk_backend.get_macro(
             macro_id=macro_id,
             actor=build_request_actor(message.from_user),
         )
         if macro is None:
-            macros = await helpdesk_service.list_macros(
+            macros = await helpdesk_backend.list_macros(
                 actor=build_request_actor(message.from_user)
             )
             text, markup = build_admin_macro_list_response(macros=macros, page=page)
@@ -247,14 +245,14 @@ async def _restore_category_list_after_cancel(
     *,
     message: Message,
     state_data: dict[str, object],
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
 ) -> None:
     if message.from_user is None:
         return
 
     page = _parse_page(state_data.get("page"))
-    async with helpdesk_service_factory() as helpdesk_service:
-        categories = await helpdesk_service.list_ticket_categories(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        categories = await helpdesk_backend.list_ticket_categories(
             actor=build_request_actor(message.from_user)
         )
 
@@ -266,7 +264,7 @@ async def _restore_category_details_after_cancel(
     *,
     message: Message,
     state_data: dict[str, object],
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
 ) -> None:
     if message.from_user is None:
         return
@@ -277,17 +275,17 @@ async def _restore_category_details_after_cancel(
         await _restore_category_list_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
         )
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        category = await helpdesk_service.get_ticket_category(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        category = await helpdesk_backend.get_ticket_category(
             category_id=category_id,
             actor=build_request_actor(message.from_user),
         )
         if category is None:
-            categories = await helpdesk_service.list_ticket_categories(
+            categories = await helpdesk_backend.list_ticket_categories(
                 actor=build_request_actor(message.from_user)
             )
             text, markup = build_admin_category_list_response(categories=categories, page=page)
