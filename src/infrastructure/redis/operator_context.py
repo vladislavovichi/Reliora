@@ -5,12 +5,12 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.async_support import resolve_redis_result
-from infrastructure.redis.contracts import (
+from application.contracts.runtime import (
     OperatorActiveTicketStore,
     TicketLiveSession,
     TicketLiveSessionStore,
 )
+from infrastructure.redis.async_support import resolve_redis_result
 from infrastructure.redis.keys import operator_active_ticket_key, ticket_live_session_key
 
 LIVE_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30

@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
@@ -23,7 +24,6 @@ from bot.texts.macros import (
     build_macro_delete_prompt_text,
     build_macro_page_text,
 )
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_macro_browser")
 

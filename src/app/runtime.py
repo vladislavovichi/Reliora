@@ -11,32 +11,7 @@ from application.services.authorization import AuthorizationServiceFactory
 from application.services.diagnostics import DiagnosticsService
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from infrastructure.config.settings import Settings
-from infrastructure.redis.contracts import (
-    ChatRateLimiter,
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    SLADeadlineScheduler,
-    SLATimeoutProcessor,
-    TicketLiveSessionStore,
-    TicketLockManager,
-    TicketStreamConsumer,
-    TicketStreamPublisher,
-)
-
-
-@dataclass(slots=True)
-class RedisWorkflowRuntime:
-    ticket_lock_manager: TicketLockManager
-    global_rate_limiter: GlobalRateLimiter
-    chat_rate_limiter: ChatRateLimiter
-    operator_presence: OperatorPresenceHelper
-    ticket_live_session_store: TicketLiveSessionStore
-    operator_active_ticket_store: OperatorActiveTicketStore
-    sla_deadline_scheduler: SLADeadlineScheduler
-    ticket_stream_publisher: TicketStreamPublisher
-    ticket_stream_consumer: TicketStreamConsumer
-    sla_timeout_processor: SLATimeoutProcessor
+from infrastructure.redis.runtime import RedisWorkflowRuntime
 
 
 @dataclass(slots=True)

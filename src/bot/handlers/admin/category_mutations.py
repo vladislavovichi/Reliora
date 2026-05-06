@@ -5,6 +5,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import CategoryManagementError
 from backend.grpc.contracts import HelpdeskBackendClientFactory
@@ -31,7 +32,6 @@ from bot.texts.categories import (
     CATEGORY_TITLE_UPDATED_TEXT,
 )
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_category_mutations")
 

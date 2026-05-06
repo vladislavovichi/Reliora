@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.contracts import ChatRateLimiter, GlobalRateLimiter
+from application.contracts.runtime import ChatRateLimiter, GlobalRateLimiter
 from infrastructure.redis.keys import GLOBAL_RATE_LIMIT_KEY, chat_rate_limit_key
 
 

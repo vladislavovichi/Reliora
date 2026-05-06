@@ -7,6 +7,13 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_internal_note_command,
@@ -35,13 +42,6 @@ from bot.texts.operator import (
     NOTE_PROMPT_TEXT,
     build_note_saved_text,
     build_notes_opened_text,
-)
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-    TicketLockManager,
 )
 
 router = Router(name="operator_workflow_ticket_notes")

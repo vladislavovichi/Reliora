@@ -9,6 +9,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import OperatorManagementError, OperatorSummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
@@ -46,7 +47,6 @@ from bot.texts.operator_invites import (
     build_invite_link_missing_text,
 )
 from infrastructure.config.settings import Settings
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_operator_mutations")
 logger = logging.getLogger(__name__)

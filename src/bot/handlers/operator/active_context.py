@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from application.contracts.runtime import OperatorActiveTicketStore, TicketLiveSessionStore
 from application.use_cases.tickets.summaries import TicketDetailsSummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor_from_id
 from domain.enums.tickets import TicketStatus
-from infrastructure.redis.contracts import OperatorActiveTicketStore, TicketLiveSessionStore
 
 ACTIVE_OPERATOR_TICKET_STATUSES = frozenset({TicketStatus.ASSIGNED, TicketStatus.ESCALATED})
 

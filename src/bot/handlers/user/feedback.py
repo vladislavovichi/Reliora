@@ -8,6 +8,7 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import ChatRateLimiter, GlobalRateLimiter
 from application.use_cases.tickets.summaries import TicketFeedbackMutationStatus
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.callbacks import ClientFeedbackCallback
@@ -29,7 +30,6 @@ from bot.texts.feedback import (
 )
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
-from infrastructure.redis.contracts import ChatRateLimiter, GlobalRateLimiter
 
 router = Router(name="client_feedback")
 

@@ -8,13 +8,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ai_service.grpc.client import ping_ai_service
-from app.runtime import RedisWorkflowRuntime
-from app.runtime_factories import (
-    build_ai_settings_repository,
-    build_helpdesk_ai_client_factory,
-    build_helpdesk_service_factory,
-    build_redis_workflow_runtime,
-)
 from backend.grpc.server import build_helpdesk_backend_server
 from backend.runtime import BackendRuntime
 from infrastructure.config.settings import Settings
@@ -28,6 +21,13 @@ from infrastructure.redis.client import (
     build_redis_client,
     close_redis_client,
     ping_redis_client,
+)
+from infrastructure.redis.runtime import RedisWorkflowRuntime
+from infrastructure.runtime_factories import (
+    build_ai_settings_repository,
+    build_helpdesk_ai_client_factory,
+    build_helpdesk_service_factory,
+    build_redis_workflow_runtime,
 )
 from infrastructure.startup_checks import (
     StartupDependencyCheck,

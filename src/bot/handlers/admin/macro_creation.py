@@ -5,6 +5,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from application.errors import ValidationAppError
 from application.use_cases.tickets.summaries import MacroManagementError
 from backend.grpc.contracts import HelpdeskBackendClientFactory
@@ -32,7 +33,6 @@ from bot.texts.macros import (
     MACRO_INPUT_NAVIGATION_BLOCK_TEXT,
     MACRO_PREVIEW_COMMAND_BLOCK_TEXT,
 )
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_macro_creation")
 

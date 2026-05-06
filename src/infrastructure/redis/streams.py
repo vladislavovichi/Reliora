@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.contracts import (
+from application.contracts.runtime import (
     TicketStreamConsumer,
     TicketStreamMessage,
     TicketStreamPublisher,

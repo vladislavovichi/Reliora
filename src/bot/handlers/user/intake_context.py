@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from backend.grpc.contracts import HelpdeskBackendClientFactory
-from infrastructure.redis.contracts import (
+from application.contracts.runtime import (
     ChatRateLimiter,
     GlobalRateLimiter,
     OperatorActiveTicketStore,
     TicketLiveSessionStore,
     TicketStreamPublisher,
 )
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 
 
 @dataclass(slots=True, frozen=True)

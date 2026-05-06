@@ -6,6 +6,12 @@ import grpc
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+)
 from application.use_cases.tickets.exports import TicketReportFormat
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
@@ -28,12 +34,6 @@ from bot.texts.operator import (
     build_export_ready_text,
 )
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-)
 
 router = Router(name="operator_workflow_ticket_exports")
 logger = logging.getLogger(__name__)

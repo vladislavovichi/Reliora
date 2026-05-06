@@ -9,13 +9,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.runtime import AppRuntime, RedisWorkflowRuntime
-from app.runtime_factories import (
-    build_authorization_service_factory,
-    build_diagnostics_service,
-    build_helpdesk_backend_client_factory,
-    build_redis_workflow_runtime,
-)
+from app.runtime import AppRuntime
 from backend.grpc.client import ping_helpdesk_backend
 from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config.settings import Settings
@@ -31,6 +25,13 @@ from infrastructure.redis.client import (
     ping_redis_client,
 )
 from infrastructure.redis.fsm import build_fsm_storage
+from infrastructure.redis.runtime import RedisWorkflowRuntime
+from infrastructure.runtime_factories import (
+    build_authorization_service_factory,
+    build_diagnostics_service,
+    build_helpdesk_backend_client_factory,
+    build_redis_workflow_runtime,
+)
 from infrastructure.startup_checks import (
     StartupDependencyCheck,
     run_startup_dependency_checks,

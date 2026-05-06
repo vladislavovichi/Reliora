@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.contracts import OperatorPresenceHelper
+from application.contracts.runtime import OperatorPresenceHelper
 from infrastructure.redis.keys import operator_presence_key
 
 

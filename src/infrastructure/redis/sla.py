@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.contracts import SLADeadlineScheduler, SLATimeoutProcessor
+from application.contracts.runtime import SLADeadlineScheduler, SLATimeoutProcessor
 from infrastructure.redis.keys import SLA_DEADLINES_KEY
 
 

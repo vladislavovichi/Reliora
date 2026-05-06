@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminCategoryCallback
@@ -21,7 +22,6 @@ from bot.texts.categories import (
     CATEGORY_NOT_FOUND_TEXT,
 )
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_category_browser")
 

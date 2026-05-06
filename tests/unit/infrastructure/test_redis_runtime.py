@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
-from infrastructure.redis.contracts import TicketStreamMessage
+from application.contracts.runtime import TicketStreamMessage
 from infrastructure.redis.keys import SLA_DEADLINES_KEY
 from infrastructure.redis.locks import RedisTicketLock
 from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor

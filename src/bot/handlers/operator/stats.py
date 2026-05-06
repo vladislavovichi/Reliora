@@ -7,6 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from application.services.stats import AnalyticsWindow, get_analytics_window_label
 from application.use_cases.analytics.exports import (
     AnalyticsExportFormat,
@@ -35,7 +36,6 @@ from bot.texts.operator import (
     build_analytics_opened_text,
 )
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="operator_stats")
 DEFAULT_ANALYTICS_WINDOW = AnalyticsWindow.DAYS_7

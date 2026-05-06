@@ -4,6 +4,10 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from application.contracts.runtime import (
+    OperatorActiveTicketStore,
+    TicketLiveSessionStore,
+)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.formatters.categories import format_admin_category_details
@@ -27,10 +31,6 @@ from bot.keyboards.inline.macros import build_admin_macro_detail_markup
 from bot.texts.buttons import CANCEL_BUTTON_TEXT
 from bot.texts.operator import OPERATOR_ACTION_CANCELLED_TEXT, OPERATOR_ACTION_IDLE_TEXT
 from infrastructure.config.settings import Settings
-from infrastructure.redis.contracts import (
-    OperatorActiveTicketStore,
-    TicketLiveSessionStore,
-)
 
 MACRO_CREATE_STATE_NAMES = {
     AdminMacroStates.creating_title.state,

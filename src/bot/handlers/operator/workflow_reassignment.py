@@ -5,6 +5,13 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_operator_identity_from_parts,
@@ -41,13 +48,6 @@ from bot.texts.operator import (
 )
 from domain.enums.tickets import TicketEventType
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-    TicketLockManager,
-)
 
 router = Router(name="operator_workflow_reassignment")
 

@@ -8,6 +8,13 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     build_ticket_attachment_summary,
@@ -49,13 +56,6 @@ from bot.texts.operator import (
 )
 from domain.enums.roles import UserRole
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-    TicketLockManager,
-)
 
 router = Router(name="operator_workflow_reply")
 logger = logging.getLogger(__name__)

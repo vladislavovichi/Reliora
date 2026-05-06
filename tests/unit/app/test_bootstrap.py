@@ -7,8 +7,8 @@ import pytest
 from pytest import MonkeyPatch
 
 from app import bootstrap
-from app.bootstrap import RedisWorkflowRuntime
 from infrastructure.config.settings import Settings
+from infrastructure.redis.runtime import RedisWorkflowRuntime
 
 
 def build_settings(*, bot_token: str) -> Settings:

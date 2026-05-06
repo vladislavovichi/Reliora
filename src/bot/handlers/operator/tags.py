@@ -5,6 +5,13 @@ from collections.abc import Sequence
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from application.use_cases.tickets.summaries import TagSummary, TicketTagsSummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
@@ -27,13 +34,6 @@ from bot.texts.operator import (
     TAGS_UPDATED_TEXT,
     build_active_ticket_opened_text,
     build_view_opened_text,
-)
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-    TicketLockManager,
 )
 
 router = Router(name="operator_tags")

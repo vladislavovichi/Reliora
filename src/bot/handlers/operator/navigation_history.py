@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from application.contracts.actors import RequestActor
+from application.contracts.runtime import GlobalRateLimiter, OperatorPresenceHelper
 from application.use_cases.tickets.archive_browser import (
     ALL_ARCHIVE_CATEGORIES_ID,
     ArchiveBrowserPage,
@@ -35,7 +36,6 @@ from bot.texts.operator import (
     build_archive_topic_picker_opened_text,
     build_archived_ticket_opened_text,
 )
-from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="operator_navigation_history")
 

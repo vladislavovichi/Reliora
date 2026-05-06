@@ -8,6 +8,13 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from application.use_cases.tickets.summaries import OperatorTicketSummary, QueuedTicketSummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
@@ -34,13 +41,6 @@ from bot.texts.operator import (
     QUEUE_EMPTY_TEXT,
     build_queue_page_callback_text,
     build_take_next_fallback_text,
-)
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-    TicketLockManager,
 )
 
 QUEUE_PAGE_SIZE = 5

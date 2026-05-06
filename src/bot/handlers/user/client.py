@@ -8,6 +8,12 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    TicketLiveSessionStore,
+    TicketLockManager,
+)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_predict_ticket_category_command, build_request_actor
 from bot.callbacks import ClientTicketCallback
@@ -41,12 +47,6 @@ from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    TicketLiveSessionStore,
-    TicketLockManager,
-)
 
 router = Router(name="client")
 logger = logging.getLogger(__name__)

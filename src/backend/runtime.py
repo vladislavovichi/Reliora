@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from app.runtime import RedisWorkflowRuntime
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from backend.grpc.server import HelpdeskBackendGrpcServer
 from infrastructure.config.settings import Settings
+from infrastructure.redis.runtime import RedisWorkflowRuntime
 
 
 @dataclass(slots=True)

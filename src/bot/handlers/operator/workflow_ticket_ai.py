@@ -3,6 +3,12 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorActiveTicketStore,
+    OperatorPresenceHelper,
+    TicketLiveSessionStore,
+)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback
@@ -17,12 +23,6 @@ from bot.texts.common import (
     TICKET_NOT_FOUND_TEXT,
 )
 from bot.texts.operator import build_assist_opened_text
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorActiveTicketStore,
-    OperatorPresenceHelper,
-    TicketLiveSessionStore,
-)
 
 router = Router(name="operator_workflow_ticket_ai")
 

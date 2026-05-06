@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
+from application.contracts.runtime import TicketLock, TicketLockManager
 from infrastructure.redis.async_support import resolve_redis_result
-from infrastructure.redis.contracts import TicketLock, TicketLockManager
 from infrastructure.redis.keys import ticket_lock_key
 
 _RELEASE_LOCK_SCRIPT = """

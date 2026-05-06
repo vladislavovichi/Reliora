@@ -6,17 +6,17 @@ from uuid import UUID
 
 from aiogram.types import CallbackQuery
 
+from application.contracts.runtime import (
+    GlobalRateLimiter,
+    OperatorPresenceHelper,
+    TicketLockManager,
+)
 from bot.callbacks import OperatorActionCallback
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
     TICKET_LOCKED_TEXT,
-)
-from infrastructure.redis.contracts import (
-    GlobalRateLimiter,
-    OperatorPresenceHelper,
-    TicketLockManager,
 )
 
 

@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from infrastructure.health import EXPECTED_HEALTH_FAILURES
+from application.contracts.runtime import (
+    EXPECTED_DIAGNOSTICS_FAILURES,
+    DependencyFailureTypes,
+)
 
 AsyncDependencyCheck = Callable[[], Awaitable[bool]]
 
@@ -58,6 +61,7 @@ class DiagnosticsService:
     mini_app_url_detail: str = "MINI_APP__PUBLIC_URL не задан."
     mini_app_http_check: AsyncDependencyCheck | None = None
     mini_app_http_target: str = ""
+    expected_dependency_failures: DependencyFailureTypes = EXPECTED_DIAGNOSTICS_FAILURES
 
     async def collect_report(self) -> DiagnosticsReport:
         checks = [
@@ -132,7 +136,7 @@ class DiagnosticsService:
     ) -> DiagnosticsCheck:
         try:
             is_ready = await check()
-        except EXPECTED_HEALTH_FAILURES as exc:
+        except self.expected_dependency_failures as exc:
             return DiagnosticsCheck(
                 name=name,
                 category=category,
