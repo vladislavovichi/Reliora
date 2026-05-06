@@ -14,7 +14,9 @@ MINI_APP_TUNNEL_HOST ?= 127.0.0.1
 MINI_APP_TUNNEL_PORT ?= 8088
 MINI_APP_TUNNEL_URL ?= http://$(MINI_APP_TUNNEL_HOST):$(MINI_APP_TUNNEL_PORT)
 ENV_FILE ?= .env.local
-export RELIORA_ENV_FILE ?= ../../$(ENV_FILE)
+ENV_EXAMPLE ?= .env.example
+COMPOSE_ENV_FILE = $(abspath $(ENV_FILE))
+export RELIORA_ENV_FILE = $(COMPOSE_ENV_FILE)
 FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis ai-service backend bot mini-app
 FULL_TIMEOUT ?= 180
@@ -40,12 +42,12 @@ define ensure_poetry_env
 endef
 
 define port_is_available
-python3 -c 'import socket, sys; sock = socket.socket(); sock.settimeout(0.2); result = sock.connect_ex(("127.0.0.1", int(sys.argv[1]))); sock.close(); sys.exit(0 if result != 0 else 1)' "$(1)"
+$(PYTHON) ops/scripts/port_available.py "$(1)"
 endef
 
-.PHONY: help install lint format typecheck test repo-hygiene architecture-boundaries proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test repo-hygiene architecture-boundaries proto proto-check check ci ensure-env-file health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
-COMPOSE_CMD = $(COMPOSE) --env-file $(ENV_FILE) $(COMPOSE_FILES)
+COMPOSE_CMD = $(COMPOSE) --env-file $(COMPOSE_ENV_FILE) $(COMPOSE_FILES)
 
 help:
 	@printf "Available targets:\n"
@@ -60,6 +62,7 @@ help:
 	@printf "  proto-check        Verify that generated gRPC stubs are up to date\n"
 	@printf "  check              Run lint, typing, and tests\n"
 	@printf "  ci                 Run check, proto-check, and migration consistency\n"
+	@printf "  ensure-env-file    Create the local env file from .env.example if needed\n"
 	@printf "  health             Show Docker Compose stack health\n"
 	@printf "  health-bot         Run the bot-side health check locally\n"
 	@printf "  health-backend     Run the backend-side health check\n"
@@ -131,11 +134,26 @@ proto:
 proto-check: proto
 	git diff --exit-code -- $(BACKEND_PROTO_OUT) $(AI_PROTO_OUT)
 
+ensure-env-file:
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		if [ "$(ENV_FILE)" = ".env.local" ] && [ -f ".env" ]; then \
+			printf '%s\n' "Found .env, but Makefile now uses .env.local."; \
+			printf '%s\n' "Run: cp .env .env.local"; \
+			exit 1; \
+		fi; \
+		if [ ! -f "$(ENV_EXAMPLE)" ]; then \
+			printf '%s\n' "Missing $(ENV_FILE) and $(ENV_EXAMPLE)."; \
+			exit 1; \
+		fi; \
+		cp "$(ENV_EXAMPLE)" "$(ENV_FILE)"; \
+		printf '%s\n' "Created $(ENV_FILE) from $(ENV_EXAMPLE). Review it before production-like runs."; \
+	fi
+
 health-bot:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m app.healthcheck
 
-health:
+health: ensure-env-file
 	COMPOSE="$(COMPOSE_CMD)" sh $(STACK_HEALTH_SCRIPT)
 
 health-backend:
@@ -178,7 +196,7 @@ run-mini-app:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(MINI_APP_MODULE)
 
-run-mini-app-cloudflared:
+run-mini-app-cloudflared: ensure-env-file
 	@set -eu; \
 	if command -v "$(CLOUDFLARED_BIN)" >/dev/null 2>&1; then \
 		cloudflared_bin="$(CLOUDFLARED_BIN)"; \
@@ -241,7 +259,7 @@ migrate:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) upgrade head
 
-migrate-stack:
+migrate-stack: ensure-env-file
 	$(COMPOSE_CMD) run --rm backend alembic -c migrations/alembic.ini upgrade head
 
 make-migration:
@@ -253,29 +271,46 @@ check: repo-hygiene architecture-boundaries lint typecheck test
 
 ci: check proto-check migration-check
 
-docker-up:
+docker-up: ensure-env-file
 	$(COMPOSE_CMD) up --build -d
 
-docker-down:
+docker-down: ensure-env-file
 	$(COMPOSE_CMD) down
 
-restart:
+restart: ensure-env-file
 	$(COMPOSE_CMD) restart
 
-ps:
+ps: ensure-env-file
 	$(COMPOSE_CMD) ps
 
-full:
+full: ensure-env-file
 	COMPOSE="$(COMPOSE_CMD)" MINI_APP_EXPOSE_PORT="$(MINI_APP_EXPOSE_PORT)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
 
-full-cloudflared:
+full-cloudflared: ensure-env-file
 	@set -eu; \
+	if command -v "$(CLOUDFLARED_BIN)" >/dev/null 2>&1; then \
+		:; \
+	elif [ -x /tmp/cloudflared ]; then \
+		:; \
+	else \
+		echo "cloudflared not found. Install it or place a standalone binary at /tmp/cloudflared."; \
+		echo "Then run: make full-cloudflared"; \
+		exit 1; \
+	fi; \
 	desired_port="$${MINI_APP_EXPOSE_PORT:-$$(awk -F= '/^MINI_APP_EXPOSE_PORT=/{print $$2; exit}' "$(ENV_FILE)" 2>/dev/null)}"; \
 	if [ -z "$$desired_port" ]; then \
 		desired_port="$(MINI_APP_TUNNEL_PORT)"; \
 	fi; \
 	mini_app_port="$$desired_port"; \
-	while ! $(call port_is_available,$$mini_app_port); do \
+	while :; do \
+		$(call port_is_available,$$mini_app_port); \
+		status="$$?"; \
+		if [ "$$status" -eq 0 ]; then \
+			break; \
+		fi; \
+		if [ "$$status" -ne 1 ]; then \
+			exit "$$status"; \
+		fi; \
 		mini_app_port="$$((mini_app_port + 1))"; \
 	done; \
 	if [ "$$mini_app_port" != "$$desired_port" ]; then \
@@ -286,28 +321,28 @@ full-cloudflared:
 
 full-down: docker-down
 
-logs:
+logs: ensure-env-file
 	$(COMPOSE_CMD) logs -f ai-service backend bot mini-app
 
-logs-bot:
+logs-bot: ensure-env-file
 	$(COMPOSE_CMD) logs -f bot
 
-logs-backend:
+logs-backend: ensure-env-file
 	$(COMPOSE_CMD) logs -f backend
 
-logs-ai:
+logs-ai: ensure-env-file
 	$(COMPOSE_CMD) logs -f ai-service
 
-logs-mini-app:
+logs-mini-app: ensure-env-file
 	$(COMPOSE_CMD) logs -f mini-app
 
-smoke:
+smoke: ensure-env-file
 	$(COMPOSE_CMD) run --rm --no-deps backend python $(SMOKE_SCRIPT)
 
-backup-db:
+backup-db: ensure-env-file
 	COMPOSE="$(COMPOSE_CMD)" sh $(BACKUP_DB_SCRIPT)
 
-restore-db:
+restore-db: ensure-env-file
 	COMPOSE="$(COMPOSE_CMD)" BACKUP_PATH="$(BACKUP_PATH)" sh $(RESTORE_DB_SCRIPT)
 
 up: docker-up
