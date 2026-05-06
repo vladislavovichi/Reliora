@@ -15,7 +15,7 @@ from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.use_cases.tickets.exports import TicketReportFormat
 from domain.enums.tickets import TicketStatus
-from tests.integration.application.test_helpdesk_service import (
+from tests.component.application.test_helpdesk_service import (
     StubOperatorManagementRepository,
     StubTicketRepository,
     build_service,

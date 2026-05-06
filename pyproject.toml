@@ -33,6 +33,12 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-q"
+markers = [
+    "unit: pure unit tests without real runtime boundaries",
+    "component: handlers, services, repositories, or gateways tested with fake, stub, or mock dependencies",
+    "integration: tests that cross a real API or infrastructure boundary such as gRPC, HTTP, DB, or Redis",
+    "e2e: full scenarios across several running processes",
+]
 
 [tool.ruff]
 line-length = 100

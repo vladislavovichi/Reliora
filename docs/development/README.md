@@ -109,6 +109,9 @@ make run-ai
 | `make lint` | Ruff без изменений |
 | `make typecheck` | mypy по `src` и `tests` |
 | `make test` | pytest |
+| `make test-unit` | чистые unit-тесты без реальных runtime-границ |
+| `make test-component` | component-тесты с fake/stub/mock зависимостями |
+| `make test-integration` | integration-тесты через реальные API/infra границы |
 | `make proto-check` | gRPC stubs соответствуют `.proto` |
 | `make migration-check` | Alembic upgrade и `alembic check` |
 | `make smoke` | работающий стек и ключевые связи |
@@ -116,6 +119,15 @@ make run-ai
 | `make ai-smoke` | реальная AI-проверка через локальную модель |
 | `make check` | `lint`, `typecheck`, `test` |
 | `make ci` | `check`, `proto-check`, `migration-check` |
+
+Тесты разложены по таксономии:
+
+- `tests/unit` — чистые unit-тесты, без реальных API/infra границ.
+- `tests/component` — handlers/services/repositories/gateways с fake, stub или mock зависимостями. Эти тесты должны запускаться без PostgreSQL, Redis, Telegram Bot API и других внешних сервисов.
+- `tests/integration` — только реальные границы: живой gRPC/HTTP сервер и клиент, PostgreSQL, Redis или аналогичная инфраструктура.
+- `tests/e2e` — полный сценарий через несколько процессов.
+
+Pytest автоматически ставит маркеры `unit`, `component`, `integration` и `e2e` по первому каталогу внутри `tests/`. Тесты, которым нужен PostgreSQL, Redis или другая инфраструктура, должны лежать в `tests/integration` или `tests/e2e`, иметь соответствующий маркер через путь и явно описывать требуемый сервис в названии фикстуры, docstring или комментарии рядом с настройкой.
 
 ## Миграции
 
