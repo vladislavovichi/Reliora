@@ -1,66 +1,85 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import AsyncMock
 
 from aiogram.filters.command import CommandObject
-from aiogram.types import CallbackQuery, Chat, Message, User
 
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from application.contracts.actors import OperatorIdentity
+from application.use_cases.tickets.operator_invites import (
+    OperatorInviteCodePreview,
+    OperatorInviteCodeRedemptionResult,
+)
+from application.use_cases.tickets.summaries import OperatorRoleMutationResult, OperatorSummary
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.common.system import handle_start
 from bot.handlers.user.operator_invites import handle_operator_invite_confirm
 from bot.texts.operator_invites import INVITE_ONBOARDING_CONFIRMED_TEXT
 from domain.enums.roles import UserRole
+from tests.support.aiogram import (
+    CallbackHarness,
+    MessageHarness,
+    build_callback_harness,
+    build_message_harness,
+)
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
+
+
+class OperatorInviteBackendClient(FakeHelpdeskBackendClient):
+    def __init__(self) -> None:
+        self.preview_operator_invite_mock = AsyncMock()
+        self.redeem_operator_invite_mock = AsyncMock()
+
+    async def preview_operator_invite(self, *, code: str) -> OperatorInviteCodePreview:
+        await self.preview_operator_invite_mock(code=code)
+        return OperatorInviteCodePreview(
+            expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
+            remaining_uses=1,
+        )
+
+    async def redeem_operator_invite(
+        self,
+        *,
+        code: str,
+        operator: OperatorIdentity,
+    ) -> OperatorInviteCodeRedemptionResult:
+        await self.redeem_operator_invite_mock(code=code, operator=operator)
+        return OperatorInviteCodeRedemptionResult(
+            operator=OperatorRoleMutationResult(
+                operator=OperatorSummary(
+                    telegram_user_id=operator.telegram_user_id,
+                    display_name="Анна Смирнова",
+                    username=operator.username,
+                    is_active=True,
+                ),
+                changed=True,
+            ),
+            expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
+        )
 
 
 def _build_helpdesk_backend_client_factory(
-    service: object,
+    service: FakeHelpdeskBackendClient,
 ) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
-
-    return provide
+    return build_backend_client_factory(service)
 
 
-def _build_message() -> Message:
-    message = Message.model_construct(
+def _build_message() -> MessageHarness:
+    return build_message_harness(
+        user_id=3001,
         message_id=10,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=3001, type="private"),
-        from_user=User.model_construct(
-            id=3001,
-            is_bot=False,
-            first_name="Anna",
-            username="anna_support",
-        ),
         text="/start opr_test",
+        with_edit_text=True,
     )
-    object.__setattr__(message, "answer", AsyncMock())
-    object.__setattr__(message, "edit_text", AsyncMock())
-    return message
 
 
-def _build_callback() -> CallbackQuery:
-    message = _build_message()
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(
-            id=3001,
-            is_bot=False,
-            first_name="Anna",
-            username="anna_support",
-        ),
-        chat_instance="chat-instance",
+def _build_callback() -> CallbackHarness:
+    return build_callback_harness(
+        user_id=3001,
         data="operator_invite:confirm",
-        message=message,
+        message=_build_message(),
     )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
 
 
 async def test_handle_start_with_invite_code_opens_onboarding_prompt() -> None:
@@ -69,17 +88,10 @@ async def test_handle_start_with_invite_code_opens_onboarding_prompt() -> None:
         set_state=AsyncMock(),
         update_data=AsyncMock(),
     )
-    service = SimpleNamespace(
-        preview_operator_invite=AsyncMock(
-            return_value=SimpleNamespace(
-                expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
-                remaining_uses=1,
-            )
-        )
-    )
+    service = OperatorInviteBackendClient()
 
     await handle_start(
-        message=message,
+        message=message.message,
         command=CommandObject(prefix="/", command="start", mention=None, args="opr_test"),
         state=state,
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
@@ -93,10 +105,9 @@ async def test_handle_start_with_invite_code_opens_onboarding_prompt() -> None:
     )
 
     state.set_state.assert_awaited()
-    message_answer = cast(AsyncMock, message.answer)
-    message_answer.assert_awaited_once()
-    assert message_answer.await_args is not None
-    assert "Приглашение оператора подтверждено." in message_answer.await_args.args[0]
+    message.answer.assert_awaited_once()
+    assert message.answer.await_args is not None
+    assert "Приглашение оператора подтверждено." in message.answer.await_args.args[0]
 
 
 async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_menu() -> None:
@@ -110,17 +121,10 @@ async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_
         ),
         clear=AsyncMock(),
     )
-    service = SimpleNamespace(
-        redeem_operator_invite=AsyncMock(
-            return_value=SimpleNamespace(
-                operator=SimpleNamespace(operator=SimpleNamespace(display_name="Анна Смирнова")),
-                expires_at=datetime(2026, 4, 15, 12, 0, tzinfo=UTC),
-            )
-        )
-    )
+    service = OperatorInviteBackendClient()
 
     await handle_operator_invite_confirm(
-        callback=callback,
+        callback=callback.callback,
         state=state,
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         settings=SimpleNamespace(
@@ -131,13 +135,10 @@ async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_
         ),
     )
 
-    callback_answer = cast(AsyncMock, callback.answer)
-    callback_answer.assert_awaited_once_with(INVITE_ONBOARDING_CONFIRMED_TEXT)
-    assert isinstance(callback.message, Message)
-    callback_message_edit = cast(AsyncMock, callback.message.edit_text)
-    callback_message_edit.assert_awaited_once()
-    callback_message_answer = cast(AsyncMock, callback.message.answer)
-    callback_message_answer.assert_awaited_once()
-    assert callback_message_answer.await_args is not None
-    reply_markup = callback_message_answer.await_args.kwargs["reply_markup"]
+    callback.answer.assert_awaited_once_with(INVITE_ONBOARDING_CONFIRMED_TEXT)
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once()
+    callback.message.answer.assert_awaited_once()
+    assert callback.message.answer.await_args is not None
+    reply_markup = callback.message.answer.await_args.kwargs["reply_markup"]
     assert reply_markup.keyboard[0][0].text == "Очередь"

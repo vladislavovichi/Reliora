@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 from sqlalchemy import Table
 
 import infrastructure.db.models  # noqa: F401
@@ -30,7 +28,8 @@ def test_models_package_populates_base_metadata() -> None:
 
 
 def test_operator_telegram_user_id_uses_unique_constraint_and_plain_index() -> None:
-    operator_table = cast(Table, Operator.__table__)
+    operator_table = Operator.__table__
+    assert isinstance(operator_table, Table)
     constraint_names = {
         constraint.name for constraint in operator_table.constraints if constraint.name is not None
     }
@@ -44,7 +43,8 @@ def test_operator_telegram_user_id_uses_unique_constraint_and_plain_index() -> N
 
 
 def test_operator_invite_code_hash_uses_single_unique_index() -> None:
-    invite_table = cast(Table, OperatorInviteCode.__table__)
+    invite_table = OperatorInviteCode.__table__
+    assert isinstance(invite_table, Table)
     constraint_names = {
         constraint.name for constraint in invite_table.constraints if constraint.name is not None
     }

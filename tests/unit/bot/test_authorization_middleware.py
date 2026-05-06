@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import NoReturn, cast
+from typing import NoReturn
 from unittest.mock import AsyncMock
 
-from aiogram.types import CallbackQuery, Chat, Message, User
+from aiogram.types import CallbackQuery, Message
+from tests.support.aiogram import build_callback_harness, build_message_harness
 
 from application.services.authorization import AuthorizationService, AuthorizationServiceFactory
 from bot.keyboards.reply.main_menu import build_main_menu
@@ -64,45 +65,21 @@ def build_authorization_service_factory(
 
 
 def build_message(*, user_id: int, text: str) -> Message:
-    message = Message.model_construct(
-        message_id=1,
-        date=None,
-        chat=Chat.model_construct(id=user_id, type="private"),
-        from_user=User.model_construct(id=user_id, is_bot=False, first_name="Test"),
-        text=text,
-    )
-    object.__setattr__(message, "answer", AsyncMock())
-    return message
+    return build_message_harness(user_id=user_id, text=text).message
 
 
 def build_callback(*, user_id: int, data: str) -> CallbackQuery:
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(id=user_id, is_bot=False, first_name="Test"),
-        chat_instance="chat-instance",
-        data=data,
-        message=build_message(user_id=user_id, text="stub"),
-    )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
-
-
-def message_answer_mock(message: Message) -> AsyncMock:
-    return cast(AsyncMock, message.answer)
-
-
-def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    return cast(AsyncMock, callback.answer)
+    return build_callback_harness(user_id=user_id, data=data).callback
 
 
 async def test_authorization_middleware_denies_regular_user_operator_command() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock()
-    message = build_message(user_id=2002, text=QUEUE_BUTTON_TEXT)
+    message = build_message_harness(user_id=2002, text=QUEUE_BUTTON_TEXT)
 
     result = await middleware(
         handler,
-        message,
+        message.message,
         {
             "authorization_service_factory": build_authorization_service_factory(
                 active_operator_ids=set()
@@ -114,7 +91,7 @@ async def test_authorization_middleware_denies_regular_user_operator_command() -
 
     assert result is None
     handler.assert_not_awaited()
-    message_answer_mock(message).assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(
         "Доступно только операторам и суперадминистраторам.",
         reply_markup=build_main_menu(UserRole.USER),
     )
@@ -123,11 +100,11 @@ async def test_authorization_middleware_denies_regular_user_operator_command() -
 async def test_authorization_middleware_denies_regular_user_operator_callback() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock()
-    callback = build_callback(user_id=2002, data="operator:take:ticket-public-id")
+    callback = build_callback_harness(user_id=2002, data="operator:take:ticket-public-id")
 
     result = await middleware(
         handler,
-        callback,
+        callback.callback,
         {
             "authorization_service_factory": build_authorization_service_factory(
                 active_operator_ids=set()
@@ -139,7 +116,7 @@ async def test_authorization_middleware_denies_regular_user_operator_callback() 
 
     assert result is None
     handler.assert_not_awaited()
-    callback_answer_mock(callback).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         "Доступно только операторам и суперадминистраторам.",
         show_alert=True,
     )
@@ -148,7 +125,7 @@ async def test_authorization_middleware_denies_regular_user_operator_callback() 
 async def test_authorization_middleware_allows_operator_command_and_sets_role_context() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock(return_value="handled")
-    message = build_message(user_id=1001, text=QUEUE_BUTTON_TEXT)
+    message = build_message_harness(user_id=1001, text=QUEUE_BUTTON_TEXT)
     data = {
         "authorization_service_factory": build_authorization_service_factory(
             active_operator_ids={1001}
@@ -157,11 +134,11 @@ async def test_authorization_middleware_allows_operator_command_and_sets_role_co
         "state": None,
     }
 
-    result = await middleware(handler, message, data)
+    result = await middleware(handler, message.message, data)
 
     assert result == "handled"
     handler.assert_awaited_once()
-    message_answer_mock(message).assert_not_awaited()
+    message.answer.assert_not_awaited()
     assert data["event_user_role"] == UserRole.OPERATOR
     assert data["event_is_super_admin"] is False
 
@@ -210,19 +187,19 @@ async def test_authorization_middleware_denies_revoked_operator_on_next_request(
     active_operator_ids.remove(1001)
     handler.reset_mock()
 
-    second_message = build_message(user_id=1001, text=QUEUE_BUTTON_TEXT)
+    second_message = build_message_harness(user_id=1001, text=QUEUE_BUTTON_TEXT)
     second_data = {
         "authorization_service_factory": authorization_service_factory,
         "event_user_id": 1001,
         "state": None,
     }
 
-    second_result = await middleware(handler, second_message, second_data)
+    second_result = await middleware(handler, second_message.message, second_data)
 
     assert second_result is None
     handler.assert_not_awaited()
     assert second_data["event_user_role"] == UserRole.USER
-    message_answer_mock(second_message).assert_awaited_once_with(
+    second_message.answer.assert_awaited_once_with(
         "Доступно только операторам и суперадминистраторам.",
         reply_markup=build_main_menu(UserRole.USER),
     )

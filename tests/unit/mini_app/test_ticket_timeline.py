@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import cast
 from uuid import UUID, uuid4
+
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.ai.summaries import TicketAssistSnapshot, TicketSummaryStatus
 from application.contracts.actors import RequestActor
@@ -16,7 +15,7 @@ from application.use_cases.tickets.summaries import (
     TicketInternalNoteSummary,
     TicketMessageSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 from mini_app.api import MiniAppGateway
@@ -24,7 +23,7 @@ from mini_app.auth import TelegramMiniAppUser
 from mini_app.serializers import serialize_ticket_timeline
 
 
-class TimelineBackendClient:
+class TimelineBackendClient(FakeHelpdeskBackendClient):
     def __init__(
         self,
         *,
@@ -70,11 +69,7 @@ class TimelineBackendClient:
 
 
 def build_backend_factory(client: TimelineBackendClient) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, client)
-
-    return provide
+    return build_backend_client_factory(client)
 
 
 def test_ticket_timeline_serializer_orders_items_chronologically() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -102,7 +102,7 @@ async def test_create_adds_ticket_to_session() -> None:
         priority=TicketPriority.NORMAL,
     )
 
-    assert session.added == [cast(object, ticket)]
+    assert session.added == [ticket]
     assert session.flush_count == 1
     assert ticket.client_chat_id == 100
     assert ticket.subject == "Need access"
@@ -122,7 +122,7 @@ async def test_enqueue_updates_ticket_status() -> None:
 
     result = await repository.enqueue(ticket_public_id=ticket.public_id)
 
-    assert cast(object, result) is ticket
+    assert result is ticket
     assert ticket.status == TicketStatus.QUEUED
     assert session.flush_count == 1
 
@@ -143,7 +143,7 @@ async def test_assign_queued_to_operator_only_updates_queued_tickets() -> None:
         operator_id=77,
     )
 
-    assert cast(object, result) is None
+    assert result is None
     assert ticket.status == TicketStatus.ASSIGNED
     assert session.flush_count == 0
 
@@ -163,7 +163,7 @@ async def test_assign_to_operator_updates_ticket_status() -> None:
         operator_id=77,
     )
 
-    assert cast(object, result) is ticket
+    assert result is ticket
     assert ticket.assigned_operator_id == 77
     assert ticket.status == TicketStatus.ASSIGNED
     assert session.flush_count == 1
@@ -181,7 +181,7 @@ async def test_escalate_updates_ticket_status() -> None:
 
     result = await repository.escalate(ticket_public_id=ticket.public_id)
 
-    assert cast(object, result) is ticket
+    assert result is ticket
     assert ticket.status == TicketStatus.ESCALATED
     assert session.flush_count == 1
 
@@ -198,7 +198,7 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
 
     result = await repository.close(ticket_public_id=ticket.public_id)
 
-    assert cast(object, result) is ticket
+    assert result is ticket
     assert ticket.status == TicketStatus.CLOSED
     assert ticket.closed_at is not None
     assert session.flush_count == 1
@@ -210,7 +210,7 @@ async def test_create_ticket_feedback_adds_feedback_to_session() -> None:
 
     feedback = await repository.create(ticket_id=7, client_chat_id=1001, rating=5)
 
-    assert session.added == [cast(object, feedback)]
+    assert session.added == [feedback]
     assert session.flush_count == 1
     assert feedback.ticket_id == 7
     assert feedback.client_chat_id == 1001
@@ -228,7 +228,7 @@ async def test_get_ticket_feedback_by_ticket_id_returns_record() -> None:
 
     result = await repository.get_by_ticket_id(ticket_id=7)
 
-    assert cast(object, result) is feedback
+    assert result is feedback
 
 
 async def test_update_ticket_feedback_comment_persists_comment() -> None:
@@ -242,7 +242,7 @@ async def test_update_ticket_feedback_comment_persists_comment() -> None:
 
     result = await repository.update_comment(ticket_id=7, comment="Спасибо")
 
-    assert cast(object, result) is feedback
+    assert result is feedback
     assert feedback.comment == "Спасибо"
     assert session.flush_count == 1
 
@@ -594,7 +594,7 @@ async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:
 
     result = await repository.get_next_queued_ticket()
 
-    assert cast(object, result) is first_ticket
+    assert result is first_ticket
 
 
 async def test_list_queued_tickets_returns_ordered_sequence() -> None:
@@ -634,7 +634,7 @@ async def test_list_open_tickets_returns_only_non_closed_items() -> None:
     result = await repository.list_open_tickets(limit=5)
 
     assert len(result) == 1
-    assert cast(object, result[0]) is open_ticket
+    assert result[0] is open_ticket
 
 
 async def test_ticket_message_repository_allocates_negative_internal_ids() -> None:
@@ -660,7 +660,9 @@ async def test_ticket_event_repository_persists_event_rows() -> None:
     )
 
     assert len(session.added) == 1
-    event = cast(TicketEvent, session.added[0])
+    event_record = session.added[0]
+    assert isinstance(event_record, TicketEvent)
+    event = event_record
     assert event.ticket_id == 10
     assert event.event_type == TicketEventType.QUEUED
     assert event.payload_json == {"from_status": "new", "to_status": "queued"}

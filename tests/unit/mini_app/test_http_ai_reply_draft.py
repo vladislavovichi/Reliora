@@ -4,7 +4,7 @@ import asyncio
 from http import HTTPStatus
 from pathlib import Path
 from types import MethodType
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -118,7 +118,7 @@ def _build_handler(*, gateway: StubGateway, static_dir: Path) -> Any:
         bot_token="123:ABC",
         static_dir=static_dir,
     )
-    handler = cast(Any, object.__new__(handler_cls))
+    handler: Any = object.__new__(handler_cls)
 
     def write_json(self: Any, status: HTTPStatus, payload: dict[str, object]) -> None:
         self.captured_status = status

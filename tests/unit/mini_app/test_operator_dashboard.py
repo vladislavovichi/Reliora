@@ -1,25 +1,26 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from types import MethodType
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
+
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.contracts.actors import RequestActor
 from application.services.stats import AnalyticsWindow, HelpdeskAnalyticsSnapshot
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
     TicketMessageSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketMessageSenderType, TicketSentiment, TicketStatus
 from infrastructure.config.settings import MiniAppConfig
@@ -165,7 +166,7 @@ def test_operator_dashboard_route_authorization(tmp_path: Path) -> None:
     assert handler.captured_payload["buckets"] == {}
 
 
-class StubDashboardBackendClient:
+class StubDashboardBackendClient(FakeHelpdeskBackendClient):
     def __init__(
         self,
         *,
@@ -209,7 +210,7 @@ class StubDashboardBackendClient:
         self,
         *,
         actor: RequestActor | None = None,
-    ) -> tuple[Any, ...]:
+    ) -> tuple[HistoricalTicketSummary, ...]:
         del actor
         return ()
 
@@ -234,11 +235,7 @@ class StubGateway:
 
 
 def _backend_factory(client: StubDashboardBackendClient) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, client)
-
-    return provide
+    return build_backend_client_factory(client)
 
 
 def _queued_ticket(
@@ -370,7 +367,7 @@ def _build_handler(*, gateway: StubGateway, static_dir: Path) -> Any:
         bot_token="123:ABC",
         static_dir=static_dir,
     )
-    handler = cast(Any, object.__new__(handler_cls))
+    handler: Any = object.__new__(handler_cls)
 
     def write_json(self: Any, status: HTTPStatus, payload: dict[str, object]) -> None:
         self.captured_status = status

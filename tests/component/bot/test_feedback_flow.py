@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
-from aiogram.types import CallbackQuery, Chat, Message, User
-
+from application.contracts.actors import RequestActor
 from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     TicketFeedbackMutationResult,
     TicketFeedbackMutationStatus,
     TicketFeedbackSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.feedback import (
     handle_ticket_feedback_comment,
     handle_ticket_feedback_comment_prompt,
@@ -32,14 +28,81 @@ from bot.texts.feedback import (
     TICKET_FEEDBACK_THANK_YOU_TEXT,
 )
 from domain.enums.tickets import TicketStatus
+from tests.support.aiogram import (
+    CallbackHarness,
+    build_callback_harness,
+    build_message_harness,
+)
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class FeedbackBackendClient(FakeHelpdeskBackendClient):
+    def __init__(
+        self,
+        *,
+        feedback_result: TicketFeedbackMutationResult | None = None,
+        feedback: TicketFeedbackSummary | None = None,
+        ticket_details: TicketDetailsSummary | None = None,
+    ) -> None:
+        self._feedback_result = feedback_result
+        self._feedback = feedback
+        self._ticket_details = ticket_details
+        self.submit_ticket_feedback_rating_mock = AsyncMock()
+        self.get_ticket_feedback_mock = AsyncMock()
+        self.get_ticket_details_mock = AsyncMock()
+        self.add_ticket_feedback_comment_mock = AsyncMock()
 
-    return provide
+    async def submit_ticket_feedback_rating(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        rating: int,
+    ) -> TicketFeedbackMutationResult:
+        await self.submit_ticket_feedback_rating_mock(
+            ticket_public_id=ticket_public_id,
+            client_chat_id=client_chat_id,
+            rating=rating,
+        )
+        assert self._feedback_result is not None
+        return self._feedback_result
+
+    async def get_ticket_feedback(self, *, ticket_public_id: UUID) -> TicketFeedbackSummary | None:
+        await self.get_ticket_feedback_mock(ticket_public_id=ticket_public_id)
+        return self._feedback
+
+    async def get_ticket_details(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketDetailsSummary | None:
+        await self.get_ticket_details_mock(
+            ticket_public_id=ticket_public_id,
+            actor=actor,
+        )
+        return self._ticket_details
+
+    async def add_ticket_feedback_comment(
+        self,
+        *,
+        ticket_public_id: UUID,
+        client_chat_id: int,
+        comment: str,
+    ) -> TicketFeedbackMutationResult:
+        await self.add_ticket_feedback_comment_mock(
+            ticket_public_id=ticket_public_id,
+            client_chat_id=client_chat_id,
+            comment=comment,
+        )
+        assert self._feedback_result is not None
+        return self._feedback_result
+
+
+def build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
 
 
 def build_feedback_callback(
@@ -47,27 +110,13 @@ def build_feedback_callback(
     ticket_public_id: str,
     action: str,
     rating: int = 0,
-) -> CallbackQuery:
-    message = Message.model_construct(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=2002, type="private"),
-        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
-        text="stub",
-    )
-    object.__setattr__(message, "answer", AsyncMock())
-    object.__setattr__(message, "edit_reply_markup", AsyncMock())
-    object.__setattr__(message, "edit_text", AsyncMock())
-
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
-        chat_instance="chat-instance",
+) -> CallbackHarness:
+    return build_callback_harness(
+        user_id=2002,
         data=f"client_feedback:{action}:{ticket_public_id}:{rating}",
-        message=message,
+        with_edit_reply_markup=True,
+        with_edit_text=True,
     )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
 
 
 def build_ticket_details(*, public_id: UUID) -> TicketDetailsSummary:
@@ -105,25 +154,6 @@ def build_feedback_summary(
     )
 
 
-def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    return cast(AsyncMock, callback.answer)
-
-
-def message_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.answer)
-
-
-def message_edit_reply_markup_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.edit_reply_markup)
-
-
-def message_edit_text_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.edit_text)
-
-
 async def test_handle_ticket_feedback_rating_saves_rating_and_offers_comment() -> None:
     ticket_public_id = uuid4()
     callback = build_feedback_callback(
@@ -132,34 +162,33 @@ async def test_handle_ticket_feedback_rating_saves_rating_and_offers_comment() -
         rating=5,
     )
     feedback = build_feedback_summary(public_id=ticket_public_id, rating=5)
-    service = SimpleNamespace(
-        submit_ticket_feedback_rating=AsyncMock(
-            return_value=TicketFeedbackMutationResult(
-                status=TicketFeedbackMutationStatus.CREATED,
-                feedback=feedback,
-            )
+    service = FeedbackBackendClient(
+        feedback_result=TicketFeedbackMutationResult(
+            status=TicketFeedbackMutationStatus.CREATED,
+            feedback=feedback,
         )
     )
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
 
     await handle_ticket_feedback_rating(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id), rating=5),
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
-    service.submit_ticket_feedback_rating.assert_awaited_once_with(
+    service.submit_ticket_feedback_rating_mock.assert_awaited_once_with(
         ticket_public_id=ticket_public_id,
         client_chat_id=2002,
         rating=5,
     )
-    message_edit_reply_markup_mock(callback).assert_awaited_once_with(reply_markup=None)
-    message_answer_mock(callback).assert_awaited_once_with(
+    assert callback.message.edit_reply_markup is not None
+    callback.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+    callback.message.answer.assert_awaited_once_with(
         TICKET_FEEDBACK_THANK_YOU_TEXT,
         reply_markup=build_ticket_feedback_comment_markup(ticket_public_id=ticket_public_id),
     )
-    callback_answer_mock(callback).assert_awaited_once_with()
+    callback.answer.assert_awaited_once_with()
 
 
 async def test_handle_ticket_feedback_comment_prompt_sets_state_and_edits_message() -> None:
@@ -167,15 +196,12 @@ async def test_handle_ticket_feedback_comment_prompt_sets_state_and_edits_messag
     callback = build_feedback_callback(ticket_public_id=str(ticket_public_id), action="comment")
     feedback = build_feedback_summary(public_id=ticket_public_id, rating=5)
     ticket_details = build_ticket_details(public_id=ticket_public_id)
-    service = SimpleNamespace(
-        get_ticket_feedback=AsyncMock(return_value=feedback),
-        get_ticket_details=AsyncMock(return_value=ticket_details),
-    )
+    service = FeedbackBackendClient(feedback=feedback, ticket_details=ticket_details)
     state = SimpleNamespace(set_state=AsyncMock(), set_data=AsyncMock())
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
 
     await handle_ticket_feedback_comment_prompt(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         state=state,
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
@@ -184,11 +210,12 @@ async def test_handle_ticket_feedback_comment_prompt_sets_state_and_edits_messag
 
     state.set_state.assert_awaited_once_with(UserFeedbackStates.writing_comment)
     state.set_data.assert_awaited_once_with({"ticket_public_id": str(ticket_public_id)})
-    message_edit_text_mock(callback).assert_awaited_once_with(
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once_with(
         TICKET_FEEDBACK_COMMENT_PROMPT_TEXT,
         reply_markup=None,
     )
-    callback_answer_mock(callback).assert_awaited_once_with()
+    callback.answer.assert_awaited_once_with()
 
 
 async def test_handle_ticket_feedback_skip_closes_prompt_cleanly() -> None:
@@ -196,47 +223,40 @@ async def test_handle_ticket_feedback_skip_closes_prompt_cleanly() -> None:
     callback = build_feedback_callback(ticket_public_id=str(ticket_public_id), action="skip")
     feedback = build_feedback_summary(public_id=ticket_public_id, rating=5)
     ticket_details = build_ticket_details(public_id=ticket_public_id)
-    service = SimpleNamespace(
-        get_ticket_feedback=AsyncMock(return_value=feedback),
-        get_ticket_details=AsyncMock(return_value=ticket_details),
-    )
+    service = FeedbackBackendClient(feedback=feedback, ticket_details=ticket_details)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
 
     await handle_ticket_feedback_skip(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
-    message_edit_text_mock(callback).assert_awaited_once_with(
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once_with(
         TICKET_FEEDBACK_SKIPPED_TEXT,
         reply_markup=None,
     )
-    callback_answer_mock(callback).assert_awaited_once_with()
+    callback.answer.assert_awaited_once_with()
 
 
 async def test_handle_ticket_feedback_comment_persists_comment_and_clears_state() -> None:
     ticket_public_id = uuid4()
-    message = Message.model_construct(
+    message = build_message_harness(
+        user_id=2002,
         message_id=7,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=2002, type="private"),
-        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
         text="Спасибо за помощь",
     )
-    object.__setattr__(message, "answer", AsyncMock())
 
-    service = SimpleNamespace(
-        add_ticket_feedback_comment=AsyncMock(
-            return_value=TicketFeedbackMutationResult(
-                status=TicketFeedbackMutationStatus.UPDATED,
-                feedback=build_feedback_summary(
-                    public_id=ticket_public_id,
-                    rating=5,
-                    comment="Спасибо за помощь",
-                ),
-            )
+    service = FeedbackBackendClient(
+        feedback_result=TicketFeedbackMutationResult(
+            status=TicketFeedbackMutationStatus.UPDATED,
+            feedback=build_feedback_summary(
+                public_id=ticket_public_id,
+                rating=5,
+                comment="Спасибо за помощь",
+            ),
         )
     )
     state = SimpleNamespace(
@@ -247,17 +267,17 @@ async def test_handle_ticket_feedback_comment_persists_comment_and_clears_state(
     chat_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
 
     await handle_ticket_feedback_comment(
-        message=message,
+        message=message.message,
         state=state,
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         chat_rate_limiter=chat_rate_limiter,
     )
 
-    service.add_ticket_feedback_comment.assert_awaited_once_with(
+    service.add_ticket_feedback_comment_mock.assert_awaited_once_with(
         ticket_public_id=ticket_public_id,
         client_chat_id=2002,
         comment="Спасибо за помощь",
     )
     state.clear.assert_awaited_once_with()
-    cast(AsyncMock, message.answer).assert_awaited_once_with(TICKET_FEEDBACK_COMMENT_SAVED_TEXT)
+    message.answer.assert_awaited_once_with(TICKET_FEEDBACK_COMMENT_SAVED_TEXT)

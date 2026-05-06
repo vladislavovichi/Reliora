@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, Chat, Message, User
 
+from application.contracts.actors import RequestActor
 from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.client import (
     handle_finish_ticket_confirm,
     handle_finish_ticket_prompt,
@@ -25,36 +23,66 @@ from bot.texts.client import (
 from bot.texts.feedback import build_ticket_closed_with_feedback_text
 from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
+from tests.support.aiogram import CallbackHarness, build_callback_harness
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class FinishTicketBackendClient(FakeHelpdeskBackendClient):
+    def __init__(
+        self,
+        *,
+        ticket_details: TicketDetailsSummary | Sequence[TicketDetailsSummary | None] | None = None,
+        close_ticket_result: TicketSummary | None = None,
+        close_ticket_error: Exception | None = None,
+    ) -> None:
+        self._ticket_details = (
+            list(ticket_details)
+            if isinstance(ticket_details, Sequence) and not isinstance(ticket_details, str)
+            else ticket_details
+        )
+        self._close_ticket_result = close_ticket_result
+        self._close_ticket_error = close_ticket_error
+        self.get_ticket_details_mock = AsyncMock()
+        self.close_ticket_mock = AsyncMock()
 
-    return provide
+    async def get_ticket_details(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketDetailsSummary | None:
+        await self.get_ticket_details_mock(
+            ticket_public_id=ticket_public_id,
+            actor=actor,
+        )
+        if isinstance(self._ticket_details, list):
+            return self._ticket_details.pop(0)
+        return self._ticket_details
+
+    async def close_ticket(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketSummary | None:
+        await self.close_ticket_mock(ticket_public_id=ticket_public_id, actor=actor)
+        if self._close_ticket_error is not None:
+            raise self._close_ticket_error
+        return self._close_ticket_result
 
 
-def build_callback(*, ticket_public_id: str) -> CallbackQuery:
-    message = Message.model_construct(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=2002, type="private"),
-        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
-        text="stub",
-    )
-    object.__setattr__(message, "answer", AsyncMock())
-    object.__setattr__(message, "edit_reply_markup", AsyncMock())
+def build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
 
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(id=2002, is_bot=False, first_name="Client"),
-        chat_instance="chat-instance",
+
+def build_callback(*, ticket_public_id: str) -> CallbackHarness:
+    return build_callback_harness(
+        user_id=2002,
         data=f"client_ticket:finish:{ticket_public_id}",
-        message=message,
+        with_edit_reply_markup=True,
     )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
 
 
 def build_ticket_details(*, public_id: UUID, status: TicketStatus) -> TicketDetailsSummary:
@@ -76,38 +104,25 @@ def build_ticket_details(*, public_id: UUID, status: TicketStatus) -> TicketDeta
     )
 
 
-def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    return cast(AsyncMock, callback.answer)
-
-
-def message_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.answer)
-
-
-def message_edit_reply_markup_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.edit_reply_markup)
-
-
 async def test_finish_ticket_prompt_uses_domain_stale_text_for_missing_ticket() -> None:
     ticket_public_id = str(uuid4())
     callback = build_callback(ticket_public_id=ticket_public_id)
-    service = SimpleNamespace(get_ticket_details=AsyncMock(return_value=None))
+    service = FinishTicketBackendClient(ticket_details=None)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
 
     await handle_finish_ticket_prompt(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=ticket_public_id),
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
-    callback_answer_mock(callback).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         FINISH_TICKET_STALE_TEXT,
         show_alert=True,
     )
-    message_edit_reply_markup_mock(callback).assert_not_awaited()
+    assert callback.message.edit_reply_markup is not None
+    callback.message.edit_reply_markup.assert_not_awaited()
 
 
 async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() -> None:
@@ -120,9 +135,9 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
         status=TicketStatus.CLOSED,
     )
 
-    service = SimpleNamespace(
-        get_ticket_details=AsyncMock(return_value=ticket_details),
-        close_ticket=AsyncMock(return_value=closed_ticket),
+    service = FinishTicketBackendClient(
+        ticket_details=ticket_details,
+        close_ticket_result=closed_ticket,
     )
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_active_ticket_store = SimpleNamespace(clear_if_matches=AsyncMock())
@@ -133,7 +148,7 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
     bot.send_message = AsyncMock()
 
     await handle_finish_ticket_confirm(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         bot=bot,
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
@@ -151,12 +166,13 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
         ticket_public_id=str(ticket_public_id),
     )
     bot.send_message.assert_awaited_once()
-    message_edit_reply_markup_mock(callback).assert_awaited_once_with(reply_markup=None)
-    message_answer_mock(callback).assert_awaited_once_with(
+    assert callback.message.edit_reply_markup is not None
+    callback.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+    callback.message.answer.assert_awaited_once_with(
         build_ticket_closed_with_feedback_text(ticket_details.public_number),
         reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket_public_id),
     )
-    callback_answer_mock(callback).assert_awaited_once_with()
+    callback.answer.assert_awaited_once_with()
     lock.release.assert_awaited_once_with()
 
 
@@ -172,9 +188,9 @@ async def test_finish_ticket_confirm_returns_closed_message_after_race() -> None
         status=TicketStatus.CLOSED,
     )
 
-    service = SimpleNamespace(
-        get_ticket_details=AsyncMock(side_effect=[open_ticket_details, closed_ticket_details]),
-        close_ticket=AsyncMock(side_effect=InvalidTicketTransitionError("already closed")),
+    service = FinishTicketBackendClient(
+        ticket_details=[open_ticket_details, closed_ticket_details],
+        close_ticket_error=InvalidTicketTransitionError("already closed"),
     )
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_active_ticket_store = SimpleNamespace(clear_if_matches=AsyncMock())
@@ -185,7 +201,7 @@ async def test_finish_ticket_confirm_returns_closed_message_after_race() -> None
     bot.send_message = AsyncMock()
 
     await handle_finish_ticket_confirm(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         bot=bot,
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
@@ -195,13 +211,13 @@ async def test_finish_ticket_confirm_returns_closed_message_after_race() -> None
         ticket_lock_manager=ticket_lock_manager,
     )
 
-    callback_answer_mock(callback).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         build_ticket_already_closed_text(closed_ticket_details.public_number),
         show_alert=True,
     )
     ticket_live_session_store.delete_session.assert_not_called()
     operator_active_ticket_store.clear_if_matches.assert_not_called()
-    message_answer_mock(callback).assert_not_awaited()
+    callback.message.answer.assert_not_awaited()
     lock.release.assert_awaited_once_with()
 
 
@@ -209,21 +225,22 @@ async def test_finish_ticket_prompt_uses_domain_stale_text_when_markup_is_outdat
     ticket_public_id = uuid4()
     callback = build_callback(ticket_public_id=str(ticket_public_id))
     ticket_details = build_ticket_details(public_id=ticket_public_id, status=TicketStatus.ASSIGNED)
-    service = SimpleNamespace(get_ticket_details=AsyncMock(return_value=ticket_details))
+    service = FinishTicketBackendClient(ticket_details=ticket_details)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
-    message_edit_reply_markup_mock(callback).side_effect = TelegramBadRequest(
+    assert callback.message.edit_reply_markup is not None
+    callback.message.edit_reply_markup.side_effect = TelegramBadRequest(
         method=Mock(),
         message="message is not modified",
     )
 
     await handle_finish_ticket_prompt(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
     )
 
-    callback_answer_mock(callback).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         FINISH_TICKET_STALE_TEXT,
         show_alert=True,
     )

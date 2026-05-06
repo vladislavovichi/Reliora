@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from types import MethodType
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 import pytest
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.ai.summaries import TicketAssistSnapshot, TicketReplyDraft, TicketSummaryStatus
 from application.contracts.actors import RequestActor
 from application.errors import ForbiddenError
 from application.use_cases.ai.settings import InMemoryAISettingsRepository, RuntimeAISettings
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
@@ -161,7 +160,7 @@ class StubAISettingsGateway:
         return {"settings": {"ai_reply_drafts_enabled": False}}
 
 
-class StubAIBackendClient:
+class StubAIBackendClient(FakeHelpdeskBackendClient):
     def __init__(self) -> None:
         self.reply_draft_calls: list[tuple[UUID, RequestActor | None]] = []
         self.snapshot_calls: list[tuple[UUID, bool, RequestActor | None]] = []
@@ -197,11 +196,7 @@ class StubAIBackendClient:
 
 
 def _backend_factory(client: StubAIBackendClient) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, client)
-
-    return provide
+    return build_backend_client_factory(client)
 
 
 def _build_handler(*, gateway: StubAISettingsGateway, static_dir: Path) -> Any:
@@ -211,7 +206,7 @@ def _build_handler(*, gateway: StubAISettingsGateway, static_dir: Path) -> Any:
         bot_token="123:ABC",
         static_dir=static_dir,
     )
-    handler = cast(Any, object.__new__(handler_cls))
+    handler: Any = object.__new__(handler_cls)
 
     def write_json(self: Any, status: HTTPStatus, payload: dict[str, object]) -> None:
         self.captured_status = status

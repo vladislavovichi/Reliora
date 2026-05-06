@@ -1,45 +1,79 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import ANY, AsyncMock, Mock
 
-from aiogram.types import Chat, Message, User
-
 from application.ai.summaries import AIPredictionConfidence, TicketCategoryPrediction
+from application.contracts.actors import RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.use_cases.tickets.summaries import TicketCategorySummary
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.cancellation import handle_user_cancel
 from bot.handlers.user.client import handle_client_text
 from bot.handlers.user.intake_context import ClientIntakeContext, TicketRuntimeContext
 from bot.handlers.user.states import UserFeedbackStates
 from bot.texts.feedback import TICKET_FEEDBACK_COMMENT_CANCELLED_TEXT
+from tests.support.aiogram import MessageHarness, build_message_harness
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class AIIntakeBackendClient(FakeHelpdeskBackendClient):
+    def __init__(self, prediction: TicketCategoryPrediction) -> None:
+        self.predict_ticket_category_mock = AsyncMock()
+        self._prediction = prediction
 
-    return provide
+    async def get_client_active_ticket(self, *, client_chat_id: int) -> None:
+        del client_chat_id
+        return None
+
+    async def list_client_ticket_categories(self) -> list[TicketCategorySummary]:
+        return [
+            TicketCategorySummary(
+                id=1,
+                code="access",
+                title="Доступ и вход",
+                is_active=True,
+                sort_order=10,
+            ),
+            TicketCategorySummary(
+                id=2,
+                code="billing",
+                title="Оплата и баланс",
+                is_active=True,
+                sort_order=20,
+            ),
+        ]
+
+    async def predict_ticket_category(
+        self,
+        command: PredictTicketCategoryCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketCategoryPrediction:
+        await self.predict_ticket_category_mock(command, actor=actor)
+        return self._prediction
 
 
-def build_message(*, text: str, chat_id: int = 2002, message_id: int = 15) -> Message:
-    message = Message.model_construct(
+def build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
+
+
+def build_message(
+    *,
+    text: str,
+    chat_id: int = 2002,
+    message_id: int = 15,
+) -> MessageHarness:
+    return build_message_harness(
+        user_id=chat_id,
         message_id=message_id,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=chat_id, type="private"),
-        from_user=User.model_construct(id=chat_id, is_bot=False, first_name="Client"),
         text=text,
     )
-    object.__setattr__(message, "answer", AsyncMock())
-    return message
 
 
-def build_client_intake_context(service: object) -> ClientIntakeContext:
+def build_client_intake_context(service: FakeHelpdeskBackendClient) -> ClientIntakeContext:
     return ClientIntakeContext(
         ticket_runtime=TicketRuntimeContext(
             helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
@@ -56,48 +90,27 @@ def build_client_intake_context(service: object) -> ClientIntakeContext:
 async def test_client_intake_uses_category_prediction_when_available() -> None:
     message = build_message(text="Не могу войти после смены пароля")
     state = SimpleNamespace(set_state=AsyncMock(), set_data=AsyncMock())
-    service = SimpleNamespace(
-        get_client_active_ticket=AsyncMock(return_value=None),
-        list_client_ticket_categories=AsyncMock(
-            return_value=[
-                TicketCategorySummary(
-                    id=1,
-                    code="access",
-                    title="Доступ и вход",
-                    is_active=True,
-                    sort_order=10,
-                ),
-                TicketCategorySummary(
-                    id=2,
-                    code="billing",
-                    title="Оплата и баланс",
-                    is_active=True,
-                    sort_order=20,
-                ),
-            ]
-        ),
-        predict_ticket_category=AsyncMock(
-            return_value=TicketCategoryPrediction(
-                available=True,
-                category_id=1,
-                category_code="access",
-                category_title="Доступ и вход",
-                confidence=AIPredictionConfidence.HIGH,
-                reason="Текст явно про восстановление доступа.",
-                model_id="Qwen/Qwen3.5-4B",
-            )
-        ),
+    service = AIIntakeBackendClient(
+        TicketCategoryPrediction(
+            available=True,
+            category_id=1,
+            category_code="access",
+            category_title="Доступ и вход",
+            confidence=AIPredictionConfidence.HIGH,
+            reason="Текст явно про восстановление доступа.",
+            model_id="Qwen/Qwen3.5-4B",
+        )
     )
 
     await handle_client_text(
-        message=message,
+        message=message.message,
         state=state,
         bot=Mock(),
         client_intake_context=build_client_intake_context(service),
     )
 
-    service.predict_ticket_category.assert_awaited_once()
-    cast(AsyncMock, message.answer).assert_awaited_once_with(
+    service.predict_ticket_category_mock.assert_awaited_once()
+    message.answer.assert_awaited_once_with(
         "Похоже, подойдёт тема «Доступ и вход».\n"
         "Почему так: Текст явно про восстановление доступа.\n"
         "Подтвердите вариант или выберите другую тему.",
@@ -115,12 +128,12 @@ async def test_user_cancel_clears_feedback_state() -> None:
         clear=AsyncMock(),
     )
 
-    await handle_user_cancel(message=message, state=state)
+    await handle_user_cancel(message=message.message, state=state)
 
     state.set_data.assert_awaited_once_with({})
     state.set_state.assert_awaited_once_with(None)
     state.clear.assert_awaited_once_with()
-    cast(AsyncMock, message.answer).assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(
         TICKET_FEEDBACK_COMMENT_CANCELLED_TEXT,
         reply_markup=ANY,
     )

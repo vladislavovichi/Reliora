@@ -1,50 +1,50 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import ANY, AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from aiogram.types import CallbackQuery, Chat, Message, User
-
+from application.contracts.actors import RequestActor
 from application.use_cases.tickets.summaries import TicketDetailsSummary
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.operator.workflow_ticket_views import handle_back_from_more_action
 from bot.texts.operator import build_active_ticket_opened_text
 from domain.enums.tickets import TicketStatus
+from tests.support.aiogram import CallbackHarness, build_callback_harness
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def _build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class TicketDetailsBackendClient(FakeHelpdeskBackendClient):
+    def __init__(self, ticket_details: TicketDetailsSummary) -> None:
+        self._ticket_details = ticket_details
+        self.get_ticket_details_mock = AsyncMock()
 
-    return provide
+    async def get_ticket_details(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketDetailsSummary | None:
+        await self.get_ticket_details_mock(
+            ticket_public_id=ticket_public_id,
+            actor=actor,
+        )
+        return self._ticket_details
 
 
-def _build_callback(*, ticket_public_id: str) -> CallbackQuery:
-    message = Message.model_construct(
-        message_id=10,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=3001, type="private"),
-        from_user=User.model_construct(id=1001, is_bot=False, first_name="Operator"),
-        text="stub",
-    )
-    object.__setattr__(message, "answer", AsyncMock())
-    object.__setattr__(message, "edit_text", AsyncMock())
+def _build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
 
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(id=1001, is_bot=False, first_name="Operator"),
-        chat_instance="chat-instance",
+
+def _build_callback(*, ticket_public_id: str) -> CallbackHarness:
+    return build_callback_harness(
+        user_id=1001,
         data=f"operator:back:{ticket_public_id}",
-        message=message,
+        with_edit_text=True,
     )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
 
 
 async def test_back_from_more_action_returns_to_current_ticket_surface() -> None:
@@ -66,7 +66,7 @@ async def test_back_from_more_action_returns_to_current_ticket_surface() -> None
         last_message_sender_type=None,
         message_history=(),
     )
-    service = SimpleNamespace(get_ticket_details=AsyncMock(return_value=ticket_details))
+    service = TicketDetailsBackendClient(ticket_details)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_presence = SimpleNamespace(touch=AsyncMock())
     operator_active_ticket_store = SimpleNamespace(
@@ -76,7 +76,7 @@ async def test_back_from_more_action_returns_to_current_ticket_surface() -> None
     ticket_live_session_store = SimpleNamespace(refresh_session=AsyncMock())
 
     await handle_back_from_more_action(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(ticket_public_id=str(ticket_public_id)),
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
@@ -85,22 +85,9 @@ async def test_back_from_more_action_returns_to_current_ticket_surface() -> None
         ticket_live_session_store=ticket_live_session_store,
     )
 
-    callback_answer_mock(callback).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         build_active_ticket_opened_text(ticket_details.public_number)
     )
-    message_edit_text_mock(callback).assert_awaited_once_with(ANY, reply_markup=ANY)
-    message_answer_mock(callback).assert_not_awaited()
-
-
-def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    return cast(AsyncMock, callback.answer)
-
-
-def message_edit_text_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.edit_text)
-
-
-def message_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    assert isinstance(callback.message, Message)
-    return cast(AsyncMock, callback.message.answer)
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once_with(ANY, reply_markup=ANY)
+    callback.message.answer.assert_not_awaited()

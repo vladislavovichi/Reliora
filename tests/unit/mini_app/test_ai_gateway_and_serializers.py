@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import cast
 from uuid import UUID, uuid4
+
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.ai.summaries import (
     AIPredictionConfidence,
@@ -14,13 +13,13 @@ from application.ai.summaries import (
     TicketSummaryStatus,
 )
 from application.contracts.actors import RequestActor
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from mini_app.api import MiniAppAIRateLimiter, MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.serializers import serialize_ticket_ai_snapshot, serialize_ticket_reply_draft
 
 
-class StubBackendClient:
+class StubBackendClient(FakeHelpdeskBackendClient):
     def __init__(
         self,
         snapshot: TicketAssistSnapshot,
@@ -52,11 +51,7 @@ class StubBackendClient:
 
 
 def build_backend_factory(client: StubBackendClient) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, client)
-
-    return provide
+    return build_backend_client_factory(client)
 
 
 async def test_gateway_refresh_ticket_ai_summary_requests_forced_summary_refresh() -> None:

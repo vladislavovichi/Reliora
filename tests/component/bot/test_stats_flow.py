@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import ANY, AsyncMock, Mock
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Chat, Message, User
 
 from application.contracts.actors import RequestActor
 from application.services.stats import (
@@ -26,7 +21,7 @@ from application.use_cases.analytics.exports import (
     AnalyticsSnapshotExport,
     get_analytics_section_label,
 )
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.operator.stats import (
     handle_stats,
     handle_stats_export_file,
@@ -38,60 +33,110 @@ from bot.texts.operator import (
     build_analytics_export_ready_text,
     build_analytics_opened_text,
 )
+from tests.support.aiogram import (
+    CallbackHarness,
+    MessageHarness,
+    build_callback_harness,
+    build_message_harness,
+)
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def _build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class StatsBackendClient(FakeHelpdeskBackendClient):
+    def __init__(
+        self,
+        *,
+        snapshot: HelpdeskAnalyticsSnapshot | None = None,
+        export: AnalyticsSnapshotExport | None = None,
+    ) -> None:
+        self._snapshot = snapshot
+        self._export = export
+        self.get_analytics_snapshot_mock = AsyncMock()
+        self.export_analytics_snapshot_mock = AsyncMock()
 
-    return provide
+    async def get_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        actor: RequestActor | None = None,
+    ) -> HelpdeskAnalyticsSnapshot:
+        await self.get_analytics_snapshot_mock(window=window, actor=actor)
+        assert self._snapshot is not None
+        return self._snapshot
+
+    async def export_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        section: AnalyticsSection,
+        format: AnalyticsExportFormat,
+        actor: RequestActor | None = None,
+    ) -> AnalyticsSnapshotExport:
+        await self.export_analytics_snapshot_mock(
+            window=window,
+            section=section,
+            format=format,
+            actor=actor,
+        )
+        assert self._export is not None
+        return self._export
 
 
-def _build_message() -> Message:
-    message = Message.model_construct(
+class FakeFSMContext(FSMContext):
+    def __init__(self) -> None:
+        self.clear_mock = AsyncMock()
+
+    async def clear(self) -> None:
+        await self.clear_mock()
+
+
+def _build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
+
+
+def _build_message() -> MessageHarness:
+    return build_message_harness(
+        user_id=1001,
+        chat_id=3001,
         message_id=10,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=3001, type="private"),
-        from_user=User.model_construct(id=1001, is_bot=False, first_name="Operator"),
         text="Статистика",
     )
-    object.__setattr__(message, "answer", AsyncMock())
-    return message
 
 
-def _build_callback() -> CallbackQuery:
-    message = _build_message()
-    object.__setattr__(message, "edit_text", AsyncMock())
-    callback = CallbackQuery.model_construct(
-        id="callback-id",
-        from_user=User.model_construct(id=1001, is_bot=False, first_name="Operator"),
-        chat_instance="chat-instance",
+def _build_callback() -> CallbackHarness:
+    return build_callback_harness(
+        user_id=1001,
         data="operator_stats:operators:7d",
-        message=message,
+        message=build_message_harness(
+            user_id=1001,
+            chat_id=3001,
+            message_id=10,
+            text="Статистика",
+            with_edit_text=True,
+        ),
     )
-    object.__setattr__(callback, "answer", AsyncMock())
-    return callback
 
 
 async def test_handle_stats_sends_overview_surface() -> None:
     message = _build_message()
-    state = cast(FSMContext, SimpleNamespace(clear=AsyncMock()))
+    state = FakeFSMContext()
     snapshot = _build_snapshot()
-    service = SimpleNamespace(get_analytics_snapshot=AsyncMock(return_value=snapshot))
+    service = StatsBackendClient(snapshot=snapshot)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_presence = SimpleNamespace(touch=AsyncMock())
 
     await handle_stats(
-        message=message,
+        message=message.message,
         state=state,
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )
 
-    cast(AsyncMock, message.answer).assert_awaited_once_with(ANY, reply_markup=ANY)
-    service.get_analytics_snapshot.assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(ANY, reply_markup=ANY)
+    service.get_analytics_snapshot_mock.assert_awaited_once_with(
         window=AnalyticsWindow.DAYS_7,
         actor=RequestActor(telegram_user_id=1001),
     )
@@ -100,45 +145,45 @@ async def test_handle_stats_sends_overview_surface() -> None:
 async def test_handle_stats_navigation_updates_surface() -> None:
     callback = _build_callback()
     snapshot = _build_snapshot()
-    service = SimpleNamespace(get_analytics_snapshot=AsyncMock(return_value=snapshot))
+    service = StatsBackendClient(snapshot=snapshot)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_presence = SimpleNamespace(touch=AsyncMock())
 
     await handle_stats_navigation(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(section="operators", window="7d"),
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )
 
-    cast(AsyncMock, callback.answer).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         build_analytics_opened_text(section="operators", window=AnalyticsWindow.DAYS_7)
     )
-    assert isinstance(callback.message, Message)
-    cast(AsyncMock, callback.message.edit_text).assert_awaited_once_with(ANY, reply_markup=ANY)
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once_with(ANY, reply_markup=ANY)
 
 
 async def test_handle_stats_export_menu_updates_surface() -> None:
     callback = _build_callback()
     snapshot = _build_snapshot()
-    service = SimpleNamespace(get_analytics_snapshot=AsyncMock(return_value=snapshot))
+    service = StatsBackendClient(snapshot=snapshot)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_presence = SimpleNamespace(touch=AsyncMock())
 
     await handle_stats_export_menu(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(action="open", section="operators", window="7d"),
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
         global_rate_limiter=global_rate_limiter,
         operator_presence=operator_presence,
     )
 
-    cast(AsyncMock, callback.answer).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         build_analytics_export_opened_text(section="operators", window=AnalyticsWindow.DAYS_7)
     )
-    assert isinstance(callback.message, Message)
-    cast(AsyncMock, callback.message.edit_text).assert_awaited_once_with(ANY, reply_markup=ANY)
+    assert callback.message.edit_text is not None
+    callback.message.edit_text.assert_awaited_once_with(ANY, reply_markup=ANY)
 
 
 async def test_handle_stats_export_file_delivers_document() -> None:
@@ -153,12 +198,12 @@ async def test_handle_stats_export_file_delivers_document() -> None:
         section=AnalyticsSection.OPERATORS,
         window=AnalyticsWindow.DAYS_7,
     )
-    service = SimpleNamespace(export_analytics_snapshot=AsyncMock(return_value=export))
+    service = StatsBackendClient(export=export)
     global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
     operator_presence = SimpleNamespace(touch=AsyncMock())
 
     await handle_stats_export_file(
-        callback=callback,
+        callback=callback.callback,
         callback_data=SimpleNamespace(action="csv", section="operators", window="7d"),
         bot=bot,
         helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
@@ -166,13 +211,13 @@ async def test_handle_stats_export_file_delivers_document() -> None:
         operator_presence=operator_presence,
     )
 
-    service.export_analytics_snapshot.assert_awaited_once_with(
+    service.export_analytics_snapshot_mock.assert_awaited_once_with(
         window=AnalyticsWindow.DAYS_7,
         section=AnalyticsSection.OPERATORS,
         format=AnalyticsExportFormat.CSV,
         actor=RequestActor(telegram_user_id=1001),
     )
-    cast(AsyncMock, callback.answer).assert_awaited_once_with(
+    callback.answer.assert_awaited_once_with(
         build_analytics_export_ready_text(section="operators", format_name="CSV")
     )
     _, kwargs = bot.send_document.await_args

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from application.contracts.actors import RequestActor
@@ -12,7 +12,7 @@ from application.use_cases.tickets.summaries import (
     QueuedTicketSummary,
     TicketDetailsSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from domain.enums.tickets import TicketStatus
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.gateway.common import build_actor
@@ -29,7 +29,7 @@ from mini_app.serializers import (
 
 async def load_dashboard_ticket_details(
     *,
-    client: Any,
+    client: HelpdeskBackendClient,
     actor: RequestActor,
     tickets: list[QueuedTicketSummary | OperatorTicketSummary],
 ) -> dict[UUID, TicketDetailsSummary]:
@@ -52,15 +52,12 @@ async def load_dashboard_ticket_details(
 
 async def safe_get_ticket_details(
     *,
-    client: Any,
+    client: HelpdeskBackendClient,
     actor: RequestActor,
     ticket_public_id: UUID,
 ) -> TicketDetailsSummary | None:
     try:
-        return cast(
-            TicketDetailsSummary | None,
-            await client.get_ticket_details(ticket_public_id=ticket_public_id, actor=actor),
-        )
+        return await client.get_ticket_details(ticket_public_id=ticket_public_id, actor=actor)
     except Exception:  # noqa: BLE001
         return None
 

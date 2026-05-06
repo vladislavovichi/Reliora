@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import ANY, AsyncMock, Mock
-from uuid import uuid4
-
-from aiogram.types import Chat, Message, User
+from uuid import UUID, uuid4
 
 from application.ai.summaries import TicketCategoryPrediction
+from application.contracts.actors import RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
+from application.contracts.tickets import ClientTicketMessageCommand
 from application.use_cases.tickets.summaries import (
     TicketCategorySummary,
     TicketDetailsSummary,
     TicketSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.client import handle_client_text
 from bot.handlers.user.intake_context import ClientIntakeContext, TicketRuntimeContext
 from bot.handlers.user.states import UserIntakeStates
@@ -26,29 +24,83 @@ from bot.texts.client import (
     build_ticket_message_recorded_text,
 )
 from domain.enums.tickets import TicketEventType, TicketStatus
+from tests.support.aiogram import MessageHarness, build_message_harness
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
-def build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield cast(HelpdeskBackendClient, service)
+class ClientIntakeBackendClient(FakeHelpdeskBackendClient):
+    def __init__(
+        self,
+        *,
+        active_ticket: TicketSummary | None = None,
+        created_ticket: TicketSummary | None = None,
+        ticket_details: TicketDetailsSummary | None = None,
+        prediction: TicketCategoryPrediction | None = None,
+    ) -> None:
+        self._active_ticket = active_ticket
+        self._created_ticket = created_ticket
+        self._ticket_details = ticket_details
+        self._prediction = prediction or TicketCategoryPrediction(available=False)
+        self.create_ticket_from_client_message_mock = AsyncMock()
 
-    return provide
+    async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
+        del client_chat_id
+        return self._active_ticket
+
+    async def list_client_ticket_categories(self) -> list[TicketCategorySummary]:
+        return [
+            TicketCategorySummary(
+                id=1,
+                code="access",
+                title="Доступ и вход",
+                is_active=True,
+                sort_order=10,
+            )
+        ]
+
+    async def predict_ticket_category(
+        self,
+        command: PredictTicketCategoryCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketCategoryPrediction:
+        del command, actor
+        return self._prediction
+
+    async def create_ticket_from_client_message(
+        self,
+        command: ClientTicketMessageCommand,
+    ) -> TicketSummary:
+        await self.create_ticket_from_client_message_mock(command)
+        assert self._created_ticket is not None
+        return self._created_ticket
+
+    async def get_ticket_details(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketDetailsSummary | None:
+        del ticket_public_id, actor
+        return self._ticket_details
 
 
-def build_message(*, text: str, chat_id: int = 2002, message_id: int = 15) -> Message:
-    message = Message.model_construct(
-        message_id=message_id,
-        date=datetime.now(UTC),
-        chat=Chat.model_construct(id=chat_id, type="private"),
-        from_user=User.model_construct(id=chat_id, is_bot=False, first_name="Client"),
-        text=text,
-    )
-    object.__setattr__(message, "answer", AsyncMock())
-    return message
+def build_helpdesk_backend_client_factory(
+    service: FakeHelpdeskBackendClient,
+) -> HelpdeskBackendClientFactory:
+    return build_backend_client_factory(service)
 
 
-def build_client_intake_context(service: object) -> ClientIntakeContext:
+def build_message(
+    *,
+    text: str,
+    chat_id: int = 2002,
+    message_id: int = 15,
+) -> MessageHarness:
+    return build_message_harness(user_id=chat_id, message_id=message_id, text=text)
+
+
+def build_client_intake_context(service: FakeHelpdeskBackendClient) -> ClientIntakeContext:
     return ClientIntakeContext(
         ticket_runtime=TicketRuntimeContext(
             helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
@@ -67,31 +119,17 @@ def build_client_intake_context(service: object) -> ClientIntakeContext:
 async def test_client_first_message_without_active_ticket_starts_intake_flow() -> None:
     message = build_message(text="Помогите с доступом")
     state = SimpleNamespace(set_state=AsyncMock(), set_data=AsyncMock())
-    service = SimpleNamespace(
-        get_client_active_ticket=AsyncMock(return_value=None),
-        list_client_ticket_categories=AsyncMock(
-            return_value=[
-                TicketCategorySummary(
-                    id=1,
-                    code="access",
-                    title="Доступ и вход",
-                    is_active=True,
-                    sort_order=10,
-                )
-            ]
-        ),
-        predict_ticket_category=AsyncMock(return_value=TicketCategoryPrediction(available=False)),
-    )
+    service = ClientIntakeBackendClient()
 
     await handle_client_text(
-        message=message,
+        message=message.message,
         state=state,
         bot=Mock(),
         client_intake_context=build_client_intake_context(service),
     )
 
     state.set_state.assert_awaited_once_with(UserIntakeStates.choosing_category)
-    cast(AsyncMock, message.answer).assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(
         INTAKE_CATEGORY_PROMPT_TEXT,
         reply_markup=ANY,
     )
@@ -119,22 +157,22 @@ async def test_client_message_with_active_ticket_keeps_live_dialogue_path() -> N
         assigned_operator_telegram_user_id=None,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
     )
-    service = SimpleNamespace(
-        get_client_active_ticket=AsyncMock(return_value=ticket),
-        create_ticket_from_client_message=AsyncMock(return_value=ticket),
-        get_ticket_details=AsyncMock(return_value=ticket_details),
+    service = ClientIntakeBackendClient(
+        active_ticket=ticket,
+        created_ticket=ticket,
+        ticket_details=ticket_details,
     )
 
     await handle_client_text(
-        message=message,
+        message=message.message,
         state=state,
         bot=Mock(),
         client_intake_context=build_client_intake_context(service),
     )
 
-    service.create_ticket_from_client_message.assert_awaited_once()
+    service.create_ticket_from_client_message_mock.assert_awaited_once()
     state.set_state.assert_not_called()
-    cast(AsyncMock, message.answer).assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(
         build_ticket_message_added_text(ticket.public_number, operator_connected=False),
         reply_markup=ANY,
     )
@@ -165,21 +203,21 @@ async def test_client_duplicate_burst_is_not_forwarded_to_operator_again() -> No
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
     )
-    service = SimpleNamespace(
-        get_client_active_ticket=AsyncMock(return_value=ticket),
-        create_ticket_from_client_message=AsyncMock(return_value=ticket),
-        get_ticket_details=AsyncMock(return_value=ticket_details),
+    service = ClientIntakeBackendClient(
+        active_ticket=ticket,
+        created_ticket=ticket,
+        ticket_details=ticket_details,
     )
 
     await handle_client_text(
-        message=message,
+        message=message.message,
         state=state,
         bot=bot,
         client_intake_context=build_client_intake_context(service),
     )
 
     bot.send_message.assert_not_awaited()
-    cast(AsyncMock, message.answer).assert_awaited_once_with(
+    message.answer.assert_awaited_once_with(
         build_ticket_message_recorded_text(ticket.public_number),
         reply_markup=ANY,
     )

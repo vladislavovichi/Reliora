@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, cast
-
 from application.services.stats import (
     AnalyticsCategorySnapshot,
     AnalyticsOperatorSnapshot,
@@ -205,103 +203,93 @@ def test_render_analytics_snapshot_html_escapes_dynamic_labels() -> None:
     assert "<Billing>" not in html
 
 
-def _build_analytics_snapshot(**overrides: object) -> HelpdeskAnalyticsSnapshot:
-    values = {
-        "window": AnalyticsWindow.DAYS_7,
-        "total_open_tickets": 8,
-        "queued_tickets_count": 2,
-        "assigned_tickets_count": 4,
-        "escalated_tickets_count": 1,
-        "closed_tickets_count": 11,
-        "tickets_per_operator": (
+def _build_analytics_snapshot(
+    *,
+    total_open_tickets: int = 8,
+    queued_tickets_count: int = 2,
+    assigned_tickets_count: int = 4,
+    escalated_tickets_count: int = 1,
+    closed_tickets_count: int = 11,
+    period_created_tickets_count: int = 14,
+    period_closed_tickets_count: int = 9,
+    satisfaction_average: float | None = 4.7,
+    feedback_count: int = 6,
+    feedback_coverage_percent: int | None = 67,
+    tickets_per_operator: tuple[OperatorTicketLoad, ...] | None = None,
+    rating_distribution: tuple[AnalyticsRatingBucket, ...] | None = None,
+    operator_snapshots: tuple[AnalyticsOperatorSnapshot, ...] | None = None,
+    category_snapshots: tuple[AnalyticsCategorySnapshot, ...] | None = None,
+    best_operators_by_closures: tuple[AnalyticsOperatorSnapshot, ...] | None = None,
+    best_operators_by_satisfaction: tuple[AnalyticsOperatorSnapshot, ...] | None = None,
+    top_categories: tuple[AnalyticsCategorySnapshot, ...] | None = None,
+    first_response_breach_count: int = 1,
+    resolution_breach_count: int = 2,
+    sla_categories: tuple[AnalyticsCategorySnapshot, ...] | None = None,
+) -> HelpdeskAnalyticsSnapshot:
+    default_operator_snapshots = (
+        AnalyticsOperatorSnapshot(
+            operator_id=7,
+            display_name="Иван Петров",
+            active_ticket_count=3,
+            closed_ticket_count=5,
+            average_first_response_time_seconds=360,
+            average_resolution_time_seconds=7200,
+            average_satisfaction=4.8,
+            feedback_count=4,
+        ),
+    )
+    default_category_snapshots = (
+        AnalyticsCategorySnapshot(
+            category_id=2,
+            category_title="Доступ и вход",
+            created_ticket_count=6,
+            open_ticket_count=2,
+            closed_ticket_count=4,
+            average_satisfaction=4.6,
+            feedback_count=3,
+            sla_breach_count=1,
+        ),
+    )
+    return HelpdeskAnalyticsSnapshot(
+        window=AnalyticsWindow.DAYS_7,
+        total_open_tickets=total_open_tickets,
+        queued_tickets_count=queued_tickets_count,
+        assigned_tickets_count=assigned_tickets_count,
+        escalated_tickets_count=escalated_tickets_count,
+        closed_tickets_count=closed_tickets_count,
+        tickets_per_operator=tickets_per_operator
+        if tickets_per_operator is not None
+        else (
             OperatorTicketLoad(operator_id=7, display_name="Иван Петров", ticket_count=3),
             OperatorTicketLoad(operator_id=8, display_name="Анна Смирнова", ticket_count=2),
         ),
-        "period_created_tickets_count": 14,
-        "period_closed_tickets_count": 9,
-        "average_first_response_time_seconds": 420,
-        "average_resolution_time_seconds": 8100,
-        "satisfaction_average": 4.7,
-        "feedback_count": 6,
-        "feedback_coverage_percent": 67,
-        "rating_distribution": (
+        period_created_tickets_count=period_created_tickets_count,
+        period_closed_tickets_count=period_closed_tickets_count,
+        average_first_response_time_seconds=420,
+        average_resolution_time_seconds=8100,
+        satisfaction_average=satisfaction_average,
+        feedback_count=feedback_count,
+        feedback_coverage_percent=feedback_coverage_percent,
+        rating_distribution=rating_distribution
+        if rating_distribution is not None
+        else (
             AnalyticsRatingBucket(rating=5, count=4),
             AnalyticsRatingBucket(rating=4, count=2),
         ),
-        "operator_snapshots": (
-            AnalyticsOperatorSnapshot(
-                operator_id=7,
-                display_name="Иван Петров",
-                active_ticket_count=3,
-                closed_ticket_count=5,
-                average_first_response_time_seconds=360,
-                average_resolution_time_seconds=7200,
-                average_satisfaction=4.8,
-                feedback_count=4,
-            ),
-        ),
-        "category_snapshots": (
-            AnalyticsCategorySnapshot(
-                category_id=2,
-                category_title="Доступ и вход",
-                created_ticket_count=6,
-                open_ticket_count=2,
-                closed_ticket_count=4,
-                average_satisfaction=4.6,
-                feedback_count=3,
-                sla_breach_count=1,
-            ),
-        ),
-        "best_operators_by_closures": (
-            AnalyticsOperatorSnapshot(
-                operator_id=7,
-                display_name="Иван Петров",
-                active_ticket_count=3,
-                closed_ticket_count=5,
-                average_first_response_time_seconds=360,
-                average_resolution_time_seconds=7200,
-                average_satisfaction=4.8,
-                feedback_count=4,
-            ),
-        ),
-        "best_operators_by_satisfaction": (
-            AnalyticsOperatorSnapshot(
-                operator_id=7,
-                display_name="Иван Петров",
-                active_ticket_count=3,
-                closed_ticket_count=5,
-                average_first_response_time_seconds=360,
-                average_resolution_time_seconds=7200,
-                average_satisfaction=4.8,
-                feedback_count=4,
-            ),
-        ),
-        "top_categories": (
-            AnalyticsCategorySnapshot(
-                category_id=2,
-                category_title="Доступ и вход",
-                created_ticket_count=6,
-                open_ticket_count=2,
-                closed_ticket_count=4,
-                average_satisfaction=4.6,
-                feedback_count=3,
-                sla_breach_count=1,
-            ),
-        ),
-        "first_response_breach_count": 1,
-        "resolution_breach_count": 2,
-        "sla_categories": (
-            AnalyticsCategorySnapshot(
-                category_id=2,
-                category_title="Доступ и вход",
-                created_ticket_count=6,
-                open_ticket_count=2,
-                closed_ticket_count=4,
-                average_satisfaction=4.6,
-                feedback_count=3,
-                sla_breach_count=1,
-            ),
-        ),
-    }
-    values.update(overrides)
-    return HelpdeskAnalyticsSnapshot(**cast(Any, values))
+        operator_snapshots=operator_snapshots
+        if operator_snapshots is not None
+        else default_operator_snapshots,
+        category_snapshots=category_snapshots
+        if category_snapshots is not None
+        else default_category_snapshots,
+        best_operators_by_closures=best_operators_by_closures
+        if best_operators_by_closures is not None
+        else default_operator_snapshots,
+        best_operators_by_satisfaction=best_operators_by_satisfaction
+        if best_operators_by_satisfaction is not None
+        else default_operator_snapshots,
+        top_categories=top_categories if top_categories is not None else default_category_snapshots,
+        first_response_breach_count=first_response_breach_count,
+        resolution_breach_count=resolution_breach_count,
+        sla_categories=sla_categories if sla_categories is not None else default_category_snapshots,
+    )
