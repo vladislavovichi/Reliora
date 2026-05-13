@@ -439,10 +439,7 @@ class ReplyToTicketAsOperatorUseCase:
             display_name=command.operator.display_name,
             username=command.operator.username,
         )
-        if (
-            ticket.assigned_operator_id is not None
-            and ticket.assigned_operator_id != operator_id
-        ):
+        if ticket.assigned_operator_id is not None and ticket.assigned_operator_id != operator_id:
             raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
         ticket_summary = await self._add_message_to_ticket(
