@@ -1,43 +1,66 @@
 from __future__ import annotations
 
-import asyncio
+# ruff: noqa: B008
 import logging
 from dataclasses import dataclass
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
-from urllib.parse import ParseResult, urlparse
+
+import uvicorn
+from fastapi import Depends, FastAPI
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 from application.errors import ApplicationError
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
-from mini_app.auth import (
-    TelegramMiniAppAuthError,
-    TelegramMiniAppUser,
-    validate_telegram_mini_app_init_data,
+from mini_app.auth import TelegramMiniAppAuthError
+from mini_app.context import (
+    MiniAppAuthenticatedContext,
+    MiniAppHttpDependencies,
+    log_auth_failure,
+    require_operator_context,
 )
 from mini_app.http_errors import mini_app_error_response
-from mini_app.launch import ResolvedMiniAppLaunch, resolve_mini_app_launch
-from mini_app.responses import serve_file, write_json
-from mini_app.routes.admin import handle_admin_routes
+from mini_app.request_parsing import MiniAppRouteNotFound
+from mini_app.responses import json_response, static_file_response
+from mini_app.routes.admin import build_admin_router
 from mini_app.routes.ai import is_ai_route
-from mini_app.routes.analytics import handle_analytics_routes
-from mini_app.routes.dashboard import handle_dashboard_routes
-from mini_app.routes.queue import handle_queue_routes
-from mini_app.routes.session import handle_session_route, require_operator_session
-from mini_app.routes.tickets import handle_ticket_routes
+from mini_app.routes.analytics import build_analytics_router
+from mini_app.routes.dashboard import build_dashboard_router
+from mini_app.routes.queue import build_queue_router
+from mini_app.routes.session import build_session_router
+from mini_app.routes.tickets import build_ticket_router
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True, frozen=True)
-class MiniAppHttpDependencies:
-    gateway: MiniAppGateway
-    config: MiniAppConfig
-    bot_token: str
-    static_dir: Path
+def create_mini_app(
+    *,
+    gateway: MiniAppGateway,
+    config: MiniAppConfig,
+    bot_token: str,
+    static_dir: Path,
+) -> FastAPI:
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.mini_app_dependencies = MiniAppHttpDependencies(
+        gateway=gateway,
+        config=config,
+        bot_token=bot_token,
+    )
+    app.state.mini_app_static_dir = static_dir
+
+    _register_exception_handlers(app)
+    _register_public_routes(app)
+    app.include_router(build_session_router())
+    app.include_router(build_dashboard_router())
+    app.include_router(build_queue_router())
+    app.include_router(build_admin_router())
+    app.include_router(build_ticket_router())
+    app.include_router(build_analytics_router())
+    _register_route_fallback(app)
+    return app
 
 
 @dataclass(slots=True)
@@ -46,377 +69,143 @@ class MiniAppHttpServer:
     bot_token: str
     gateway: MiniAppGateway
     static_dir: Path
-    server: ThreadingHTTPServer | None = None
+    app: FastAPI | None = None
 
-    def build_server(self) -> ThreadingHTTPServer:
-        handler_cls = build_handler_class(
+    def build_app(self) -> FastAPI:
+        self.app = create_mini_app(
             gateway=self.gateway,
             config=self.config,
             bot_token=self.bot_token,
             static_dir=self.static_dir,
         )
-        self.server = ThreadingHTTPServer((self.config.listen_host, self.config.port), handler_cls)
-        return self.server
+        return self.app
 
-
-def build_handler_class(
-    *,
-    gateway: MiniAppGateway,
-    config: MiniAppConfig,
-    bot_token: str,
-    static_dir: Path,
-) -> type[BaseHTTPRequestHandler]:
-    deps = MiniAppHttpDependencies(
-        gateway=gateway,
-        config=config,
-        bot_token=bot_token,
-        static_dir=static_dir,
-    )
-
-    class MiniAppRequestHandler(BaseHTTPRequestHandler):
-        dependencies = deps
-        gateway = deps.gateway
-        config = deps.config
-        bot_token = deps.bot_token
-        static_dir = deps.static_dir
-
-        def do_GET(self) -> None:  # noqa: N802
-            dispatch_mini_app_request(self, "GET")
-
-        def do_POST(self) -> None:  # noqa: N802
-            dispatch_mini_app_request(self, "POST")
-
-        def do_PUT(self) -> None:  # noqa: N802
-            dispatch_mini_app_request(self, "PUT")
-
-        def log_message(self, format: str, *args: object) -> None:
-            logger.info("mini-app http %s - %s", self.address_string(), format % args)
-
-        def _dispatch(self, method: str) -> None:
-            if not hasattr(self, "requestline"):
-                self.requestline = f"{method} {self.path} HTTP/1.1"
-            if not hasattr(self, "request_version"):
-                self.request_version = "HTTP/1.1"
-            if not hasattr(self, "client_address"):
-                self.client_address = ("127.0.0.1", 0)
-            if not hasattr(self, "wfile"):
-                self.wfile = BytesIO()
-            dispatch_mini_app_request(self, method)
-
-        def _handle_authenticated_request(
-            self,
-            *,
-            method: str,
-            path: str,
-            parsed: ParseResult,
-            launch: ResolvedMiniAppLaunch,
-            user: TelegramMiniAppUser,
-            session: dict[str, Any],
-        ) -> None:
-            MiniAppRouteDispatcher(self).handle_authenticated_request(
-                method=method,
-                path=path,
-                parsed=parsed,
-                launch=launch,
-                user=user,
-                session=session,
-            )
-
-        def _load_session(
-            self,
-        ) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
-            return MiniAppSessionLoader(self).load()
-
-        def _write_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
-            MiniAppJsonResponder(self).write(status, payload)
-
-    return MiniAppRequestHandler
-
-
-def dispatch_mini_app_request(handler: BaseHTTPRequestHandler, method: str) -> None:
-    parsed = urlparse(handler.path)
-    path = parsed.path
-    try:
-        dispatcher = MiniAppRouteDispatcher(handler)
-        if dispatcher.handle_public_request(method=method, path=path, parsed=parsed):
-            return
-        if not path.startswith("/api/"):
-            MiniAppJsonResponder(handler).not_found()
-            return
-
-        handler_adapter: Any = handler
-        launch, user, session = handler_adapter._load_session()
-        dispatcher.handle_authenticated_request(
-            method=method,
-            path=path,
-            parsed=parsed,
-            launch=launch,
-            user=user,
-            session=session,
+    def build_server(self) -> MiniAppUvicornServer:
+        return MiniAppUvicornServer(
+            app=self.build_app(),
+            host=self.config.listen_host,
+            port=self.config.port,
         )
-    except Exception as exc:  # noqa: BLE001
-        MiniAppErrorResponder(handler).write_exception(method=method, path=path, exc=exc)
+
+    def run(self) -> None:
+        self.build_server().serve_forever()
 
 
 @dataclass(slots=True)
-class MiniAppJsonResponder:
-    handler: BaseHTTPRequestHandler
+class MiniAppUvicornServer:
+    app: FastAPI
+    host: str
+    port: int
 
-    def write(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
-        writer = getattr(self.handler, "_write_json", None)
-        if writer is not None and not getattr(
-            self.handler,
-            "_mini_app_json_responder_active",
-            False,
-        ):
-            active_handler: Any = self.handler
-            active_handler._mini_app_json_responder_active = True
-            try:
-                writer(status, payload)
-            finally:
-                active_handler._mini_app_json_responder_active = False
-            return
-        write_json(self.handler, status, payload)
+    def serve_forever(self) -> None:
+        uvicorn.run(self.app, host=self.host, port=self.port)
 
-    def not_found(self) -> None:
-        self.write(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
+    def server_close(self) -> None:
+        return None
 
 
-@dataclass(slots=True)
-class MiniAppRouteDispatcher:
-    handler: BaseHTTPRequestHandler
-
-    def handle_public_request(
-        self,
-        *,
-        method: str,
-        path: str,
-        parsed: ParseResult,
-    ) -> bool:
-        del parsed
-        deps = self._deps
-        if method == "GET" and path == "/healthz":
-            MiniAppJsonResponder(self.handler).write(
-                HTTPStatus.OK,
-                {
-                    "status": "ok",
-                    "mini_app": {
-                        "public_url": deps.config.public_url or None,
-                        "public_url_valid": deps.config.public_url_is_valid,
-                        "detail": deps.config.public_url_status_detail,
-                    },
+def _register_public_routes(app: FastAPI) -> None:
+    @app.get("/healthz")
+    async def healthz(request: Request) -> Response:
+        deps: MiniAppHttpDependencies = request.app.state.mini_app_dependencies
+        return json_response(
+            {
+                "status": "ok",
+                "mini_app": {
+                    "public_url": deps.config.public_url or None,
+                    "public_url_valid": deps.config.public_url_is_valid,
+                    "detail": deps.config.public_url_status_detail,
                 },
-            )
-            return True
-        if method == "GET" and (path == "/" or path == "/index.html"):
-            serve_file(
-                self.handler,
-                deps.static_dir / "index.html",
-                static_dir=deps.static_dir,
-                content_type="text/html; charset=utf-8",
-            )
-            return True
-        if method == "GET" and path.startswith("/assets/"):
-            asset_path = path.removeprefix("/assets/")
-            serve_file(
-                self.handler,
-                deps.static_dir / "assets" / asset_path,
-                static_dir=deps.static_dir,
-            )
-            return True
-        return False
+            }
+        )
 
-    def handle_authenticated_request(
-        self,
-        *,
-        method: str,
+    @app.get("/")
+    @app.get("/index.html")
+    async def index(request: Request) -> Response:
+        static_dir: Path = request.app.state.mini_app_static_dir
+        return static_file_response(
+            static_dir / "index.html",
+            static_dir=static_dir,
+            content_type="text/html; charset=utf-8",
+        )
+
+    @app.get("/assets/{asset_path:path}")
+    async def asset(asset_path: str, request: Request) -> Response:
+        static_dir: Path = request.app.state.mini_app_static_dir
+        return static_file_response(static_dir / "assets" / asset_path, static_dir=static_dir)
+
+
+def _register_route_fallback(app: FastAPI) -> None:
+    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT"])
+    async def api_not_found(
         path: str,
-        parsed: ParseResult,
-        launch: ResolvedMiniAppLaunch,
-        user: TelegramMiniAppUser,
-        session: dict[str, Any],
-    ) -> None:
-        if handle_session_route(
-            self.handler,
-            method=method,
-            path=path,
-            launch=launch,
-            session=session,
-        ):
-            return
-        if not require_operator_session(self.handler, path=path, session=session):
-            return
-        if self._handle_endpoint_routes(
-            method=method,
-            path=path,
-            parsed=parsed,
-            user=user,
-            session=session,
-        ):
-            return
-        MiniAppJsonResponder(self.handler).not_found()
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> Response:
+        del path, context
+        return _route_not_found_response()
 
-    def _handle_endpoint_routes(
-        self,
-        *,
-        method: str,
-        path: str,
-        parsed: ParseResult,
-        user: TelegramMiniAppUser,
-        session: dict[str, Any],
-    ) -> bool:
-        return (
-            handle_dashboard_routes(self.handler, method=method, path=path, user=user)
-            or handle_queue_routes(self.handler, method=method, path=path, user=user)
-            or handle_admin_routes(
-                self.handler,
-                method=method,
-                path=path,
-                parsed=parsed,
-                user=user,
-                session=session,
-            )
-            or handle_ticket_routes(
-                self.handler,
-                method=method,
-                path=path,
-                parsed=parsed,
-                user=user,
-            )
-            or handle_analytics_routes(
-                self.handler,
-                method=method,
-                path=path,
-                parsed=parsed,
-                user=user,
-            )
+    @app.api_route("/{path:path}", methods=["GET", "POST", "PUT"])
+    async def not_found(path: str) -> Response:
+        del path
+        return _route_not_found_response()
+
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(TelegramMiniAppAuthError)
+    async def telegram_auth_error(request: Request, exc: TelegramMiniAppAuthError) -> Response:
+        log_auth_failure(request, code=exc.code)
+        return json_response(
+            {
+                "error": str(exc),
+                "code": "unauthorized" if is_ai_route(request.url.path) else exc.code,
+            },
+            status_code=HTTPStatus.UNAUTHORIZED,
         )
 
-    @property
-    def _deps(self) -> MiniAppHttpDependencies:
-        return cast(MiniAppHttpDependencies, self.handler.dependencies)  # type: ignore[attr-defined]
+    @app.exception_handler(ApplicationError)
+    async def application_error(request: Request, exc: ApplicationError) -> Response:
+        status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(request.url.path))
+        return json_response(payload, status_code=status)
 
+    @app.exception_handler(MiniAppRouteNotFound)
+    async def mini_app_route_not_found(request: Request, exc: MiniAppRouteNotFound) -> Response:
+        del request, exc
+        return _route_not_found_response()
 
-@dataclass(slots=True)
-class MiniAppSessionLoader:
-    handler: BaseHTTPRequestHandler
-
-    def load(self) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
-        deps = self._deps
-        launch = self._resolve_launch()
-        validated = validate_telegram_mini_app_init_data(
-            init_data=launch.init_data,
-            bot_token=deps.bot_token,
-            max_age_seconds=deps.config.init_data_ttl_seconds,
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        del request
+        if exc.status_code in {HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED}:
+            return _route_not_found_response()
+        return json_response(
+            {
+                "error": "Mini App временно недоступен. Попробуйте ещё раз.",
+                "code": "internal_error",
+            },
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         )
-        session = asyncio.run(deps.gateway.get_session(user=validated.user))
-        return launch, validated.user, session
 
-    def _resolve_launch(self) -> ResolvedMiniAppLaunch:
-        launch = resolve_mini_app_launch(
-            path=self.handler.path,
-            headers=dict(self.handler.headers.items()),
-        )
-        self._store_launch_diagnostics(launch)
-        _log_launch_resolution(path=self.handler.path, launch=launch)
-        return launch
-
-    def _store_launch_diagnostics(self, launch: ResolvedMiniAppLaunch) -> None:
-        handler: Any = self.handler
-        handler._request_launch_source = launch.source
-        handler._request_client_source = launch.client_source or "<unknown>"
-        handler._request_telegram_webapp = _format_presence(launch.is_telegram_webapp)
-        handler._request_telegram_user = _format_presence(launch.has_telegram_user)
-        handler._request_attempted_sources = ",".join(launch.attempted_sources) or "<none>"
-        handler._request_launch_diagnostics = ",".join(launch.diagnostics) or "<none>"
-
-    @property
-    def _deps(self) -> MiniAppHttpDependencies:
-        return cast(MiniAppHttpDependencies, self.handler.dependencies)  # type: ignore[attr-defined]
-
-
-@dataclass(slots=True)
-class MiniAppErrorResponder:
-    handler: BaseHTTPRequestHandler
-
-    def write_exception(self, *, method: str, path: str, exc: Exception) -> None:
-        responder = MiniAppJsonResponder(self.handler)
-        if isinstance(exc, TelegramMiniAppAuthError):
-            self._log_auth_failure(method=method, path=path, exc=exc)
-            responder.write(
-                HTTPStatus.UNAUTHORIZED,
-                {
-                    "error": str(exc),
-                    "code": "unauthorized" if is_ai_route(path) else exc.code,
-                },
-            )
-            return
-        if isinstance(exc, ApplicationError):
-            status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
-            responder.write(status, payload)
-            return
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception) -> Response:
         if isinstance(exc, ConnectionError | OSError | RuntimeError | TimeoutError):
             logger.warning(
                 "Mini App backend dependency failed method=%s path=%s error=%s",
-                method,
-                path,
+                request.method,
+                request.url.path,
                 exc,
             )
-        elif not isinstance(exc, PermissionError | LookupError | ValueError):
-            logger.exception("Mini App request failed method=%s path=%s", method, self.handler.path)
-        status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
-        responder.write(status, payload)
-
-    def _log_auth_failure(
-        self,
-        *,
-        method: str,
-        path: str,
-        exc: TelegramMiniAppAuthError,
-    ) -> None:
-        logger.warning(
-            (
-                "Mini App auth failed method=%s path=%s code=%s source=%s "
-                "client_source=%s telegram_webapp=%s telegram_user=%s "
-                "attempted_sources=%s diagnostics=%s"
-            ),
-            method,
-            path,
-            exc.code,
-            getattr(self.handler, "_request_launch_source", "<unresolved>"),
-            getattr(self.handler, "_request_client_source", "<unknown>"),
-            getattr(self.handler, "_request_telegram_webapp", "<unknown>"),
-            getattr(self.handler, "_request_telegram_user", "<unknown>"),
-            getattr(self.handler, "_request_attempted_sources", "<none>"),
-            getattr(self.handler, "_request_launch_diagnostics", "<none>"),
-        )
+        else:
+            logger.exception(
+                "Mini App request failed method=%s path=%s",
+                request.method,
+                request.url.path,
+            )
+        status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(request.url.path))
+        return json_response(payload, status_code=status)
 
 
-def _log_launch_resolution(*, path: str, launch: ResolvedMiniAppLaunch) -> None:
-    log = logger.debug if launch.has_init_data else logger.warning
-    state = "resolved" if launch.has_init_data else "missing"
-    log(
-        (
-            "Mini App launch %s source=%s client_source=%s path=%s "
-            "telegram_webapp=%s telegram_user=%s platform=%s version=%s "
-            "attempted_sources=%s diagnostics=%s"
-        ),
-        state,
-        launch.source,
-        launch.client_source or "<unknown>",
-        urlparse(path).path,
-        _format_presence(launch.is_telegram_webapp),
-        _format_presence(launch.has_telegram_user),
-        launch.client_platform or "<unknown>",
-        launch.client_version or "<unknown>",
-        ",".join(launch.attempted_sources) or "<none>",
-        ",".join(launch.diagnostics) or "<none>",
+def _route_not_found_response() -> Response:
+    return json_response(
+        {"error": "Маршрут Mini App не найден."},
+        status_code=HTTPStatus.NOT_FOUND,
     )
-
-
-def _format_presence(value: bool | None) -> str:
-    if value is True:
-        return "present"
-    if value is False:
-        return "missing"
-    return "unknown"

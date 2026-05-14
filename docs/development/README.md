@@ -64,7 +64,7 @@ make down
 
 ## Mini App локально
 
-Mini App gateway слушает `MINI_APP__LISTEN_HOST` и `MINI_APP__PORT`. В Docker наружный порт задаётся `MINI_APP_EXPOSE_PORT`, по умолчанию `8088`.
+Mini App gateway запускает FastAPI ASGI app через Uvicorn и слушает `MINI_APP__LISTEN_HOST` и `MINI_APP__PORT`. В Docker наружный порт задаётся `MINI_APP_EXPOSE_PORT`, по умолчанию `8088`.
 
 Проверка endpoint:
 

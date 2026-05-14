@@ -4,11 +4,10 @@ import asyncio
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from types import MethodType
 from typing import Any
-from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
+import httpx
 from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.contracts.actors import RequestActor
@@ -26,7 +25,8 @@ from domain.enums.tickets import TicketMessageSenderType, TicketSentiment, Ticke
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
-from mini_app.http import build_handler_class
+from mini_app.context import MiniAppAuthenticatedContext, load_mini_app_session
+from mini_app.http import create_mini_app
 from mini_app.launch import ResolvedMiniAppLaunch
 from mini_app.serializers import serialize_dashboard_bucket, serialize_dashboard_ticket_preview
 
@@ -152,18 +152,16 @@ def test_dashboard_serializer_builds_ticket_preview_with_optional_signals() -> N
 
 def test_operator_dashboard_route_authorization(tmp_path: Path) -> None:
     gateway = StubGateway()
-    handler = _build_handler(gateway=gateway, static_dir=tmp_path)
+    response = _request_dashboard(gateway=gateway, static_dir=tmp_path, role=UserRole.USER)
 
-    _dispatch_dashboard(handler, role=UserRole.USER)
-
-    assert handler.captured_status == HTTPStatus.FORBIDDEN
+    assert response.status_code == HTTPStatus.FORBIDDEN
     assert gateway.called is False
 
-    _dispatch_dashboard(handler, role=UserRole.OPERATOR)
+    response = _request_dashboard(gateway=gateway, static_dir=tmp_path, role=UserRole.OPERATOR)
 
-    assert handler.captured_status == HTTPStatus.OK
+    assert response.status_code == HTTPStatus.OK
     assert gateway.called is True
-    assert handler.captured_payload["buckets"] == {}
+    assert response.json()["buckets"] == {}
 
 
 class StubDashboardBackendClient(FakeHelpdeskBackendClient):
@@ -360,47 +358,40 @@ def _mini_app_user(*, telegram_user_id: int) -> TelegramMiniAppUser:
     )
 
 
-def _build_handler(*, gateway: StubGateway, static_dir: Path) -> Any:
-    handler_cls = build_handler_class(
+def _request_dashboard(*, gateway: StubGateway, static_dir: Path, role: UserRole) -> Any:
+    app = create_mini_app(
         gateway=gateway,  # type: ignore[arg-type]
         config=MiniAppConfig(listen_host="127.0.0.1", port=0, init_data_ttl_seconds=3600),
         bot_token="123:ABC",
         static_dir=static_dir,
     )
-    handler: Any = object.__new__(handler_cls)
 
-    def write_json(self: Any, status: HTTPStatus, payload: dict[str, object]) -> None:
-        self.captured_status = status
-        self.captured_payload = payload
+    async def load_session_override() -> MiniAppAuthenticatedContext:
+        return MiniAppAuthenticatedContext(
+            launch=ResolvedMiniAppLaunch(
+                init_data="signed",
+                source="test",
+                client_source=None,
+                diagnostics=(),
+                is_telegram_webapp=True,
+                has_telegram_user=True,
+                attempted_sources=(),
+                client_platform=None,
+                client_version=None,
+            ),
+            user=_mini_app_user(telegram_user_id=1001),
+            session={
+                "access": {"telegram_user_id": 1001, "role": role.value},
+                "user": {"telegram_user_id": 1001, "display_name": "Anna"},
+            },
+            gateway=gateway,  # type: ignore[arg-type]
+        )
 
-    def write_async_json(self: Any, awaitable: Any) -> None:
-        self._write_json(HTTPStatus.OK, asyncio.run(awaitable))
-
-    handler._write_json = MethodType(write_json, handler)
-    handler._write_async_json = MethodType(write_async_json, handler)
-    return handler
+    app.dependency_overrides[load_mini_app_session] = load_session_override
+    return asyncio.run(_get_asgi(app, "/api/dashboard/operator"))
 
 
-def _dispatch_dashboard(handler: Any, *, role: UserRole) -> None:
-    path = "/api/dashboard/operator"
-    handler._handle_authenticated_request(
-        method="GET",
-        path=path,
-        parsed=urlparse(path),
-        launch=ResolvedMiniAppLaunch(
-            init_data="signed",
-            source="test",
-            client_source=None,
-            diagnostics=(),
-            is_telegram_webapp=True,
-            has_telegram_user=True,
-            attempted_sources=(),
-            client_platform=None,
-            client_version=None,
-        ),
-        user=_mini_app_user(telegram_user_id=1001),
-        session={
-            "access": {"telegram_user_id": 1001, "role": role.value},
-            "user": {"telegram_user_id": 1001, "display_name": "Anna"},
-        },
-    )
+async def _get_asgi(app: Any, path: str) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://mini-app.test") as client:
+        return await client.get(path)

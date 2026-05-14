@@ -92,7 +92,8 @@ make full-cloudflared
 
 Backend-side Mini App:
 
-- `src/mini_app/http.py` - HTTP routing, auth, errors, file responses.
+- `src/mini_app/http.py` - FastAPI ASGI app factory, public routes, errors, Uvicorn wrapper.
+- `src/mini_app/routes/` - ASGI routers for session, queue, tickets, analytics, admin.
 - `src/mini_app/api.py` - gateway к backend gRPC.
 - `src/mini_app/serializers.py` - JSON shape для frontend.
 - `src/mini_app/auth.py` - проверка Telegram init data.

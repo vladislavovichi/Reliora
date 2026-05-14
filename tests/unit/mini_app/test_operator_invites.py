@@ -4,9 +4,9 @@ import asyncio
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from types import MethodType
 from typing import Any
 
+import httpx
 from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.contracts.actors import RequestActor
@@ -16,7 +16,8 @@ from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
-from mini_app.http import build_handler_class
+from mini_app.context import MiniAppAuthenticatedContext, load_mini_app_session
+from mini_app.http import create_mini_app
 from mini_app.launch import ResolvedMiniAppLaunch
 from mini_app.serializers import serialize_operator_invite
 
@@ -62,28 +63,22 @@ async def test_gateway_create_operator_invite_returns_deep_link_fields() -> None
 
 def test_admin_invite_route_requires_super_admin(tmp_path: Path) -> None:
     gateway = StubInviteGateway()
-    handler = _build_handler(gateway=gateway, static_dir=tmp_path)
+    response = _request_invite(gateway=gateway, static_dir=tmp_path, role=UserRole.OPERATOR)
 
-    _dispatch_invite(handler, role=UserRole.OPERATOR)
-
-    assert handler.captured_status == HTTPStatus.FORBIDDEN
+    assert response.status_code == HTTPStatus.FORBIDDEN
     assert gateway.called is False
 
 
 def test_admin_invite_route_returns_link_fields_for_super_admin(tmp_path: Path) -> None:
     gateway = StubInviteGateway()
-    handler = _build_handler(gateway=gateway, static_dir=tmp_path)
+    response = _request_invite(gateway=gateway, static_dir=tmp_path, role=UserRole.SUPER_ADMIN)
 
-    _dispatch_invite(handler, role=UserRole.SUPER_ADMIN)
-
-    assert handler.captured_status == HTTPStatus.OK
+    assert response.status_code == HTTPStatus.OK
     assert gateway.called is True
-    assert handler.captured_payload["invite"]["code"] == "opr_test"
-    assert (
-        handler.captured_payload["invite"]["telegram_deep_link"]
-        == "https://t.me/reliorabot?start=opr_test"
-    )
-    assert handler.captured_payload["invite"]["link_available"] is True
+    payload = response.json()
+    assert payload["invite"]["code"] == "opr_test"
+    assert payload["invite"]["telegram_deep_link"] == "https://t.me/reliorabot?start=opr_test"
+    assert payload["invite"]["link_available"] is True
 
 
 def test_static_renderer_invite_and_macro_copy_contracts() -> None:
@@ -131,37 +126,17 @@ def _backend_factory(client: StubInviteBackendClient) -> HelpdeskBackendClientFa
     return build_backend_client_factory(client)
 
 
-def _build_handler(*, gateway: StubInviteGateway, static_dir: Path) -> Any:
-    handler_cls = build_handler_class(
+def _request_invite(*, gateway: StubInviteGateway, static_dir: Path, role: UserRole) -> Any:
+    app = create_mini_app(
         gateway=gateway,  # type: ignore[arg-type]
         config=MiniAppConfig(listen_host="127.0.0.1", port=0, init_data_ttl_seconds=3600),
         bot_token="123:ABC",
         static_dir=static_dir,
     )
-    handler: Any = object.__new__(handler_cls)
 
-    def write_json(self: Any, status: HTTPStatus, payload: dict[str, object]) -> None:
-        self.captured_status = status
-        self.captured_payload = payload
-
-    def write_async_json(self: Any, awaitable: Any) -> None:
-        self._write_json(HTTPStatus.OK, asyncio.run(awaitable))
-
-    handler._write_json = MethodType(write_json, handler)
-    handler._write_async_json = MethodType(write_async_json, handler)
-    return handler
-
-
-def _dispatch_invite(handler: Any, *, role: UserRole) -> None:
-    path = "/api/admin/invites"
-    handler.path = path
-
-    def load_session(
-        self: Any,
-    ) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
-        del self
-        return (
-            ResolvedMiniAppLaunch(
+    async def load_session_override() -> MiniAppAuthenticatedContext:
+        return MiniAppAuthenticatedContext(
+            launch=ResolvedMiniAppLaunch(
                 init_data="signed",
                 source="test",
                 client_source=None,
@@ -172,15 +147,22 @@ def _dispatch_invite(handler: Any, *, role: UserRole) -> None:
                 client_platform=None,
                 client_version=None,
             ),
-            _mini_app_user(),
-            {
+            user=_mini_app_user(),
+            session={
                 "access": {"telegram_user_id": 1001, "role": role.value},
                 "user": {"telegram_user_id": 1001, "display_name": "Anna"},
             },
+            gateway=gateway,  # type: ignore[arg-type]
         )
 
-    handler._load_session = MethodType(load_session, handler)
-    handler._dispatch("POST")
+    app.dependency_overrides[load_mini_app_session] = load_session_override
+    return asyncio.run(_post_asgi(app, "/api/admin/invites"))
+
+
+async def _post_asgi(app: Any, path: str) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://mini-app.test") as client:
+        return await client.post(path)
 
 
 def _mini_app_user() -> TelegramMiniAppUser:

@@ -1,155 +1,181 @@
 from __future__ import annotations
 
-import re
-from typing import Any
-from urllib.parse import ParseResult
+# ruff: noqa: B008
+from urllib.parse import urlparse
 from uuid import UUID
 
+from fastapi import APIRouter, Depends
+from starlette.requests import Request
+from starlette.responses import Response
+
 from application.contracts.actors import OperatorIdentity
-from mini_app.auth import TelegramMiniAppUser
+from mini_app.context import MiniAppAuthenticatedContext, require_operator_context
 from mini_app.request_parsing import (
-    optional_string,
-    read_json_body,
-    require_int,
-    require_string,
+    AssignTicketPayload,
+    MiniAppRouteNotFound,
+    TicketNotePayload,
+    parse_positive_int_path,
+    parse_ticket_public_id,
+    read_json_model,
 )
-from mini_app.responses import write_async_json
-from mini_app.routes.ai import TICKET_AI_REPLY_DRAFT_ROUTE, TICKET_AI_SUMMARY_ROUTE
-from mini_app.routes.exports import handle_ticket_export
-
-TICKET_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})$")
-TICKET_ACTION_ROUTE = re.compile(
-    r"^/api/tickets/([0-9a-fA-F-]{36})/(take|close|escalate|assign|notes)$"
-)
-TICKET_MACRO_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})/macros/(\d+)$")
-TICKET_EXPORT_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})/export$")
+from mini_app.responses import MiniAppJSONResponse, json_response
+from mini_app.routes.exports import export_ticket_response
 
 
-def handle_ticket_routes(
-    handler: Any,
-    *,
-    method: str,
-    path: str,
-    parsed: ParseResult,
-    user: TelegramMiniAppUser,
-) -> bool:
-    ticket_match = TICKET_ROUTE.fullmatch(path)
-    if method == "GET" and ticket_match is not None:
-        write_async_json(
-            handler,
-            handler.gateway.get_ticket_workspace(
-                user=user,
-                ticket_public_id=UUID(ticket_match.group(1)),
-            ),
-        )
-        return True
+def build_ticket_router() -> APIRouter:
+    router = APIRouter()
 
-    action_match = TICKET_ACTION_ROUTE.fullmatch(path)
-    if method == "POST" and action_match is not None:
-        return handle_ticket_action(
-            handler,
-            user=user,
-            ticket_public_id=UUID(action_match.group(1)),
-            action=action_match.group(2),
+    @router.get("/api/tickets/{ticket_public_id}", response_class=MiniAppJSONResponse)
+    async def get_ticket_workspace(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.get_ticket_workspace(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+            )
         )
 
-    ai_summary_match = TICKET_AI_SUMMARY_ROUTE.fullmatch(path)
-    if method == "POST" and ai_summary_match is not None:
-        write_async_json(
-            handler,
-            handler.gateway.refresh_ticket_ai_summary(
-                user=user,
-                ticket_public_id=UUID(ai_summary_match.group(1)),
-            ),
+    @router.post("/api/tickets/{ticket_public_id}/take", response_class=MiniAppJSONResponse)
+    async def take_ticket(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.take_ticket(user=context.user, ticket_public_id=parsed_ticket_id)
         )
-        return True
 
-    ai_reply_draft_match = TICKET_AI_REPLY_DRAFT_ROUTE.fullmatch(path)
-    if method == "POST" and ai_reply_draft_match is not None:
-        write_async_json(
-            handler,
-            handler.gateway.generate_ticket_reply_draft(
-                user=user,
-                ticket_public_id=UUID(ai_reply_draft_match.group(1)),
-            ),
+    @router.post("/api/tickets/{ticket_public_id}/close", response_class=MiniAppJSONResponse)
+    async def close_ticket(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.close_ticket(user=context.user, ticket_public_id=parsed_ticket_id)
         )
-        return True
 
-    macro_match = TICKET_MACRO_ROUTE.fullmatch(path)
-    if method == "POST" and macro_match is not None:
-        write_async_json(
-            handler,
-            handler.gateway.apply_macro(
-                user=user,
-                ticket_public_id=UUID(macro_match.group(1)),
-                macro_id=int(macro_match.group(2)),
-            ),
+    @router.post("/api/tickets/{ticket_public_id}/escalate", response_class=MiniAppJSONResponse)
+    async def escalate_ticket(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.escalate_ticket(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+            )
         )
-        return True
 
-    export_match = TICKET_EXPORT_ROUTE.fullmatch(path)
-    if method == "GET" and export_match is not None:
-        handle_ticket_export(
-            handler,
-            user=user,
-            ticket_public_id=UUID(export_match.group(1)),
-            parsed=parsed,
-        )
-        return True
-
-    return False
-
-
-def handle_ticket_action(
-    handler: Any,
-    *,
-    user: TelegramMiniAppUser,
-    ticket_public_id: UUID,
-    action: str,
-) -> bool:
-    if action == "take":
-        write_async_json(
-            handler,
-            handler.gateway.take_ticket(user=user, ticket_public_id=ticket_public_id),
-        )
-        return True
-    if action == "close":
-        write_async_json(
-            handler,
-            handler.gateway.close_ticket(user=user, ticket_public_id=ticket_public_id),
-        )
-        return True
-    if action == "escalate":
-        write_async_json(
-            handler,
-            handler.gateway.escalate_ticket(user=user, ticket_public_id=ticket_public_id),
-        )
-        return True
-
-    payload = read_json_body(handler)
-    if action == "assign":
+    @router.post("/api/tickets/{ticket_public_id}/assign", response_class=MiniAppJSONResponse)
+    async def assign_ticket(
+        ticket_public_id: str,
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        payload = await read_json_model(request, AssignTicketPayload)
         operator = OperatorIdentity(
-            telegram_user_id=require_int(payload, "telegram_user_id"),
-            display_name=require_string(payload, "display_name"),
-            username=optional_string(payload, "username"),
+            telegram_user_id=payload.telegram_user_id,
+            display_name=payload.display_name,
+            username=payload.username,
         )
-        write_async_json(
-            handler,
-            handler.gateway.assign_ticket(
-                user=user,
-                ticket_public_id=ticket_public_id,
+        return json_response(
+            await context.gateway.assign_ticket(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
                 operator_identity=operator,
-            ),
+            )
         )
-        return True
-    if action == "notes":
-        write_async_json(
-            handler,
-            handler.gateway.add_note(
-                user=user,
-                ticket_public_id=ticket_public_id,
-                text=require_string(payload, "text"),
-            ),
+
+    @router.post("/api/tickets/{ticket_public_id}/notes", response_class=MiniAppJSONResponse)
+    async def add_note(
+        ticket_public_id: str,
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        payload = await read_json_model(request, TicketNotePayload)
+        return json_response(
+            await context.gateway.add_note(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+                text=payload.text,
+            )
         )
-        return True
-    return False
+
+    @router.post("/api/tickets/{ticket_public_id}/ai-summary", response_class=MiniAppJSONResponse)
+    async def refresh_ticket_ai_summary(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.refresh_ticket_ai_summary(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+            )
+        )
+
+    @router.post(
+        "/api/tickets/{ticket_public_id}/ai-reply-draft",
+        response_class=MiniAppJSONResponse,
+    )
+    async def generate_ticket_reply_draft(
+        ticket_public_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return json_response(
+            await context.gateway.generate_ticket_reply_draft(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+            )
+        )
+
+    @router.post(
+        "/api/tickets/{ticket_public_id}/macros/{macro_id}", response_class=MiniAppJSONResponse
+    )
+    async def apply_macro(
+        ticket_public_id: str,
+        macro_id: str,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        parsed_macro_id = parse_positive_int_path(macro_id)
+        if parsed_macro_id is None:
+            raise MiniAppRouteNotFound
+        return json_response(
+            await context.gateway.apply_macro(
+                user=context.user,
+                ticket_public_id=parsed_ticket_id,
+                macro_id=parsed_macro_id,
+            )
+        )
+
+    @router.get("/api/tickets/{ticket_public_id}/export")
+    async def export_ticket(
+        ticket_public_id: str,
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> Response:
+        parsed_ticket_id = _require_ticket_public_id(ticket_public_id)
+        return await export_ticket_response(
+            gateway=context.gateway,
+            user=context.user,
+            ticket_public_id=parsed_ticket_id,
+            parsed=urlparse(str(request.url)),
+        )
+
+    return router
+
+
+def _require_ticket_public_id(raw_value: str) -> UUID:
+    parsed_ticket_id = parse_ticket_public_id(raw_value)
+    if parsed_ticket_id is None:
+        raise MiniAppRouteNotFound
+    return parsed_ticket_id

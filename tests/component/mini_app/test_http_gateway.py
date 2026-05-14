@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
-import io
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -10,11 +10,13 @@ from typing import Any, cast
 from urllib.parse import urlencode
 from uuid import uuid4
 
+import httpx
+
 from application.errors import NotFoundError
 from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.auth import TelegramMiniAppUser
-from mini_app.http import build_handler_class
+from mini_app.http import create_mini_app
 from mini_app.responses import BinaryPayload
 
 BOT_TOKEN = "123:ABC"
@@ -96,6 +98,59 @@ class StubGateway:
         del user, ticket_public_id
         self.calls.append("take_ticket")
         return {"public_id": "ticket", "status": "assigned"}
+
+    async def close_ticket(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("close_ticket")
+        return {"public_id": "ticket", "status": "closed"}
+
+    async def escalate_ticket(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("escalate_ticket")
+        return {"public_id": "ticket", "status": "escalated"}
+
+    async def assign_ticket(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+        operator_identity: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("assign_ticket")
+        return {"operator": {"display_name": operator_identity.display_name}}
+
+    async def add_note(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+        text: str,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("add_note")
+        return {"note": {"text": text}}
+
+    async def apply_macro(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+        macro_id: int,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("apply_macro")
+        return {"macro": {"id": macro_id}}
 
     async def refresh_ticket_ai_summary(
         self,
@@ -230,6 +285,28 @@ def test_http_forbids_user_role_from_operator_dashboard() -> None:
     assert payload["code"] == "access_denied"
 
 
+def test_http_unknown_api_route_still_requires_auth() -> None:
+    status, payload = request_json(
+        gateway=StubGateway(),
+        path="/api/unknown",
+        init_data="auth_date=1&hash=bad",
+    )
+
+    assert status == 401
+    assert payload["code"] in {"malformed_init_data", "invalid_signature"}
+
+
+def test_http_unknown_api_route_rejects_plain_user_before_not_found() -> None:
+    status, payload = request_json(
+        gateway=StubGateway(role=UserRole.USER),
+        path="/api/unknown",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 403
+    assert payload["code"] == "access_denied"
+
+
 def test_http_maps_missing_ticket_to_not_found() -> None:
     status, payload = request_json(
         gateway=StubGateway(ticket_error=NotFoundError("Заявка не найдена.")),
@@ -322,6 +399,55 @@ def test_http_routes_ticket_action_through_gateway_without_handler_call() -> Non
     assert status == 200
     assert payload == {"public_id": "ticket", "status": "assigned"}
     assert gateway.calls == ["take_ticket"]
+
+
+def test_http_routes_ticket_mutations_with_json_payloads() -> None:
+    ticket_id = uuid4()
+    gateway = StubGateway()
+    init_data = build_init_data(auth_date=datetime.now(UTC))
+
+    close_status, close_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/close",
+        init_data=init_data,
+    )
+    assign_status, assign_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/assign",
+        init_data=init_data,
+        body=json.dumps(
+            {
+                "telegram_user_id": 2002,
+                "display_name": "  Иван   Петров ",
+                "username": "ivan",
+            }
+        ).encode(),
+    )
+    note_status, note_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/notes",
+        init_data=init_data,
+        body=json.dumps({"text": "  Проверить оплату  "}).encode(),
+    )
+    macro_status, macro_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/macros/7",
+        init_data=init_data,
+    )
+
+    assert close_status == 200
+    assert close_payload["status"] == "closed"
+    assert assign_status == 200
+    assert assign_payload["operator"]["display_name"] == "Иван Петров"
+    assert note_status == 200
+    assert note_payload["note"]["text"] == "Проверить оплату"
+    assert macro_status == 200
+    assert macro_payload["macro"]["id"] == 7
+    assert gateway.calls == ["close_ticket", "assign_ticket", "add_note", "apply_macro"]
 
 
 def test_http_routes_ai_summary_and_reply_draft() -> None:
@@ -459,6 +585,39 @@ def test_http_rejects_invalid_ticket_action_json() -> None:
     assert payload["code"] == "validation_error"
 
 
+def test_http_rejects_ticket_action_validation_error() -> None:
+    status, payload = request_json(
+        gateway=StubGateway(),
+        method="POST",
+        path=f"/api/tickets/{uuid4()}/notes",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+        body=json.dumps({"text": "   "}).encode(),
+    )
+
+    assert status == 400
+    assert payload["code"] == "validation_error"
+
+
+def test_http_serves_static_frontend_assets() -> None:
+    status, headers, body = request_raw(
+        gateway=StubGateway(),
+        path="/",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+    asset_status, asset_headers, asset_body = request_raw(
+        gateway=StubGateway(),
+        path="/assets/app.js",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 200
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert b"<html" in body.lower()
+    assert asset_status == 200
+    assert "javascript" in asset_headers["Content-Type"]
+    assert asset_body
+
+
 def request_json(
     *,
     gateway: StubGateway,
@@ -487,8 +646,8 @@ def request_raw(
     method: str = "GET",
     body: bytes = b"",
     init_data_ttl_seconds: int = 3600,
-) -> tuple[int, dict[str, str], bytes]:
-    handler_cls = build_handler_class(
+) -> tuple[int, Any, bytes]:
+    app = create_mini_app(
         gateway=cast(Any, gateway),
         config=MiniAppConfig(
             listen_host="127.0.0.1",
@@ -498,40 +657,29 @@ def request_raw(
         bot_token=BOT_TOKEN,
         static_dir=Path("src/mini_app/static"),
     )
-    content_length = f"Content-Length: {len(body)}\r\n" if body else ""
-    request = (
-        f"{method} {path} HTTP/1.1\r\n"
-        "Host: mini-app.test\r\n"
-        f"X-Telegram-Init-Data: {init_data}\r\n"
-        f"{content_length}\r\n"
-    ).encode() + body
-    connection = FakeSocket(request)
-    handler_cls(cast(Any, connection), ("127.0.0.1", 12345), cast(Any, object()))
-    status, _headers, body = parse_http_response(connection.output.getvalue())
-    return status, _headers, body
+    response = asyncio.run(
+        _request_asgi(
+            app=app,
+            method=method,
+            path=path,
+            headers={"X-Telegram-Init-Data": init_data},
+            content=body,
+        )
+    )
+    return response.status_code, response.headers, response.content
 
 
-class FakeSocket:
-    def __init__(self, request: bytes) -> None:
-        self.input = io.BytesIO(request)
-        self.output = io.BytesIO()
-
-    def makefile(self, mode: str, buffering: int | None = None) -> io.BytesIO:
-        del buffering
-        if "r" in mode:
-            return self.input
-        return self.output
-
-    def sendall(self, data: bytes) -> None:
-        self.output.write(data)
-
-
-def parse_http_response(raw: bytes) -> tuple[int, dict[str, str], bytes]:
-    header_bytes, body = raw.split(b"\r\n\r\n", 1)
-    header_lines = header_bytes.decode("iso-8859-1").split("\r\n")
-    status = int(header_lines[0].split()[1])
-    headers = dict(line.split(": ", 1) for line in header_lines[1:] if ": " in line)
-    return status, headers, body
+async def _request_asgi(
+    *,
+    app: Any,
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    content: bytes,
+) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://mini-app.test") as client:
+        return await client.request(method, path, headers=headers, content=content)
 
 
 def build_init_data(*, auth_date: datetime) -> str:

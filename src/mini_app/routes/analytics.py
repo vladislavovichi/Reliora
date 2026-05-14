@@ -1,27 +1,38 @@
 from __future__ import annotations
 
-from typing import Any
-from urllib.parse import ParseResult
+# ruff: noqa: B008
+from urllib.parse import urlparse
 
-from mini_app.auth import TelegramMiniAppUser
+from fastapi import APIRouter, Depends
+from starlette.requests import Request
+from starlette.responses import Response
+
+from mini_app.context import MiniAppAuthenticatedContext, require_operator_context
 from mini_app.request_parsing import parse_analytics_window
-from mini_app.responses import write_async_json
-from mini_app.routes.exports import handle_analytics_export
+from mini_app.responses import MiniAppJSONResponse, json_response
+from mini_app.routes.exports import export_analytics_response
 
 
-def handle_analytics_routes(
-    handler: Any,
-    *,
-    method: str,
-    path: str,
-    parsed: ParseResult,
-    user: TelegramMiniAppUser,
-) -> bool:
-    if method == "GET" and path == "/api/analytics":
-        window = parse_analytics_window(parsed)
-        write_async_json(handler, handler.gateway.get_analytics(user=user, window=window))
-        return True
-    if method == "GET" and path == "/api/analytics/export":
-        handle_analytics_export(handler, user=user, parsed=parsed)
-        return True
-    return False
+def build_analytics_router() -> APIRouter:
+    router = APIRouter()
+
+    @router.get("/api/analytics", response_class=MiniAppJSONResponse)
+    async def get_analytics(
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> MiniAppJSONResponse:
+        window = parse_analytics_window(urlparse(str(request.url)))
+        return json_response(await context.gateway.get_analytics(user=context.user, window=window))
+
+    @router.get("/api/analytics/export")
+    async def export_analytics(
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+    ) -> Response:
+        return await export_analytics_response(
+            gateway=context.gateway,
+            user=context.user,
+            parsed=urlparse(str(request.url)),
+        )
+
+    return router

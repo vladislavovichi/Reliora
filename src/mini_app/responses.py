@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import mimetypes
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+
+from starlette.responses import Response
 
 
 @dataclass(slots=True, frozen=True)
@@ -16,61 +17,71 @@ class BinaryPayload:
     content: bytes
 
 
-def write_async_json(handler: Any, awaitable: Any) -> None:
-    result = asyncio.run(awaitable)
-    if hasattr(handler, "_write_json"):
-        handler._write_json(HTTPStatus.OK, result)
-        return
-    write_json(handler, HTTPStatus.OK, result)
+class MiniAppJSONResponse(Response):
+    media_type = "application/json; charset=utf-8"
+
+    def __init__(
+        self,
+        content: dict[str, Any],
+        *,
+        status_code: int | HTTPStatus = HTTPStatus.OK,
+    ) -> None:
+        super().__init__(
+            content=content,
+            status_code=int(status_code),
+            headers={"Cache-Control": "no-store"},
+            media_type=self.media_type,
+        )
+
+    @staticmethod
+    def render(content: dict[str, Any]) -> bytes:
+        return json.dumps(content, ensure_ascii=False).encode("utf-8")
 
 
-def write_json(handler: Any, status: HTTPStatus, payload: dict[str, Any]) -> None:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status.value)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+def json_response(
+    payload: dict[str, Any],
+    *,
+    status_code: int | HTTPStatus = HTTPStatus.OK,
+) -> MiniAppJSONResponse:
+    return MiniAppJSONResponse(payload, status_code=status_code)
 
 
-def write_binary(handler: Any, payload: BinaryPayload) -> None:
-    handler.send_response(HTTPStatus.OK.value)
-    handler.send_header("Content-Type", payload.content_type)
-    handler.send_header(
-        "Content-Disposition",
-        f'attachment; filename="{payload.filename}"',
+def binary_response(payload: BinaryPayload) -> Response:
+    return Response(
+        content=payload.content,
+        media_type=payload.content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{payload.filename}"',
+            "Cache-Control": "no-store",
+        },
     )
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("Content-Length", str(len(payload.content)))
-    handler.end_headers()
-    handler.wfile.write(payload.content)
 
 
-def serve_file(
-    handler: Any,
+def static_file_response(
     path: Path,
     *,
     static_dir: Path,
     content_type: str | None = None,
-) -> None:
+) -> Response:
     resolved_base = static_dir.resolve()
     resolved_path = path.resolve()
     if resolved_base not in resolved_path.parents and resolved_path != resolved_base:
-        write_json(handler, HTTPStatus.NOT_FOUND, {"error": "Файл Mini App не найден."})
-        return
+        return _static_not_found_response()
     if not resolved_path.is_file():
-        write_json(handler, HTTPStatus.NOT_FOUND, {"error": "Файл Mini App не найден."})
-        return
+        return _static_not_found_response()
 
-    payload = resolved_path.read_bytes()
     guessed_type = content_type or mimetypes.guess_type(resolved_path.name)[0]
-    handler.send_response(HTTPStatus.OK.value)
-    handler.send_header(
-        "Content-Type",
-        guessed_type or "application/octet-stream",
+    return Response(
+        content=resolved_path.read_bytes(),
+        headers={
+            "Content-Type": guessed_type or "application/octet-stream",
+            "Cache-Control": "no-store",
+        },
     )
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("Content-Length", str(len(payload)))
-    handler.end_headers()
-    handler.wfile.write(payload)
+
+
+def _static_not_found_response() -> MiniAppJSONResponse:
+    return json_response(
+        {"error": "Файл Mini App не найден."},
+        status_code=HTTPStatus.NOT_FOUND,
+    )

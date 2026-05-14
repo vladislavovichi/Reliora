@@ -1,48 +1,60 @@
 from __future__ import annotations
 
+# ruff: noqa: B008
 from typing import Any
-from urllib.parse import ParseResult
+
+from fastapi import APIRouter, Depends
+from starlette.requests import Request
 
 from application.errors import ForbiddenError
 from domain.enums.roles import UserRole
-from mini_app.auth import TelegramMiniAppUser
+from mini_app.context import MiniAppAuthenticatedContext, require_operator_context
 from mini_app.request_parsing import read_json_body
-from mini_app.responses import write_async_json
+from mini_app.responses import MiniAppJSONResponse, json_response
 
 
-def handle_admin_routes(
-    handler: Any,
-    *,
-    method: str,
-    path: str,
-    parsed: ParseResult,
-    user: TelegramMiniAppUser,
-    session: dict[str, Any],
-) -> bool:
-    del parsed
-    if method == "GET" and path == "/api/admin/operators":
-        require_admin(session)
-        write_async_json(handler, handler.gateway.list_operators(user=user))
-        return True
-    if method == "GET" and path == "/api/admin/ai-settings":
-        require_admin(session)
-        write_async_json(handler, handler.gateway.get_ai_settings(user=user))
-        return True
-    if method == "PUT" and path == "/api/admin/ai-settings":
-        require_admin(session)
-        write_async_json(
-            handler,
-            handler.gateway.update_ai_settings(
-                user=user,
-                payload=read_json_body(handler),
-            ),
+async def require_admin_context(
+    context: MiniAppAuthenticatedContext = Depends(require_operator_context),
+) -> MiniAppAuthenticatedContext:
+    require_admin(context.session)
+    return context
+
+
+def build_admin_router() -> APIRouter:
+    router = APIRouter()
+
+    @router.get("/api/admin/operators", response_class=MiniAppJSONResponse)
+    async def list_operators(
+        context: MiniAppAuthenticatedContext = Depends(require_admin_context),
+    ) -> MiniAppJSONResponse:
+        return json_response(await context.gateway.list_operators(user=context.user))
+
+    @router.get("/api/admin/ai-settings", response_class=MiniAppJSONResponse)
+    async def get_ai_settings(
+        context: MiniAppAuthenticatedContext = Depends(require_admin_context),
+    ) -> MiniAppJSONResponse:
+        return json_response(await context.gateway.get_ai_settings(user=context.user))
+
+    @router.put("/api/admin/ai-settings", response_class=MiniAppJSONResponse)
+    async def update_ai_settings(
+        request: Request,
+        context: MiniAppAuthenticatedContext = Depends(require_admin_context),
+    ) -> MiniAppJSONResponse:
+        payload = await read_json_body(request)
+        return json_response(
+            await context.gateway.update_ai_settings(
+                user=context.user,
+                payload=payload,
+            )
         )
-        return True
-    if method == "POST" and path == "/api/admin/invites":
-        require_admin(session)
-        write_async_json(handler, handler.gateway.create_operator_invite(user=user))
-        return True
-    return False
+
+    @router.post("/api/admin/invites", response_class=MiniAppJSONResponse)
+    async def create_operator_invite(
+        context: MiniAppAuthenticatedContext = Depends(require_admin_context),
+    ) -> MiniAppJSONResponse:
+        return json_response(await context.gateway.create_operator_invite(user=context.user))
+
+    return router
 
 
 def require_admin(session: dict[str, Any]) -> None:
