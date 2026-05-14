@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Awaitable, Callable
 
@@ -202,9 +200,9 @@ async def _run_probe(
     )
 
 
-def main() -> None:
-    raise SystemExit(asyncio.run(run()))
+def main() -> int:
+    return asyncio.run(run())
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -2,6 +2,7 @@ POETRY ?= poetry
 COMPOSE ?= docker compose
 COMPOSE_FILES ?= -f ops/docker/compose.yml -f ops/docker/compose.dev.yml
 PYTHON ?= python3.12
+RELIORA_OPS ?= $(POETRY) run python -m ops.cli
 export PYTHONPATH ?= src
 ALEMBIC_CONFIG ?= migrations/alembic.ini
 ALEMBIC ?= $(POETRY) run alembic -c $(ALEMBIC_CONFIG)
@@ -133,11 +134,11 @@ test-integration:
 
 repo-hygiene:
 	$(call ensure_poetry_env)
-	$(POETRY) run python ops/scripts/check_repo_hygiene.py
+	$(RELIORA_OPS) check-repo-hygiene
 
 architecture-boundaries:
 	$(call ensure_poetry_env)
-	$(POETRY) run python ops/scripts/check_architecture_boundaries.py
+	$(RELIORA_OPS) check-architecture
 
 proto:
 	$(call ensure_poetry_env)
@@ -185,7 +186,7 @@ health-mini-app:
 
 ai-smoke:
 	$(call ensure_poetry_env)
-	$(POETRY) run python ops/scripts/ai_smoke_check.py
+	$(RELIORA_OPS) ai-smoke-check
 
 migration-check:
 	$(call ensure_poetry_env)

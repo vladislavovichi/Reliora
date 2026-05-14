@@ -103,6 +103,12 @@ AI runtime локальный: `ai-service` загружает transformers mode
 | `make check` | `lint`, `typecheck`, `test` |
 | `make ci` | `check`, `proto-check`, `migration-check` |
 
+Для прямого запуска Python ops-команд есть единый CLI:
+
+```bash
+PYTHONPATH=src poetry run python -m ops.cli --help
+```
+
 ## Карта документации
 
 - [Продукт](docs/product/README.md) - роли, жизненный цикл заявки, операторские поверхности и ограничения.

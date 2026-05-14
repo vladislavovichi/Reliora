@@ -1,22 +1,10 @@
-from __future__ import annotations
-
+import argparse
 import socket
 import sys
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: port_available.py PORT", file=sys.stderr)
-        return 2
-
-    try:
-        port = int(sys.argv[1])
-    except ValueError:
-        print(f"Invalid port: {sys.argv[1]}", file=sys.stderr)
-        return 2
-
+def check_port_available(port: int) -> int:
     if not 1 <= port <= 65535:
-        print(f"Port out of range: {port}", file=sys.stderr)
         return 2
 
     sock: socket.socket | None = None
@@ -32,6 +20,19 @@ def main() -> int:
             sock.close()
 
     return 0 if result != 0 else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="port_available.py",
+        description="Exit 0 when a local TCP port is available, 1 when it is busy.",
+    )
+    parser.add_argument("port", type=int)
+    args = parser.parse_args(argv)
+    if not 1 <= args.port <= 65535:
+        parser.error(f"port out of range: {args.port}")
+
+    return check_port_available(args.port)
 
 
 if __name__ == "__main__":

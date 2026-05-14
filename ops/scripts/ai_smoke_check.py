@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from datetime import UTC, datetime
 from time import perf_counter
@@ -89,9 +87,9 @@ def _build_smoke_command() -> GenerateTicketSummaryCommand:
     )
 
 
-def main() -> None:
-    raise SystemExit(asyncio.run(run()))
+def main() -> int:
+    return asyncio.run(run())
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

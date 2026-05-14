@@ -120,6 +120,13 @@ make run-ai
 | `make check` | `lint`, `typecheck`, `test` |
 | `make ci` | `check`, `proto-check`, `migration-check` |
 
+Нетривиальные Python-проверки также собраны в ops CLI. Makefile остаётся основным интерфейсом, а для прямого запуска используйте:
+
+```bash
+PYTHONPATH=src poetry run python -m ops.cli --help
+PYTHONPATH=src poetry run python -m ops.cli port-available 8088
+```
+
 Тесты разложены по таксономии:
 
 - `tests/unit` — чистые unit-тесты, без реальных API/infra границ.
