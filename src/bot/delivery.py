@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
@@ -13,6 +11,7 @@ from aiogram.exceptions import (
     TelegramServerError,
 )
 from aiogram.types import BufferedInputFile, FSInputFile, InlineKeyboardMarkup
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception_type, stop_after_attempt
 
 from application.use_cases.tickets.summaries import TicketAttachmentSummary
 from bot.texts.feedback import build_ticket_closed_with_feedback_text
@@ -20,6 +19,13 @@ from bot.texts.operator import build_client_finished_ticket_text
 from bot.texts.ticket_messages import build_client_delivery_body, build_operator_delivery_body
 from infrastructure.assets.storage import LocalTicketAssetStorage
 from infrastructure.config.settings import get_settings
+
+_RETRYABLE_TELEGRAM_ERRORS = (
+    TelegramRetryAfter,
+    TelegramNetworkError,
+    TelegramServerError,
+    TimeoutError,
+)
 
 
 async def send_message_with_retry(
@@ -31,56 +37,12 @@ async def send_message_with_retry(
     logger: logging.Logger,
     operation: str,
 ) -> None:
-    attempts, timeout = _resolve_delivery_policy()
-    for attempt in range(1, attempts + 1):
-        try:
-            await asyncio.wait_for(
-                bot.send_message(chat_id, text, reply_markup=reply_markup),
-                timeout=timeout,
-            )
-            if attempt > 1:
-                logger.info(
-                    "Telegram delivery recovered operation=%s chat_id=%s attempt=%s",
-                    operation,
-                    chat_id,
-                    attempt,
-                )
-            return
-        except TelegramRetryAfter as exc:
-            logger.warning(
-                "Telegram delivery rate-limited operation=%s chat_id=%s attempt=%s retry_after=%s",
-                operation,
-                chat_id,
-                attempt,
-                exc.retry_after,
-            )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(max(exc.retry_after, 1), 5))
-        except (TelegramNetworkError, TelegramServerError) as exc:
-            logger.warning(
-                "Telegram delivery transient failure operation=%s chat_id=%s attempt=%s error=%s",
-                operation,
-                chat_id,
-                attempt,
-                exc,
-            )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
-        except TimeoutError:
-            logger.warning(
-                "Telegram delivery timeout operation=%s chat_id=%s attempt=%s timeout_seconds=%s",
-                operation,
-                chat_id,
-                attempt,
-                timeout,
-            )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
-        except TelegramAPIError:
-            raise
+    await _run_telegram_delivery_with_retry(
+        lambda: bot.send_message(chat_id, text, reply_markup=reply_markup),
+        logger=logger,
+        operation=operation,
+        chat_id=chat_id,
+    )
 
 
 async def send_document_with_retry(bot: Bot, **kwargs: Any) -> None:
@@ -107,19 +69,63 @@ async def _send_with_retry(
     chat_id: int,
     **kwargs: Any,
 ) -> None:
+    await _run_telegram_delivery_with_retry(
+        lambda: send_operation(chat_id=chat_id, **kwargs),
+        logger=logger,
+        operation=operation,
+        chat_id=chat_id,
+    )
+
+
+async def _run_telegram_delivery_with_retry(
+    send: Callable[[], Awaitable[object]],
+    *,
+    logger: logging.Logger,
+    operation: str,
+    chat_id: int,
+) -> None:
     attempts, timeout = _resolve_delivery_policy()
-    for attempt in range(1, attempts + 1):
-        try:
-            await asyncio.wait_for(send_operation(chat_id=chat_id, **kwargs), timeout=timeout)
-            if attempt > 1:
+    async for attempt in AsyncRetrying(
+        retry=retry_if_exception_type(_RETRYABLE_TELEGRAM_ERRORS),
+        stop=stop_after_attempt(attempts),
+        wait=_telegram_retry_wait,
+        sleep=_telegram_retry_sleep,
+        after=_log_telegram_delivery_failure(
+            logger,
+            operation=operation,
+            chat_id=chat_id,
+            timeout=timeout,
+        ),
+        reraise=True,
+    ):
+        with attempt:
+            attempt_number = attempt.retry_state.attempt_number
+            await asyncio.wait_for(send(), timeout=timeout)
+            if attempt_number > 1:
                 logger.info(
                     "Telegram delivery recovered operation=%s chat_id=%s attempt=%s",
                     operation,
                     chat_id,
-                    attempt,
+                    attempt_number,
                 )
             return
-        except TelegramRetryAfter as exc:
+
+
+def _log_telegram_delivery_failure(
+    logger: logging.Logger,
+    *,
+    operation: str,
+    chat_id: int,
+    timeout: float,
+) -> Callable[[RetryCallState], None]:
+    def log_failure(retry_state: RetryCallState) -> None:
+        if retry_state.outcome is None:
+            return
+        exc = retry_state.outcome.exception()
+        if exc is None:
+            return
+        attempt = retry_state.attempt_number
+        if isinstance(exc, TelegramRetryAfter):
             logger.warning(
                 "Telegram delivery rate-limited operation=%s chat_id=%s attempt=%s retry_after=%s",
                 operation,
@@ -127,10 +133,8 @@ async def _send_with_retry(
                 attempt,
                 exc.retry_after,
             )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(max(exc.retry_after, 1), 5))
-        except (TelegramNetworkError, TelegramServerError) as exc:
+            return
+        if isinstance(exc, (TelegramNetworkError, TelegramServerError)):
             logger.warning(
                 "Telegram delivery transient failure operation=%s chat_id=%s attempt=%s error=%s",
                 operation,
@@ -138,10 +142,8 @@ async def _send_with_retry(
                 attempt,
                 exc,
             )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
-        except TimeoutError:
+            return
+        if isinstance(exc, TimeoutError):
             logger.warning(
                 "Telegram delivery timeout operation=%s chat_id=%s attempt=%s timeout_seconds=%s",
                 operation,
@@ -149,11 +151,23 @@ async def _send_with_retry(
                 attempt,
                 timeout,
             )
-            if attempt >= attempts:
-                raise
-            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
-        except TelegramAPIError:
-            raise
+
+    return log_failure
+
+
+def _telegram_retry_wait(retry_state: RetryCallState) -> float:
+    if retry_state.outcome is not None:
+        exc = retry_state.outcome.exception()
+        if isinstance(exc, TelegramRetryAfter):
+            retry_after = exc.retry_after
+            if not isinstance(retry_after, (int, float)):
+                retry_after = 1
+            return float(min(max(retry_after, 1), 5))
+    return float(min(0.5 * (2 ** (retry_state.attempt_number - 1)), 2.0))
+
+
+async def _telegram_retry_sleep(delay: float) -> None:
+    await asyncio.sleep(delay)
 
 
 async def deliver_operator_reply_to_client(

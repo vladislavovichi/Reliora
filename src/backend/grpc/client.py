@@ -1,6 +1,4 @@
 # mypy: disable-error-code="attr-defined,name-defined"
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -10,6 +8,7 @@ from typing import Any, TypeVar
 from uuid import UUID
 
 import grpc
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
 
 from application.ai.summaries import (
     TicketAssistSnapshot,
@@ -996,17 +995,20 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> Any:
         attempts = self.read_retry_attempts if retryable else 1
         metadata = self._build_metadata(actor=actor)
-        for attempt in range(1, attempts + 1):
-            try:
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(_is_retryable_rpc_error),
+            stop=stop_after_attempt(attempts),
+            wait=lambda retry_state: self.retry_backoff_seconds * retry_state.attempt_number,
+            sleep=self._sleep_before_retry,
+            before_sleep=_log_backend_rpc_retry,
+            reraise=True,
+        ):
+            with attempt:
                 return await call(
                     request,
                     timeout=self.request_timeout_seconds,
                     metadata=metadata,
                 )
-            except grpc.aio.AioRpcError as exc:
-                if not self._should_retry_rpc(exc, attempt=attempt, attempts=attempts):
-                    raise
-                await self._sleep_before_retry(attempt)
 
         raise RuntimeError("unreachable")
 
@@ -1075,17 +1077,23 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> list[object]:
         attempts = self.read_retry_attempts if retryable else 1
         metadata = self._build_metadata(actor=actor)
-        for attempt in range(1, attempts + 1):
-            try:
-                call = call_factory(metadata)
-                items: list[object] = []
-                async for item in call:
-                    items.append(item)
-                return items
-            except grpc.aio.AioRpcError as exc:
-                if not self._should_retry_rpc(exc, attempt=attempt, attempts=attempts):
-                    raise _translate_rpc_error(exc) from exc
-                await self._sleep_before_retry(attempt)
+        try:
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception(_is_retryable_rpc_error),
+                stop=stop_after_attempt(attempts),
+                wait=lambda retry_state: self.retry_backoff_seconds * retry_state.attempt_number,
+                sleep=self._sleep_before_retry,
+                before_sleep=_log_backend_rpc_retry,
+                reraise=True,
+            ):
+                with attempt:
+                    call = call_factory(metadata)
+                    items: list[object] = []
+                    async for item in call:
+                        items.append(item)
+                    return items
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
 
         raise RuntimeError("unreachable")
 
@@ -1096,25 +1104,26 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             actor=actor,
         )
 
-    def _should_retry_rpc(
-        self,
-        exc: grpc.aio.AioRpcError,
-        *,
-        attempt: int,
-        attempts: int,
-    ) -> bool:
-        retryable = exc.code() in RETRYABLE_RPC_CODES and attempt < attempts
-        if retryable:
-            logger.warning(
-                "gRPC transient read failure code=%s details=%s attempt=%s",
-                exc.code().name,
-                exc.details(),
-                attempt,
-            )
-        return retryable
+    async def _sleep_before_retry(self, delay: float) -> None:
+        await asyncio.sleep(delay)
 
-    async def _sleep_before_retry(self, attempt: int) -> None:
-        await asyncio.sleep(self.retry_backoff_seconds * attempt)
+
+def _is_retryable_rpc_error(exc: BaseException) -> bool:
+    return isinstance(exc, grpc.aio.AioRpcError) and exc.code() in RETRYABLE_RPC_CODES
+
+
+def _log_backend_rpc_retry(retry_state: RetryCallState) -> None:
+    if retry_state.outcome is None:
+        return
+    exc = retry_state.outcome.exception()
+    if not isinstance(exc, grpc.aio.AioRpcError):
+        return
+    logger.warning(
+        "gRPC transient read failure code=%s details=%s attempt=%s",
+        exc.code().name,
+        exc.details(),
+        retry_state.attempt_number,
+    )
 
 
 def build_helpdesk_backend_client_factory(

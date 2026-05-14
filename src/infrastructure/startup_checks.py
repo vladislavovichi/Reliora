@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
@@ -8,6 +6,7 @@ from dataclasses import dataclass
 import grpc
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception_type, stop_after_attempt
 
 from infrastructure.config.settings import Settings
 
@@ -77,47 +76,81 @@ async def _run_single_dependency_check(
     timeout = max(settings.resilience.startup_check_timeout_seconds, 0.1)
     backoff = max(settings.resilience.startup_retry_backoff_seconds, 0.0)
 
-    for attempt in range(1, attempts + 1):
-        try:
-            logger.info(
-                "Startup dependency check started component=%s dependency=%s target=%s attempt=%s",
-                component,
-                check.name,
-                check.target,
-                attempt,
-            )
-            is_ready = await asyncio.wait_for(check.check(), timeout=timeout)
-            if not is_ready:
-                raise RuntimeError("dependency returned negative readiness state")
+    try:
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception_type(EXPECTED_STARTUP_FAILURES),
+            stop=stop_after_attempt(attempts),
+            wait=lambda retry_state: backoff * retry_state.attempt_number,
+            sleep=_startup_retry_sleep,
+            after=_log_startup_check_failure(
+                component=component,
+                check=check,
+                attempts=attempts,
+                logger=logger,
+            ),
+            reraise=True,
+        ):
+            with attempt:
+                attempt_number = attempt.retry_state.attempt_number
+                logger.info(
+                    "Startup dependency check started component=%s dependency=%s target=%s "
+                    "attempt=%s",
+                    component,
+                    check.name,
+                    check.target,
+                    attempt_number,
+                )
+                is_ready = await asyncio.wait_for(check.check(), timeout=timeout)
+                if not is_ready:
+                    raise RuntimeError("dependency returned negative readiness state")
 
-            logger.info(
-                "Startup dependency check passed component=%s dependency=%s target=%s attempt=%s",
-                component,
-                check.name,
-                check.target,
-                attempt,
-            )
+                logger.info(
+                    "Startup dependency check passed component=%s dependency=%s target=%s "
+                    "attempt=%s",
+                    component,
+                    check.name,
+                    check.target,
+                    attempt_number,
+                )
+                return
+    except EXPECTED_STARTUP_FAILURES as exc:
+        raise RuntimeError(f"Критическая зависимость {check.name} недоступна: {exc}") from exc
+
+
+def _log_startup_check_failure(
+    *,
+    component: str,
+    check: StartupDependencyCheck,
+    attempts: int,
+    logger: logging.Logger,
+) -> Callable[[RetryCallState], None]:
+    def log_failure(retry_state: RetryCallState) -> None:
+        if retry_state.outcome is None:
             return
-        except EXPECTED_STARTUP_FAILURES as exc:
-            is_final_attempt = attempt >= attempts
-            log_method = logger.error if is_final_attempt else logger.warning
-            log_method(
-                "Startup dependency check failed component=%s dependency=%s target=%s "
-                "attempt=%s failure_class=%s error_type=%s error=%s final=%s",
-                component,
-                check.name,
-                check.target,
-                attempt,
-                _classify_startup_failure(exc),
-                exc.__class__.__name__,
-                exc,
-                is_final_attempt,
-            )
-            if is_final_attempt:
-                raise RuntimeError(
-                    f"Критическая зависимость {check.name} недоступна: {exc}"
-                ) from exc
-            await asyncio.sleep(backoff * attempt)
+        exc = retry_state.outcome.exception()
+        if not isinstance(exc, EXPECTED_STARTUP_FAILURES):
+            return
+        attempt = retry_state.attempt_number
+        is_final_attempt = attempt >= attempts
+        log_method = logger.error if is_final_attempt else logger.warning
+        log_method(
+            "Startup dependency check failed component=%s dependency=%s target=%s "
+            "attempt=%s failure_class=%s error_type=%s error=%s final=%s",
+            component,
+            check.name,
+            check.target,
+            attempt,
+            _classify_startup_failure(exc),
+            exc.__class__.__name__,
+            exc,
+            is_final_attempt,
+        )
+
+    return log_failure
+
+
+async def _startup_retry_sleep(delay: float) -> None:
+    await asyncio.sleep(delay)
 
 
 def _validate_helpdesk_settings(settings: Settings) -> None:

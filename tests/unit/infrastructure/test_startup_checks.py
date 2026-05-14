@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 
 import pytest
@@ -51,6 +49,31 @@ async def test_run_startup_dependency_checks_propagates_unexpected_programming_e
             settings=_settings(),
             logger=logging.getLogger(__name__),
         )
+
+
+async def test_run_startup_dependency_checks_fails_after_configured_attempts() -> None:
+    attempts = 0
+
+    async def unavailable_check() -> bool:
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("redis unavailable")
+
+    with pytest.raises(RuntimeError, match="Критическая зависимость redis недоступна"):
+        await run_startup_dependency_checks(
+            component="bot",
+            checks=(
+                StartupDependencyCheck(
+                    name="redis",
+                    target="redis://localhost:6379/0",
+                    check=unavailable_check,
+                ),
+            ),
+            settings=_settings(),
+            logger=logging.getLogger(__name__),
+        )
+
+    assert attempts == 2
 
 
 def _settings() -> Settings:

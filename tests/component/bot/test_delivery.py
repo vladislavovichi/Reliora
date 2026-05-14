@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
-from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramRetryAfter
 from pytest import MonkeyPatch
 
 from application.use_cases.tickets.summaries import TicketAttachmentSummary
@@ -87,6 +85,28 @@ async def test_send_message_with_retry_raises_after_last_attempt(
 
     assert bot.send_message.await_count == 3
     assert sleep.await_count == 2
+
+
+async def test_send_message_with_retry_does_not_retry_bad_request(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    bot = Mock()
+    bot.send_message = AsyncMock(side_effect=TelegramBadRequest(Mock(), "bad request"))
+    sleep = AsyncMock()
+    monkeypatch.setattr("bot.delivery.asyncio.sleep", sleep)
+
+    with pytest.raises(TelegramBadRequest):
+        await send_message_with_retry(
+            bot,
+            chat_id=42,
+            text="hello",
+            reply_markup=None,
+            logger=logging.getLogger("test"),
+            operation="operator_reply",
+        )
+
+    bot.send_message.assert_awaited_once()
+    sleep.assert_not_awaited()
 
 
 async def test_send_document_with_retry_recovers_from_network_error(

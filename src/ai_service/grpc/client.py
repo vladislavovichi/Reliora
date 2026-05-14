@@ -1,6 +1,4 @@
 # mypy: disable-error-code="attr-defined,name-defined"
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import AsyncIterator
@@ -9,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import grpc
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
 
 from ai_service.grpc.auth import build_call_metadata
 from ai_service.grpc.generated import ai_service_pb2, ai_service_pb2_grpc
@@ -140,17 +139,23 @@ class GrpcAIServiceClient(AIServiceClient):
     ) -> Any:
         attempts = self.read_retry_attempts if retryable else 1
         metadata = self._build_metadata()
-        for attempt in range(1, attempts + 1):
-            try:
-                return await call(
-                    request,
-                    timeout=self.request_timeout_seconds,
-                    metadata=metadata,
-                )
-            except grpc.aio.AioRpcError as exc:
-                if not self._should_retry_rpc(exc, attempt=attempt, attempts=attempts):
-                    raise _translate_rpc_error(exc) from exc
-                await asyncio.sleep(self.retry_backoff_seconds * attempt)
+        try:
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception(_is_retryable_rpc_error),
+                stop=stop_after_attempt(attempts),
+                wait=lambda retry_state: self.retry_backoff_seconds * retry_state.attempt_number,
+                sleep=self._sleep_before_retry,
+                before_sleep=_log_ai_rpc_retry,
+                reraise=True,
+            ):
+                with attempt:
+                    return await call(
+                        request,
+                        timeout=self.request_timeout_seconds,
+                        metadata=metadata,
+                    )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
         raise RuntimeError("unreachable")
 
     def _build_metadata(self) -> tuple[tuple[str, str], ...]:
@@ -159,22 +164,26 @@ class GrpcAIServiceClient(AIServiceClient):
             correlation_id=ensure_correlation_id(),
         )
 
-    def _should_retry_rpc(
-        self,
-        exc: grpc.aio.AioRpcError,
-        *,
-        attempt: int,
-        attempts: int,
-    ) -> bool:
-        retryable = exc.code() in RETRYABLE_RPC_CODES and attempt < attempts
-        if retryable:
-            logger.warning(
-                "AI gRPC transient read failure code=%s details=%s attempt=%s",
-                exc.code().name,
-                exc.details(),
-                attempt,
-            )
-        return retryable
+    async def _sleep_before_retry(self, delay: float) -> None:
+        await asyncio.sleep(delay)
+
+
+def _is_retryable_rpc_error(exc: BaseException) -> bool:
+    return isinstance(exc, grpc.aio.AioRpcError) and exc.code() in RETRYABLE_RPC_CODES
+
+
+def _log_ai_rpc_retry(retry_state: RetryCallState) -> None:
+    if retry_state.outcome is None:
+        return
+    exc = retry_state.outcome.exception()
+    if not isinstance(exc, grpc.aio.AioRpcError):
+        return
+    logger.warning(
+        "AI gRPC transient read failure code=%s details=%s attempt=%s",
+        exc.code().name,
+        exc.details(),
+        retry_state.attempt_number,
+    )
 
 
 def build_ai_service_client_factory(
