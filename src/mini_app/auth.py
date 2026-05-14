@@ -1,11 +1,10 @@
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl
 
-from aiogram.utils.web_app import check_webapp_signature
+from aiogram.utils.web_app import WebAppInitData, safe_parse_webapp_init_data
+from pydantic import ValidationError
 
 
 class TelegramMiniAppAuthError(ValueError):
@@ -44,13 +43,6 @@ class ValidatedMiniAppInitData:
     user: TelegramMiniAppUser
 
 
-@dataclass(slots=True, frozen=True)
-class _ParsedInitData:
-    raw_init_data: str
-    bot_token: str
-    values: dict[str, str]
-
-
 def validate_telegram_mini_app_init_data(
     *,
     init_data: str,
@@ -58,37 +50,47 @@ def validate_telegram_mini_app_init_data(
     max_age_seconds: int,
     now: datetime | None = None,
 ) -> ValidatedMiniAppInitData:
-    parsed = _parse_init_data(init_data=init_data, bot_token=bot_token)
-    _validate_init_data_hash(parsed)
+    normalized_init_data = init_data.strip()
+    normalized_bot_token = bot_token.strip()
+    _validate_required_inputs(
+        init_data=normalized_init_data,
+        bot_token=normalized_bot_token,
+    )
+    values = _parse_init_data_values(normalized_init_data)
+    parsed = _safe_parse_init_data(
+        init_data=normalized_init_data,
+        bot_token=normalized_bot_token,
+        values=values,
+    )
     auth_date = _validate_auth_date(
-        values=parsed.values,
+        auth_date=parsed.auth_date,
         max_age_seconds=max_age_seconds,
         now=now,
     )
-    user = _validate_user_payload(parsed.values)
+    user = _validate_user_payload(parsed)
     return ValidatedMiniAppInitData(
-        raw_init_data=parsed.raw_init_data,
+        raw_init_data=normalized_init_data,
         auth_date=auth_date,
         user=user,
     )
 
 
-def _parse_init_data(*, init_data: str, bot_token: str) -> _ParsedInitData:
-    normalized_init_data = init_data.strip()
-    normalized_bot_token = bot_token.strip()
-    if not normalized_init_data:
+def _validate_required_inputs(*, init_data: str, bot_token: str) -> None:
+    if not init_data:
         raise TelegramMiniAppAuthError(
             "Откройте рабочее место из Telegram. Данные запуска не получены.",
             code="missing_init_data",
         )
-    if not normalized_bot_token:
+    if not bot_token:
         raise TelegramMiniAppAuthError(
             "Проверка рабочего места временно недоступна.",
             code="bot_token_missing",
         )
 
+
+def _parse_init_data_values(init_data: str) -> dict[str, str]:
     try:
-        pairs = parse_qsl(normalized_init_data, keep_blank_values=True, strict_parsing=True)
+        pairs = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
     except ValueError as exc:
         raise TelegramMiniAppAuthError(
             "Не удалось прочитать данные запуска. Откройте рабочее место заново.",
@@ -110,40 +112,64 @@ def _parse_init_data(*, init_data: str, bot_token: str) -> _ParsedInitData:
             "В данных запуска отсутствует подпись Telegram.",
             code="missing_signature",
         )
-    return _ParsedInitData(
-        raw_init_data=normalized_init_data,
-        bot_token=normalized_bot_token,
-        values=values,
-    )
+    return values
 
 
-def _validate_init_data_hash(parsed: _ParsedInitData) -> None:
-    if not check_webapp_signature(parsed.bot_token, parsed.raw_init_data):
+def _safe_parse_init_data(
+    *,
+    init_data: str,
+    bot_token: str,
+    values: dict[str, str],
+) -> WebAppInitData:
+    try:
+        return safe_parse_webapp_init_data(bot_token, init_data)
+    except json.JSONDecodeError as exc:
+        raise TelegramMiniAppAuthError(
+            "Профиль Telegram в данных запуска повреждён.",
+            code="invalid_user_payload",
+        ) from exc
+    except ValidationError as exc:
+        raise _validation_error_for_values(values) from exc
+    except ValueError as exc:
         raise TelegramMiniAppAuthError(
             "Не удалось подтвердить запуск. Откройте рабочее место заново.",
             code="invalid_signature",
-        )
+        ) from exc
 
 
-def _validate_auth_date(
-    *,
-    values: dict[str, str],
-    max_age_seconds: int,
-    now: datetime | None,
-) -> datetime:
+def _validation_error_for_values(values: dict[str, str]) -> TelegramMiniAppAuthError:
     auth_timestamp_raw = values.get("auth_date", "").strip()
     if not auth_timestamp_raw:
-        raise TelegramMiniAppAuthError(
+        return TelegramMiniAppAuthError(
             "В данных запуска отсутствует время авторизации.",
             code="missing_auth_date",
         )
     try:
-        auth_date = datetime.fromtimestamp(int(auth_timestamp_raw), tz=UTC)
-    except ValueError as exc:
-        raise TelegramMiniAppAuthError(
+        int(auth_timestamp_raw)
+    except ValueError:
+        return TelegramMiniAppAuthError(
             "Telegram передал некорректное время авторизации.",
             code="invalid_auth_date",
-        ) from exc
+        )
+    if values.get("user", "").strip():
+        return TelegramMiniAppAuthError(
+            "Профиль Telegram в данных запуска неполный.",
+            code="incomplete_user_payload",
+        )
+    return TelegramMiniAppAuthError(
+        "Не удалось прочитать данные запуска. Откройте рабочее место заново.",
+        code="malformed_init_data",
+    )
+
+
+def _validate_auth_date(
+    *,
+    auth_date: datetime,
+    max_age_seconds: int,
+    now: datetime | None,
+) -> datetime:
+    if auth_date.tzinfo is None:
+        auth_date = auth_date.replace(tzinfo=UTC)
 
     current_time = now or datetime.now(UTC)
     if (auth_date - current_time).total_seconds() > 30:
@@ -159,35 +185,24 @@ def _validate_auth_date(
     return auth_date
 
 
-def _validate_user_payload(values: dict[str, str]) -> TelegramMiniAppUser:
-    user_raw = values.get("user", "").strip()
-    if not user_raw:
+def _validate_user_payload(parsed: WebAppInitData) -> TelegramMiniAppUser:
+    user = parsed.user
+    if user is None:
         raise TelegramMiniAppAuthError(
             "В данных запуска отсутствует пользователь Telegram.",
             code="missing_user",
         )
-    try:
-        payload = json.loads(user_raw)
-    except json.JSONDecodeError as exc:
-        raise TelegramMiniAppAuthError(
-            "Профиль Telegram в данных запуска повреждён.",
-            code="invalid_user_payload",
-        ) from exc
 
-    user_id = payload.get("id")
-    first_name = payload.get("first_name")
-    if not isinstance(user_id, int) or user_id <= 0 or not isinstance(first_name, str):
+    if user.id <= 0 or not user.first_name:
         raise TelegramMiniAppAuthError(
             "Профиль Telegram в данных запуска неполный.",
             code="incomplete_user_payload",
         )
 
     return TelegramMiniAppUser(
-        telegram_user_id=user_id,
-        first_name=first_name,
-        last_name=payload.get("last_name") if isinstance(payload.get("last_name"), str) else None,
-        username=payload.get("username") if isinstance(payload.get("username"), str) else None,
-        language_code=(
-            payload.get("language_code") if isinstance(payload.get("language_code"), str) else None
-        ),
+        telegram_user_id=user.id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        language_code=user.language_code,
     )
