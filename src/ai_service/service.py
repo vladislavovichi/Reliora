@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Literal
 from uuid import UUID
@@ -330,10 +330,7 @@ class _AIOperationLogger:
     operation: _AIOperationName
     model_id: str | None
     ticket_public_id: UUID | None = None
-    started_at: float = 0.0
-
-    def __post_init__(self) -> None:
-        self.started_at = perf_counter()
+    started_at: float = field(init=False, default_factory=perf_counter)
 
     def finish(
         self,

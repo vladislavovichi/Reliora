@@ -30,26 +30,6 @@ class AIJSONCompletionResult[SchemaT: BaseModel]:
     retry_count: int = 0
 
 
-async def complete_json[SchemaT: BaseModel](
-    *,
-    provider: AIProvider,
-    instructions: str,
-    prompt: str,
-    schema: type[SchemaT],
-    max_output_tokens: int,
-    temperature: float,
-) -> SchemaT | None:
-    result = await complete_json_with_metadata(
-        provider=provider,
-        instructions=instructions,
-        prompt=prompt,
-        schema=schema,
-        max_output_tokens=max_output_tokens,
-        temperature=temperature,
-    )
-    return result.payload
-
-
 async def complete_json_with_metadata[SchemaT: BaseModel](
     *,
     provider: AIProvider,
@@ -142,10 +122,9 @@ def build_json_retry_prompt(*, prompt: str, schema: type[BaseModel]) -> str:
         [
             prompt,
             "",
-            "Предыдущий ответ не был валидным JSON для ожидаемой структуры.",
+            "The previous response was not valid JSON for the expected structure.",
             "Return strictly valid JSON only, with no markdown and no surrounding explanation.",
-            "Верни строго валидный JSON-объект без markdown, комментариев и пояснений вокруг.",
-            "Структура должна соответствовать этой JSON Schema:",
+            "The structure must match this JSON Schema:",
             json.dumps(schema.model_json_schema(), ensure_ascii=False),
         ]
     )

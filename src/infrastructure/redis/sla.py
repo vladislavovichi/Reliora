@@ -8,6 +8,14 @@ from redis.asyncio import Redis
 from application.contracts.runtime import SLADeadlineScheduler, SLATimeoutProcessor
 from infrastructure.redis.keys import SLA_DEADLINES_KEY
 
+_CLAIM_DUE_SCRIPT = """
+local items = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, tonumber(ARGV[2]))
+if #items > 0 then
+    redis.call('ZREM', KEYS[1], unpack(items))
+end
+return items
+"""
+
 
 class RedisSLADeadlineScheduler(SLADeadlineScheduler):
     def __init__(self, redis: Redis) -> None:
@@ -30,11 +38,14 @@ class RedisSLADeadlineScheduler(SLADeadlineScheduler):
         return list(items)
 
     async def claim_due(self, *, until: datetime, limit: int = 100) -> Sequence[str]:
-        due_ticket_ids = list(await self.get_due(until=until, limit=limit))
-        if not due_ticket_ids:
-            return []
-        await self.redis.zrem(SLA_DEADLINES_KEY, *due_ticket_ids)
-        return due_ticket_ids
+        result = await self.redis.eval(
+            _CLAIM_DUE_SCRIPT,
+            1,
+            SLA_DEADLINES_KEY,
+            until.timestamp(),
+            limit,
+        )
+        return [r.decode() if isinstance(r, bytes) else r for r in result]
 
 
 class RedisSLATimeoutProcessor(SLATimeoutProcessor):

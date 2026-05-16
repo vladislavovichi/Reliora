@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -59,10 +60,11 @@ class RunTicketSLAChecksUseCase:
         checked_at = now or utcnow()
         tickets = await self.ticket_repository.list_open_tickets(limit=limit)
         target_by_public_id = {target.ticket_public_id: target for target in reassignment_targets}
-        policy_by_priority = {
-            priority: await self.sla_policy_repository.get_for_priority(priority=priority)
-            for priority in {ticket.priority for ticket in tickets}
-        }
+        priorities = list({ticket.priority for ticket in tickets})
+        policies = await asyncio.gather(
+            *[self.sla_policy_repository.get_for_priority(priority=p) for p in priorities]
+        )
+        policy_by_priority = dict(zip(priorities, policies))
 
         processed: list[TicketSLAProcessingSummary] = []
         auto_escalated_count = 0

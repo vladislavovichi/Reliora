@@ -133,14 +133,6 @@ class TicketStreamConsumer(Protocol):
     ) -> Sequence[TicketStreamMessage]:
         """Read new-ticket events as structured stream messages."""
 
-    async def poll_new_tickets(
-        self,
-        *,
-        last_id: str = "0-0",
-        count: int = 10,
-        block_ms: int | None = None,
-    ) -> list[tuple[str, dict[str, str]]]:
-        """Read new-ticket events from the Redis stream."""
 
 
 class SLATimeoutProcessor(Protocol):

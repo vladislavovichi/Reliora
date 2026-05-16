@@ -62,26 +62,3 @@ class RedisTicketStreamConsumer(TicketStreamConsumer):
             for message_id, payload in stream_messages
         ]
 
-    async def poll_new_tickets(
-        self,
-        *,
-        last_id: str = "0-0",
-        count: int = 10,
-        block_ms: int | None = None,
-    ) -> list[tuple[str, dict[str, str]]]:
-        messages = await self.read_new_ticket_messages(
-            last_id=last_id,
-            count=count,
-            block_ms=block_ms,
-        )
-        return [
-            (
-                message.message_id,
-                {
-                    "ticket_id": message.ticket_id,
-                    "client_chat_id": str(message.client_chat_id),
-                    "subject": message.subject,
-                },
-            )
-            for message in messages
-        ]

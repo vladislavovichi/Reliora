@@ -62,7 +62,7 @@ def _serialize_current_assignment(ticket: TicketDetailsSummary) -> dict[str, Any
         title="Current assignment",
         description=f"Ticket is assigned to {ticket.assigned_operator_name}.",
         actor_label=ticket.assigned_operator_name,
-        created_at=ticket.created_at,
+        created_at=ticket.updated_at,
         metadata={"derived": True},
     )
 
@@ -187,8 +187,9 @@ def _normalize_actor_label(value: str | None) -> str:
 
 
 def _normalize_status(value: Any) -> str:
-    status = getattr(value, "value", None)
-    return str(status)
+    if hasattr(value, "value"):
+        return str(value.value)
+    return str(value)
 
 
 def _normalize_optional_text(value: str | None) -> str | None:

@@ -41,7 +41,7 @@ from domain.contracts.repositories import (
 HelpdeskServiceFactory = Callable[[], AbstractAsyncContextManager["HelpdeskService"]]
 
 
-@dataclass(slots=True)
+@dataclass
 class HelpdeskService(
     HelpdeskTicketOperations,
     HelpdeskCatalogOperations,

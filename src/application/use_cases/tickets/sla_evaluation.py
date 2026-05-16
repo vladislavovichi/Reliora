@@ -96,14 +96,6 @@ def build_sla_event_payload(
     return payload
 
 
-def build_not_applicable_deadline() -> SLADeadlineSummary:
-    return SLADeadlineSummary(
-        deadline_at=None,
-        status=SLADeadlineStatus.NOT_APPLICABLE,
-        remaining_seconds=None,
-    )
-
-
 def evaluate_ticket_sla(
     *,
     ticket: Ticket,
@@ -111,7 +103,11 @@ def evaluate_ticket_sla(
     now: datetime,
 ) -> TicketSLAEvaluationSummary:
     if policy is None:
-        not_applicable = build_not_applicable_deadline()
+        not_applicable = SLADeadlineSummary(
+            deadline_at=None,
+            status=SLADeadlineStatus.NOT_APPLICABLE,
+            remaining_seconds=None,
+        )
         return TicketSLAEvaluationSummary(
             public_id=ticket.public_id,
             public_number=format_public_ticket_number(ticket.public_id),

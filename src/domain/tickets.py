@@ -10,14 +10,6 @@ OPEN_TICKET_STATUSES = frozenset(
         TicketStatus.ESCALATED,
     }
 )
-ASSIGNABLE_TICKET_STATUSES = frozenset(
-    {
-        TicketStatus.NEW,
-        TicketStatus.QUEUED,
-        TicketStatus.ASSIGNED,
-        TicketStatus.ESCALATED,
-    }
-)
 ESCALATABLE_TICKET_STATUSES = frozenset(
     {
         TicketStatus.QUEUED,
@@ -52,7 +44,7 @@ def is_open_status(status: TicketStatus) -> bool:
 
 
 def ensure_assignable(status: TicketStatus) -> None:
-    if status not in ASSIGNABLE_TICKET_STATUSES:
+    if status not in OPEN_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
             "Заявку нельзя назначить, пока она находится "
             f"в статусе «{format_status_for_humans(status)}»."
