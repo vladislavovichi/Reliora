@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from aiogram import Bot
+
 from application.contracts.actors import OperatorIdentity
 from application.contracts.tickets import (
     AddInternalNoteCommand,

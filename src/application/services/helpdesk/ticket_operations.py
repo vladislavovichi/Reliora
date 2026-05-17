@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
-from application.errors import ForbiddenError
 from application.contracts.tickets import (
     AddInternalNoteCommand,
     AssignNextQueuedTicketCommand,
@@ -12,6 +11,7 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,
 )
+from application.errors import ForbiddenError
 from application.services.authorization import Permission
 from application.services.helpdesk._context import _HelpdeskContext
 from application.use_cases.tickets.exports import (

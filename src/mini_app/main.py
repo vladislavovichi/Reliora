@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from aiogram import Bot
+
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from infrastructure.config.ai_settings import (
     JsonAISettingsRepository,

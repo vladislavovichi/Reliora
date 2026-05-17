@@ -256,11 +256,9 @@ class HelpdeskBackendTicketingGrpcMixin(HelpdeskBackendGrpcServiceBase):
             context,
             method="CloseTicketAsClient",
             fallback_actor=self._request_actor(request),
-            call=lambda helpdesk_service, request_context: (
-                helpdesk_service.close_ticket_as_client(
-                    ticket_public_id=UUID(request.ticket_public_id),
-                    actor=request_context.actor,
-                )
+            call=lambda helpdesk_service, request_context: helpdesk_service.close_ticket_as_client(
+                ticket_public_id=UUID(request.ticket_public_id),
+                actor=request_context.actor,
             ),
             serialize=serialize_ticket_summary,
             not_found_message="Заявка не найдена.",
