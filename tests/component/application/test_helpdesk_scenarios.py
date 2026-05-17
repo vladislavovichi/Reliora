@@ -32,7 +32,7 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
 )
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
-from application.services.helpdesk.components import HelpdeskExportRenderers
+from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
 from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
     AuditLogRepository,
@@ -839,31 +839,33 @@ def helpdesk_scenario() -> HelpdeskScenario:
 
     return HelpdeskScenario(
         helpdesk_service=HelpdeskService(
-            ticket_repository=cast(TicketRepository, ticket_repository),
-            ticket_analytics_repository=cast(TicketAnalyticsRepository, ticket_repository),
-            ticket_feedback_repository=cast(
-                TicketFeedbackRepository, EmptyTicketFeedbackRepository()
+            repository_bundle=HelpdeskRepositoryBundle(
+                ticket=cast(TicketRepository, ticket_repository),
+                ticket_analytics=cast(TicketAnalyticsRepository, ticket_repository),
+                ticket_feedback=cast(
+                    TicketFeedbackRepository, EmptyTicketFeedbackRepository()
+                ),
+                ticket_ai_summary=cast(
+                    TicketAISummaryRepository, EmptyTicketAISummaryRepository()
+                ),
+                ticket_message=cast(TicketMessageRepository, message_repository),
+                ticket_internal_note=cast(
+                    TicketInternalNoteRepository, internal_note_repository
+                ),
+                ticket_event=cast(TicketEventRepository, event_repository),
+                audit_log=cast(AuditLogRepository, EmptyAuditLogRepository()),
+                operator=cast(OperatorRepository, operator_repository),
+                operator_invite=cast(
+                    OperatorInviteCodeRepository, EmptyOperatorInviteCodeRepository()
+                ),
+                macro=cast(MacroRepository, EmptyMacroRepository()),
+                sla_policy=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),
+                tag=cast(TagRepository, EmptyTagRepository()),
+                ticket_category=cast(
+                    TicketCategoryRepository, EmptyTicketCategoryRepository()
+                ),
+                ticket_tag=cast(TicketTagRepository, EmptyTicketTagRepository()),
             ),
-            ticket_ai_summary_repository=cast(
-                TicketAISummaryRepository, EmptyTicketAISummaryRepository()
-            ),
-            ticket_message_repository=cast(TicketMessageRepository, message_repository),
-            ticket_internal_note_repository=cast(
-                TicketInternalNoteRepository, internal_note_repository
-            ),
-            ticket_event_repository=cast(TicketEventRepository, event_repository),
-            audit_log_repository=cast(AuditLogRepository, EmptyAuditLogRepository()),
-            operator_repository=cast(OperatorRepository, operator_repository),
-            operator_invite_repository=cast(
-                OperatorInviteCodeRepository, EmptyOperatorInviteCodeRepository()
-            ),
-            macro_repository=cast(MacroRepository, EmptyMacroRepository()),
-            sla_policy_repository=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),
-            tag_repository=cast(TagRepository, EmptyTagRepository()),
-            ticket_category_repository=cast(
-                TicketCategoryRepository, EmptyTicketCategoryRepository()
-            ),
-            ticket_tag_repository=cast(TicketTagRepository, EmptyTicketTagRepository()),
             ai_client_factory=build_ai_client_factory(),
             export_renderers=HelpdeskExportRenderers(
                 ticket_report_csv=render_ticket_report_csv,

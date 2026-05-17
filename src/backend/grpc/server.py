@@ -11,6 +11,7 @@ from backend.grpc.server_base import HelpdeskBackendGrpcServiceBase
 from backend.grpc.server_operations import HelpdeskBackendOperationsGrpcMixin
 from backend.grpc.server_ticketing import HelpdeskBackendTicketingGrpcMixin
 from infrastructure.config.settings import BackendAuthConfig
+from infrastructure.metrics import GrpcMetricsInterceptor
 
 
 @dataclass(slots=True)
@@ -34,7 +35,7 @@ class HelpdeskBackendGrpcServer:
     bound_port: int = field(init=False)
 
     def __post_init__(self) -> None:
-        self.server = grpc.aio.server()
+        self.server = grpc.aio.server(interceptors=[GrpcMetricsInterceptor()])
         helpdesk_pb2_grpc.add_HelpdeskBackendServiceServicer_to_server(
             HelpdeskBackendGrpcService(
                 helpdesk_service_factory=self.helpdesk_service_factory,

@@ -18,7 +18,7 @@ from application.services.authorization import (
     AuthorizationServiceFactory,
 )
 from application.services.diagnostics import DiagnosticsService
-from application.services.helpdesk.components import HelpdeskExportRenderers
+from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.ai.settings import AISettingsProvider, InMemoryAISettingsRepository
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
@@ -120,21 +120,23 @@ def build_helpdesk_service(
     ticket_repository = SqlAlchemyTicketRepository(session)
     resolved_ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
     return HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_analytics_repository=ticket_repository,
-        ticket_feedback_repository=SqlAlchemyTicketFeedbackRepository(session),
-        ticket_ai_summary_repository=SqlAlchemyTicketAISummaryRepository(session),
-        ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
-        ticket_internal_note_repository=SqlAlchemyTicketInternalNoteRepository(session),
-        ticket_event_repository=SqlAlchemyTicketEventRepository(session),
-        audit_log_repository=SqlAlchemyAuditLogRepository(session),
-        operator_repository=SqlAlchemyOperatorRepository(session),
-        operator_invite_repository=SqlAlchemyOperatorInviteCodeRepository(session),
-        macro_repository=SqlAlchemyMacroRepository(session),
-        sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
-        tag_repository=SqlAlchemyTagRepository(session),
-        ticket_category_repository=SqlAlchemyTicketCategoryRepository(session),
-        ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
+        repository_bundle=HelpdeskRepositoryBundle(
+            ticket=ticket_repository,
+            ticket_analytics=ticket_repository,
+            ticket_feedback=SqlAlchemyTicketFeedbackRepository(session),
+            ticket_ai_summary=SqlAlchemyTicketAISummaryRepository(session),
+            ticket_message=SqlAlchemyTicketMessageRepository(session),
+            ticket_internal_note=SqlAlchemyTicketInternalNoteRepository(session),
+            ticket_event=SqlAlchemyTicketEventRepository(session),
+            audit_log=SqlAlchemyAuditLogRepository(session),
+            operator=SqlAlchemyOperatorRepository(session),
+            operator_invite=SqlAlchemyOperatorInviteCodeRepository(session),
+            macro=SqlAlchemyMacroRepository(session),
+            sla_policy=SqlAlchemySLAPolicyRepository(session),
+            tag=SqlAlchemyTagRepository(session),
+            ticket_category=SqlAlchemyTicketCategoryRepository(session),
+            ticket_tag=SqlAlchemyTicketTagRepository(session),
+        ),
         ai_client_factory=ai_client_factory,
         ai_settings_provider=resolved_ai_settings_provider,
         export_renderers=HelpdeskExportRenderers(

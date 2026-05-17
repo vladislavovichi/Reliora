@@ -19,7 +19,7 @@ from application.contracts.tickets import (
 )
 from application.errors import InternalApplicationError
 from application.services.authorization import AuthorizationError
-from application.services.helpdesk.components import HelpdeskExportRenderers
+from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase
@@ -1162,43 +1162,45 @@ def build_service(
 ) -> HelpdeskService:
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
-        ticket_repository=ticket_repository,
-        ticket_analytics_repository=ticket_repository,
-        ticket_feedback_repository=ticket_feedback_repository or StubTicketFeedbackRepository(),
-        ticket_ai_summary_repository=(
-            ticket_ai_summary_repository or build_ticket_ai_summary_repository_mock()
+        repository_bundle=HelpdeskRepositoryBundle(
+            ticket=ticket_repository,
+            ticket_analytics=ticket_repository,
+            ticket_feedback=ticket_feedback_repository or StubTicketFeedbackRepository(),
+            ticket_ai_summary=(
+                ticket_ai_summary_repository or build_ticket_ai_summary_repository_mock()
+            ),
+            ticket_message=message_repository or build_message_repository_mock(),
+            ticket_internal_note=(
+                internal_note_repository or build_internal_note_repository_mock()
+            ),
+            ticket_event=event_repository or build_event_repository_mock(),
+            audit_log=build_audit_repository_mock(),
+            operator=operator_repository or build_operator_repository_mock({}),
+            operator_invite=operator_invite_repository or StubOperatorInviteRepository(),
+            macro=macro_repository or build_macro_repository_mock(),
+            sla_policy=sla_policy_repository
+            or build_sla_policy_repository_mock(
+                policies={
+                    None: SimpleNamespace(
+                        id=1,
+                        name="Default",
+                        first_response_minutes=30,
+                        resolution_minutes=240,
+                        priority=None,
+                    )
+                }
+            ),
+            tag=active_tag_repository,
+            ticket_category=ticket_category_repository
+            or StubTicketCategoryRepository(
+                initial_categories=[
+                    (1, "access", "Доступ и вход", True, 10),
+                    (2, "other", "Другая тема", True, 90),
+                ]
+            ),
+            ticket_tag=ticket_tag_repository
+            or StubTicketTagRepository(tag_repository=active_tag_repository),
         ),
-        ticket_message_repository=message_repository or build_message_repository_mock(),
-        ticket_internal_note_repository=(
-            internal_note_repository or build_internal_note_repository_mock()
-        ),
-        ticket_event_repository=event_repository or build_event_repository_mock(),
-        audit_log_repository=build_audit_repository_mock(),
-        operator_repository=operator_repository or build_operator_repository_mock({}),
-        operator_invite_repository=operator_invite_repository or StubOperatorInviteRepository(),
-        macro_repository=macro_repository or build_macro_repository_mock(),
-        sla_policy_repository=sla_policy_repository
-        or build_sla_policy_repository_mock(
-            policies={
-                None: SimpleNamespace(
-                    id=1,
-                    name="Default",
-                    first_response_minutes=30,
-                    resolution_minutes=240,
-                    priority=None,
-                )
-            }
-        ),
-        tag_repository=active_tag_repository,
-        ticket_category_repository=ticket_category_repository
-        or StubTicketCategoryRepository(
-            initial_categories=[
-                (1, "access", "Доступ и вход", True, 10),
-                (2, "other", "Другая тема", True, 90),
-            ]
-        ),
-        ticket_tag_repository=ticket_tag_repository
-        or StubTicketTagRepository(tag_repository=active_tag_repository),
         ai_client_factory=ai_client_factory or build_ai_client_factory(),
         export_renderers=HelpdeskExportRenderers(
             ticket_report_csv=render_ticket_report_csv,

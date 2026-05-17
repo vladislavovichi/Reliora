@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from application.ai.summaries import (
@@ -11,12 +10,12 @@ from application.ai.summaries import (
 from application.contracts.actors import RequestActor, actor_telegram_user_id
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.services.authorization import Permission
-from application.services.helpdesk.components import HelpdeskComponents
+from application.services.helpdesk._context import _HelpdeskContext
 
 
 class HelpdeskAIOperations:
-    _components: HelpdeskComponents
-    _require_permission_if_actor: Callable[..., Awaitable[None]]
+    def __init__(self, ctx: _HelpdeskContext) -> None:
+        self._ctx = ctx
 
     async def get_ticket_ai_assist_snapshot(
         self,
@@ -25,11 +24,11 @@ class HelpdeskAIOperations:
         refresh_summary: bool = False,
         actor: RequestActor | None = None,
     ) -> TicketAssistSnapshot | None:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.ai.build_ticket_assist_snapshot(
+        return await self._ctx.components.ai.build_ticket_assist_snapshot(
             ticket_public_id=ticket_public_id,
             refresh_summary=refresh_summary,
         )
@@ -43,7 +42,7 @@ class HelpdeskAIOperations:
         # Category prediction is client-intake assistance, so actor is accepted
         # for transport symmetry but intentionally does not gate access.
         del actor
-        return await self._components.ai.predict_ticket_category(command)
+        return await self._ctx.components.ai.predict_ticket_category(command)
 
     async def generate_ticket_reply_draft(
         self,
@@ -51,10 +50,10 @@ class HelpdeskAIOperations:
         ticket_public_id: UUID,
         actor: RequestActor | None = None,
     ) -> TicketReplyDraft | None:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.ai.generate_ticket_reply_draft(
+        return await self._ctx.components.ai.generate_ticket_reply_draft(
             ticket_public_id=ticket_public_id,
         )

@@ -84,6 +84,7 @@ from application.use_cases.tickets.workflow import (
     EscalateTicketUseCase,
 )
 from domain.contracts.repositories import (
+    AuditLogRepository,
     MacroRepository,
     OperatorInviteCodeRepository,
     OperatorRepository,
@@ -99,6 +100,25 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskRepositoryBundle:
+    ticket: TicketRepository
+    ticket_analytics: TicketAnalyticsRepository
+    ticket_feedback: TicketFeedbackRepository
+    ticket_ai_summary: TicketAISummaryRepository
+    ticket_message: TicketMessageRepository
+    ticket_internal_note: TicketInternalNoteRepository
+    ticket_event: TicketEventRepository
+    ticket_tag: TicketTagRepository
+    audit_log: AuditLogRepository
+    operator: OperatorRepository
+    operator_invite: OperatorInviteCodeRepository
+    macro: MacroRepository
+    sla_policy: SLAPolicyRepository
+    tag: TagRepository
+    ticket_category: TicketCategoryRepository
 
 
 @dataclass(slots=True, frozen=True)
@@ -160,6 +180,48 @@ class HelpdeskComponentDependencies:
     sla: HelpdeskSLADependencies
     ai: HelpdeskAIDependencies
     feedback_audit_stats: HelpdeskFeedbackAuditStatsDependencies
+
+
+def _deps_from_bundle(
+    bundle: HelpdeskRepositoryBundle,
+    *,
+    super_admin_telegram_user_ids: frozenset[int],
+    ai_client_factory: AIServiceClientFactory,
+    export_renderers: HelpdeskExportRenderers,
+    include_internal_notes_in_ticket_reports: bool = True,
+    ai_settings_provider: AISettingsProvider | None = None,
+) -> HelpdeskComponentDependencies:
+    return HelpdeskComponentDependencies(
+        tickets=HelpdeskTicketDependencies(
+            ticket_repository=bundle.ticket,
+            ticket_analytics_repository=bundle.ticket_analytics,
+            ticket_feedback_repository=bundle.ticket_feedback,
+            ticket_ai_summary_repository=bundle.ticket_ai_summary,
+            ticket_message_repository=bundle.ticket_message,
+            ticket_internal_note_repository=bundle.ticket_internal_note,
+            ticket_event_repository=bundle.ticket_event,
+            ticket_tag_repository=bundle.ticket_tag,
+        ),
+        catalog=HelpdeskCatalogDependencies(
+            macro_repository=bundle.macro,
+            tag_repository=bundle.tag,
+            ticket_category_repository=bundle.ticket_category,
+        ),
+        operators=HelpdeskOperatorDependencies(
+            operator_repository=bundle.operator,
+            operator_invite_repository=bundle.operator_invite,
+            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+        ),
+        sla=HelpdeskSLADependencies(sla_policy_repository=bundle.sla_policy),
+        ai=HelpdeskAIDependencies(
+            ai_client_factory=ai_client_factory,
+            ai_settings_provider=ai_settings_provider or InMemoryAISettingsRepository(),
+        ),
+        feedback_audit_stats=HelpdeskFeedbackAuditStatsDependencies(
+            export_renderers=export_renderers,
+            include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
+        ),
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -264,60 +326,21 @@ def build_helpdesk_components(deps: HelpdeskComponentDependencies) -> HelpdeskCo
 
 
 def build_helpdesk_component_dependencies(
+    bundle: HelpdeskRepositoryBundle,
     *,
-    ticket_repository: TicketRepository,
-    ticket_analytics_repository: TicketAnalyticsRepository,
-    ticket_feedback_repository: TicketFeedbackRepository,
-    ticket_ai_summary_repository: TicketAISummaryRepository,
-    ticket_message_repository: TicketMessageRepository,
-    ticket_internal_note_repository: TicketInternalNoteRepository,
-    ticket_event_repository: TicketEventRepository,
-    operator_repository: OperatorRepository,
-    operator_invite_repository: OperatorInviteCodeRepository,
-    macro_repository: MacroRepository,
-    sla_policy_repository: SLAPolicyRepository,
-    tag_repository: TagRepository,
-    ticket_category_repository: TicketCategoryRepository,
-    ticket_tag_repository: TicketTagRepository,
     ai_client_factory: AIServiceClientFactory,
     super_admin_telegram_user_ids: frozenset[int],
     export_renderers: HelpdeskExportRenderers,
     include_internal_notes_in_ticket_reports: bool = True,
     ai_settings_provider: AISettingsProvider | None = None,
 ) -> HelpdeskComponentDependencies:
-    # TODO: The service still fans repository fields out into these grouped dependency
-    # objects. A future pass should introduce a repository bundle at the service boundary
-    # before removing more forwarding here.
-    return HelpdeskComponentDependencies(
-        tickets=HelpdeskTicketDependencies(
-            ticket_repository=ticket_repository,
-            ticket_analytics_repository=ticket_analytics_repository,
-            ticket_feedback_repository=ticket_feedback_repository,
-            ticket_ai_summary_repository=ticket_ai_summary_repository,
-            ticket_message_repository=ticket_message_repository,
-            ticket_internal_note_repository=ticket_internal_note_repository,
-            ticket_event_repository=ticket_event_repository,
-            ticket_tag_repository=ticket_tag_repository,
-        ),
-        catalog=HelpdeskCatalogDependencies(
-            macro_repository=macro_repository,
-            tag_repository=tag_repository,
-            ticket_category_repository=ticket_category_repository,
-        ),
-        operators=HelpdeskOperatorDependencies(
-            operator_repository=operator_repository,
-            operator_invite_repository=operator_invite_repository,
-            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-        ),
-        sla=HelpdeskSLADependencies(sla_policy_repository=sla_policy_repository),
-        ai=HelpdeskAIDependencies(
-            ai_client_factory=ai_client_factory,
-            ai_settings_provider=ai_settings_provider or InMemoryAISettingsRepository(),
-        ),
-        feedback_audit_stats=HelpdeskFeedbackAuditStatsDependencies(
-            export_renderers=export_renderers,
-            include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
-        ),
+    return _deps_from_bundle(
+        bundle,
+        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+        ai_client_factory=ai_client_factory,
+        export_renderers=export_renderers,
+        include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
+        ai_settings_provider=ai_settings_provider,
     )
 
 

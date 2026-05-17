@@ -17,6 +17,12 @@ class BinaryPayload:
     content: bytes
 
 
+_SECURE_HEADERS: dict[str, str] = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
 class MiniAppJSONResponse(Response):
     media_type = "application/json; charset=utf-8"
 
@@ -29,7 +35,7 @@ class MiniAppJSONResponse(Response):
         super().__init__(
             content=content,
             status_code=int(status_code),
-            headers={"Cache-Control": "no-store"},
+            headers=_SECURE_HEADERS,
             media_type=self.media_type,
         )
 
@@ -53,6 +59,7 @@ def binary_response(payload: BinaryPayload) -> Response:
         headers={
             "Content-Disposition": f'attachment; filename="{payload.filename}"',
             "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
@@ -76,6 +83,7 @@ def static_file_response(
         headers={
             "Content-Type": guessed_type or "application/octet-stream",
             "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 

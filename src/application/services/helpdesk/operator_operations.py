@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 
 from application.contracts.actors import OperatorIdentity, RequestActor, actor_telegram_user_id
 from application.errors import InternalApplicationError
-from application.services.audit import AuditTrail
 from application.services.authorization import Permission
-from application.services.helpdesk.components import HelpdeskComponents
+from application.services.helpdesk._context import _HelpdeskContext
 from application.services.stats import (
     AnalyticsWindow,
     HelpdeskAnalyticsSnapshot,
@@ -30,39 +29,38 @@ from application.use_cases.tickets.summaries import (
 
 
 class HelpdeskOperatorOperations:
-    _components: HelpdeskComponents
-    _audit: AuditTrail
-    _require_permission_if_actor: Callable[..., Awaitable[None]]
+    def __init__(self, ctx: _HelpdeskContext) -> None:
+        self._ctx = ctx
 
     async def list_operators(
         self,
         *,
         actor: RequestActor | None = None,
     ) -> Sequence[OperatorSummary]:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.operators.list_operators()
+        return await self._ctx.components.operators.list_operators()
 
     async def get_access_context(
         self,
         *,
         actor: RequestActor | None,
     ) -> AccessContextSummary:
-        return await self._components.permissions.get_access_context(actor=actor)
+        return await self._ctx.components.permissions.get_access_context(actor=actor)
 
     async def promote_operator(
         self,
         operator: OperatorIdentity,
         actor: RequestActor | None = None,
     ) -> OperatorRoleMutationResult:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.operators.promote_operator(operator)
-        await self._audit.write(
+        result = await self._ctx.components.operators.promote_operator(operator)
+        await self._ctx.audit.write(
             action="operator.promote",
             entity_type="operator",
             outcome="applied" if result.changed else "noop",
@@ -80,15 +78,15 @@ class HelpdeskOperatorOperations:
         telegram_user_id: int,
         actor: RequestActor | None = None,
     ) -> OperatorRoleMutationResult | None:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.operators.revoke_operator(
+        result = await self._ctx.components.operators.revoke_operator(
             telegram_user_id=telegram_user_id,
         )
         if result is None:
-            await self._audit.write(
+            await self._ctx.audit.write(
                 action="operator.revoke",
                 entity_type="operator",
                 outcome="noop",
@@ -96,7 +94,7 @@ class HelpdeskOperatorOperations:
                 metadata={"target_telegram_user_id": telegram_user_id},
             )
             return None
-        await self._audit.write(
+        await self._ctx.audit.write(
             action="operator.revoke",
             entity_type="operator",
             outcome="applied",
@@ -114,16 +112,16 @@ class HelpdeskOperatorOperations:
         actor: RequestActor | None = None,
     ) -> OperatorInviteCodeSummary:
         actor_id = actor_telegram_user_id(actor)
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_id,
         )
         if actor_id is None:
             raise InternalApplicationError("Operator invite creation requires an actor.")
-        result = await self._components.operators.create_operator_invite(
+        result = await self._ctx.components.operators.create_operator_invite(
             created_by_telegram_user_id=actor_id
         )
-        await self._audit.write(
+        await self._ctx.audit.write(
             action="operator.invite.create",
             entity_type="operator_invite",
             outcome="generated",
@@ -140,7 +138,7 @@ class HelpdeskOperatorOperations:
         *,
         code: str,
     ) -> OperatorInviteCodePreview:
-        return await self._components.operators.preview_operator_invite(code=code)
+        return await self._ctx.components.operators.preview_operator_invite(code=code)
 
     async def redeem_operator_invite(
         self,
@@ -148,11 +146,11 @@ class HelpdeskOperatorOperations:
         code: str,
         operator: OperatorIdentity,
     ) -> OperatorInviteCodeRedemptionResult:
-        result = await self._components.operators.redeem_operator_invite(
+        result = await self._ctx.components.operators.redeem_operator_invite(
             code=code,
             operator=operator,
         )
-        await self._audit.write(
+        await self._ctx.audit.write(
             action="operator.invite.redeem",
             entity_type="operator_invite",
             outcome="applied",
@@ -169,11 +167,11 @@ class HelpdeskOperatorOperations:
         *,
         actor: RequestActor | None = None,
     ) -> HelpdeskOperationalStats:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.stats.get_operational_stats()
+        return await self._ctx.components.stats.get_operational_stats()
 
     async def get_analytics_snapshot(
         self,
@@ -181,11 +179,11 @@ class HelpdeskOperatorOperations:
         window: AnalyticsWindow,
         actor: RequestActor | None = None,
     ) -> HelpdeskAnalyticsSnapshot:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.stats.get_analytics_snapshot(window=window)
+        return await self._ctx.components.stats.get_analytics_snapshot(window=window)
 
     async def export_analytics_snapshot(
         self,
@@ -195,16 +193,16 @@ class HelpdeskOperatorOperations:
         format: AnalyticsExportFormat,
         actor: RequestActor | None = None,
     ) -> AnalyticsSnapshotExport:
-        await self._require_permission_if_actor(
+        await self._ctx.require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.operators.export_analytics_snapshot(
+        result = await self._ctx.components.operators.export_analytics_snapshot(
             window=window,
             section=section,
             format=format,
         )
-        await self._audit.write(
+        await self._ctx.audit.write(
             action="analytics.export",
             entity_type="analytics_snapshot",
             outcome="generated",

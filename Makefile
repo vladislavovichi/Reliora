@@ -46,7 +46,7 @@ define port_is_available
 $(PYTHON) ops/scripts/port_available.py "$(1)"
 endef
 
-.PHONY: help install lint format typecheck test test-unit test-component test-integration repo-hygiene architecture-boundaries proto proto-check check ci ensure-env-file health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test coverage test-unit test-component test-integration repo-hygiene architecture-boundaries proto proto-check check ci ensure-env-file health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
 COMPOSE_CMD = $(COMPOSE) --env-file $(COMPOSE_ENV_FILE) $(COMPOSE_FILES)
 
@@ -56,7 +56,8 @@ help:
 	@printf "  lint               Run Ruff\n"
 	@printf "  format             Auto-fix Ruff issues and format code\n"
 	@printf "  typecheck          Run mypy\n"
-	@printf "  test               Run the test suite\n"
+	@printf "  test               Run the test suite with coverage\n"
+	@printf "  coverage           Run tests and open HTML coverage report in htmlcov/\n"
 	@printf "  test-unit          Run pure unit tests\n"
 	@printf "  test-component     Run fake/stub/mock-backed component tests\n"
 	@printf "  test-integration   Run real boundary integration tests\n"
@@ -119,6 +120,11 @@ typecheck:
 test:
 	$(call ensure_poetry_env)
 	$(POETRY) run pytest
+
+coverage:
+	$(call ensure_poetry_env)
+	$(POETRY) run pytest --cov-report=html:htmlcov
+	@printf "Coverage report: htmlcov/index.html\n"
 
 test-unit:
 	$(call ensure_poetry_env)

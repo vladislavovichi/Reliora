@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 
+import time
+
 import uvicorn
 from fastapi import Depends, FastAPI
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -15,6 +17,7 @@ from starlette.responses import Response
 
 from application.errors import ApplicationError
 from infrastructure.config.settings import MiniAppConfig
+from infrastructure.metrics import HTTP_REQUEST_DURATION, HTTP_REQUESTS, metrics_text
 from mini_app.api import MiniAppGateway
 from mini_app.auth import TelegramMiniAppAuthError
 from mini_app.context import (
@@ -55,6 +58,7 @@ def create_mini_app(
     app.state.mini_app_static_dir = static_dir
 
     app.add_middleware(BaseHTTPMiddleware, dispatch=_security_headers_middleware)
+    app.add_middleware(BaseHTTPMiddleware, dispatch=_metrics_middleware)
     app.add_middleware(BaseHTTPMiddleware, dispatch=_limit_request_body_middleware)
     _register_exception_handlers(app)
     _register_public_routes(app)
@@ -122,6 +126,13 @@ def _register_public_routes(app: FastAPI) -> None:
                     "detail": deps.config.public_url_status_detail,
                 },
             }
+        )
+
+    @app.get("/metrics")
+    async def prometheus_metrics() -> Response:
+        return Response(
+            content=metrics_text(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 
     @app.get("/")
@@ -207,6 +218,22 @@ def _register_exception_handlers(app: FastAPI) -> None:
             )
         status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(request.url.path))
         return json_response(payload, status_code=status)
+
+
+async def _metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+    start = time.perf_counter()
+    response: Response = await call_next(request)
+    duration = time.perf_counter() - start
+    path_template = request.scope.get("route", None)
+    label = path_template.path if path_template is not None else request.url.path
+    status = str(response.status_code)
+    HTTP_REQUEST_DURATION.labels(
+        method=request.method, path_template=label, status_code=status
+    ).observe(duration)
+    HTTP_REQUESTS.labels(
+        method=request.method, path_template=label, status_code=status
+    ).inc()
+    return response
 
 
 async def _limit_request_body_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
