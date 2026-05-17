@@ -14,7 +14,12 @@ export default defineConfig({
         entryFileNames: (chunkInfo) =>
           chunkInfo.name === "index" ? "assets/app.js" : `assets/${chunkInfo.name}.js`,
         chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name][extname]",
+        assetFileNames: (assetInfo) => {
+              if (assetInfo.name && assetInfo.name.endsWith(".css")) {
+                return "assets/styles.css";
+              }
+              return "assets/[name][extname]";
+            },
         manualChunks: {
           renderers: [resolve(__dirname, "assets/renderers.js")],
         },
