@@ -72,7 +72,7 @@ def check_boundaries(project_root: Path) -> list[str]:
                         continue
                     line_number = getattr(node, "lineno", 0)
                     violations.append(
-                        f"{relative_path}:{line_number}: forbidden import {module} ({rule.reason})"
+                        f"{relative_path.as_posix()}:{line_number}: forbidden import {module} ({rule.reason})"
                     )
     return violations
 
