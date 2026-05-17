@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 from application.ai.summaries import (
@@ -56,7 +57,7 @@ def build_backend_factory(client: StubBackendClient) -> HelpdeskBackendClientFac
 async def test_gateway_refresh_ticket_ai_summary_requests_forced_summary_refresh() -> None:
     ticket_public_id = uuid4()
     client = StubBackendClient(_build_snapshot())
-    gateway = MiniAppGateway(backend_client_factory=build_backend_factory(client))
+    gateway = MiniAppGateway(backend_client_factory=build_backend_factory(client), bot=MagicMock())
 
     result = await gateway.refresh_ticket_ai_summary(
         user=TelegramMiniAppUser(
@@ -120,7 +121,7 @@ def test_serialize_unavailable_ticket_ai_snapshot_contains_degraded_state() -> N
 async def test_gateway_generate_ticket_reply_draft_calls_backend_with_actor() -> None:
     ticket_public_id = uuid4()
     client = StubBackendClient(_build_snapshot())
-    gateway = MiniAppGateway(backend_client_factory=build_backend_factory(client))
+    gateway = MiniAppGateway(backend_client_factory=build_backend_factory(client), bot=MagicMock())
 
     result = await gateway.generate_ticket_reply_draft(
         user=TelegramMiniAppUser(
@@ -143,6 +144,7 @@ async def test_rate_limited_ai_summary_refresh_returns_clear_unavailable_respons
     client = StubBackendClient(_build_snapshot())
     gateway = MiniAppGateway(
         backend_client_factory=build_backend_factory(client),
+        bot=MagicMock(),
         ai_rate_limiter=MiniAppAIRateLimiter(summary_limit=0),
     )
 
@@ -168,6 +170,7 @@ async def test_rate_limited_reply_draft_returns_clear_unavailable_response() -> 
     client = StubBackendClient(_build_snapshot())
     gateway = MiniAppGateway(
         backend_client_factory=build_backend_factory(client),
+        bot=MagicMock(),
         ai_rate_limiter=MiniAppAIRateLimiter(reply_draft_limit=0),
     )
 

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -77,7 +78,7 @@ async def test_operator_dashboard_bucket_counts_use_available_ticket_data() -> N
             ),
         },
     )
-    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client))
+    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client), bot=MagicMock())
 
     result = await gateway.get_operator_dashboard(user=_mini_app_user(telegram_user_id=1001))
 
@@ -94,7 +95,7 @@ async def test_operator_dashboard_bucket_counts_use_available_ticket_data() -> N
 
 async def test_operator_dashboard_is_scoped_to_current_operator() -> None:
     client = StubDashboardBackendClient(mine=())
-    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client))
+    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client), bot=MagicMock())
 
     await gateway.get_operator_dashboard(user=_mini_app_user(telegram_user_id=2002))
 
@@ -109,7 +110,7 @@ async def test_operator_dashboard_degrades_when_details_are_missing() -> None:
         mine=(_operator_ticket(mine_id, subject="Mine without detail", category_title=None),),
         details={},
     )
-    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client))
+    gateway = MiniAppGateway(backend_client_factory=_backend_factory(client), bot=MagicMock())
 
     result = await gateway.get_operator_dashboard(user=_mini_app_user(telegram_user_id=1001))
 

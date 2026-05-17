@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -52,6 +53,7 @@ async def test_get_ai_settings_returns_current_safe_settings() -> None:
     )
     gateway = MiniAppGateway(
         backend_client_factory=_backend_factory(StubAIBackendClient()),
+        bot=MagicMock(),
         ai_settings_repository=repository,
     )
 
@@ -74,6 +76,7 @@ async def test_update_ai_settings_validates_and_saves_allowed_fields() -> None:
     repository = InMemoryAISettingsRepository()
     gateway = MiniAppGateway(
         backend_client_factory=_backend_factory(StubAIBackendClient()),
+        bot=MagicMock(),
         ai_settings_repository=repository,
     )
 
@@ -106,6 +109,7 @@ async def test_disabled_reply_drafts_return_unavailable_without_backend_call() -
     client = StubAIBackendClient()
     gateway = MiniAppGateway(
         backend_client_factory=_backend_factory(client),
+        bot=MagicMock(),
         ai_settings_repository=InMemoryAISettingsRepository(
             RuntimeAISettings(ai_reply_drafts_enabled=False, default_model_id="safe-model")
         ),
@@ -127,6 +131,7 @@ async def test_disabled_summaries_do_not_request_summary_generation() -> None:
     client = StubAIBackendClient()
     gateway = MiniAppGateway(
         backend_client_factory=_backend_factory(client),
+        bot=MagicMock(),
         ai_settings_repository=InMemoryAISettingsRepository(
             RuntimeAISettings(ai_summaries_enabled=False)
         ),

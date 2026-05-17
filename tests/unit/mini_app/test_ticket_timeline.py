@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 from application.ai.summaries import TicketAssistSnapshot, TicketSummaryStatus
@@ -107,7 +108,10 @@ def test_missing_ticket_timeline_does_not_break_serialization() -> None:
 
 
 async def test_ticket_workspace_includes_timeline_when_available() -> None:
-    gateway = MiniAppGateway(backend_client_factory=build_backend_factory(TimelineBackendClient()))
+    gateway = MiniAppGateway(
+        backend_client_factory=build_backend_factory(TimelineBackendClient()),
+        bot=MagicMock(),
+    )
 
     workspace = await gateway.get_ticket_workspace(
         user=_build_user(),

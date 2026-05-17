@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import httpx
 
@@ -50,6 +51,7 @@ async def test_gateway_create_operator_invite_returns_deep_link_fields() -> None
     client = StubInviteBackendClient()
     gateway = MiniAppGateway(
         backend_client_factory=_backend_factory(client),
+        bot=MagicMock(),
         bot_username="reliorabot",
     )
 
