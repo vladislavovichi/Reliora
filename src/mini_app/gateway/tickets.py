@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from aiogram import Bot
 from application.contracts.actors import OperatorIdentity
 from application.contracts.tickets import (
     AddInternalNoteCommand,
@@ -13,6 +15,9 @@ from application.contracts.tickets import (
 )
 from application.errors import NotFoundError
 from backend.grpc.contracts import HelpdeskBackendClientFactory
+from bot.delivery import deliver_text_to_chat, deliver_ticket_closed_to_client
+from bot.keyboards.inline.client_actions import build_client_ticket_markup
+from bot.keyboards.inline.feedback import build_ticket_feedback_rating_markup
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.gateway.common import build_actor, build_operator_identity
 from mini_app.serializers import (
@@ -27,10 +32,13 @@ from mini_app.serializers import (
     serialize_ticket_timeline,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class MiniAppTicketsGateway:
     backend_client_factory: HelpdeskBackendClientFactory
+    bot: Bot
 
     async def list_queue(self, *, user: TelegramMiniAppUser) -> dict[str, Any]:
         actor = build_actor(user)
@@ -147,8 +155,20 @@ class MiniAppTicketsGateway:
                 ticket_public_id=ticket_public_id,
                 actor=actor,
             )
-        if ticket is None:
-            raise NotFoundError("Заявка не найдена.")
+            if ticket is None:
+                raise NotFoundError("Заявка не найдена.")
+            ticket_details = await client.get_ticket_details(
+                ticket_public_id=ticket_public_id,
+                actor=actor,
+            )
+        if ticket_details is not None:
+            await deliver_ticket_closed_to_client(
+                self.bot,
+                chat_id=ticket_details.client_chat_id,
+                public_number=ticket.public_number,
+                reply_markup=build_ticket_feedback_rating_markup(ticket_public_id=ticket.public_id),
+                logger=logger,
+            )
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def escalate_ticket(
@@ -227,6 +247,15 @@ class MiniAppTicketsGateway:
             )
         if result is None:
             raise NotFoundError("Заявка не найдена.")
+        if result.ticket.event_type is not None:
+            await deliver_text_to_chat(
+                self.bot,
+                chat_id=result.client_chat_id,
+                text=result.macro.body,
+                reply_markup=build_client_ticket_markup(ticket_public_id=ticket_public_id),
+                logger=logger,
+                operation="apply_macro",
+            )
         return {
             "ticket_public_id": str(result.ticket.public_id),
             "ticket_status": result.ticket.status.value,

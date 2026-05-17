@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
+from aiogram import Bot
 from application.contracts.actors import OperatorIdentity
 from application.services.stats import AnalyticsWindow
 from application.use_cases.ai.settings import AISettingsRepository, InMemoryAISettingsRepository
@@ -28,6 +29,7 @@ from mini_app.responses import BinaryPayload
 @dataclass(slots=True)
 class MiniAppGateway:
     backend_client_factory: HelpdeskBackendClientFactory
+    bot: Bot
     bot_username: str | None = None
     ai_settings_repository: AISettingsRepository = field(
         default_factory=InMemoryAISettingsRepository
@@ -44,7 +46,7 @@ class MiniAppGateway:
     def __post_init__(self) -> None:
         self._session = MiniAppSessionGateway(self.backend_client_factory)
         self._dashboard = MiniAppDashboardGateway(self.backend_client_factory)
-        self._tickets = MiniAppTicketsGateway(self.backend_client_factory)
+        self._tickets = MiniAppTicketsGateway(self.backend_client_factory, self.bot)
         self._ai = MiniAppAIGateway(
             backend_client_factory=self.backend_client_factory,
             ai_settings_repository=self.ai_settings_repository,

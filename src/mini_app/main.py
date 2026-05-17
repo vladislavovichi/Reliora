@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from aiogram import Bot
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from infrastructure.config.ai_settings import (
     JsonAISettingsRepository,
@@ -55,6 +56,7 @@ def main() -> None:
             auth_config=settings.backend_auth,
             resilience_config=settings.resilience,
         ),
+        bot=Bot(token=settings.bot.token.strip()),
         bot_username=settings.bot.username,
         ai_settings_repository=JsonAISettingsRepository(
             path=settings.ai_runtime_settings.path,
