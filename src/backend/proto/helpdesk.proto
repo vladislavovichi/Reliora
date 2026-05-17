@@ -171,6 +171,7 @@ message TicketDetailsSummary {
   optional string sentiment_confidence = 22;
   optional string sentiment_reason = 23;
   optional google.protobuf.Timestamp sentiment_detected_at = 24;
+  google.protobuf.Timestamp updated_at = 25;
 }
 
 message MacroSummary {
