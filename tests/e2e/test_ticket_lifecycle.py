@@ -61,6 +61,7 @@ async def test_client_submits_operator_replies_ticket_closes(
         OperatorTicketReplyCommand(
             ticket_public_id=ticket.public_id,
             operator=operator,
+            telegram_message_id=200,
             text="Здравствуйте! Помогу разобраться.",
             attachment=None,
         ),

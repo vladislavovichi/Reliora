@@ -38,7 +38,7 @@ _GRPC_AUTH_TOKEN = "e2e-test-internal-token"
 def _free_tcp_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        return int(s.getsockname()[1])
 
 
 def _build_mock_ai_factory() -> AIServiceClientFactory:
