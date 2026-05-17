@@ -188,10 +188,10 @@ make proto-check
 
 ### Изменить UI Mini App
 
-1. API client - `src/mini_app/static/assets/api.js`.
-2. Routing/state - `src/mini_app/static/assets/app.js`.
-3. Markup renderers - `src/mini_app/static/assets/renderers.js`.
-4. Styles - `src/mini_app/static/assets/styles.css`.
+1. API client - `src/mini_app/frontend/assets/api.js`.
+2. Routing/state - `src/mini_app/frontend/assets/app/router.js`, `src/mini_app/frontend/assets/app/state.js`.
+3. Markup renderers - `src/mini_app/frontend/assets/renderers/`.
+4. Styles - `src/mini_app/frontend/assets/styles.css`.
 5. Backend data shape - `src/mini_app/serializers.py`, `api.py`, `http.py`.
 
 ### Изменить экспорты

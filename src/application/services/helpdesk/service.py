@@ -16,8 +16,8 @@ from application.contracts.ai import AIServiceClientFactory, PredictTicketCatego
 from application.contracts.runtime import CorrelationIdProvider, SLADeadlineScheduler
 from application.contracts.tickets import (
     AddInternalNoteCommand,
-    AssignNextQueuedTicketCommand,
     ApplyMacroToTicketCommand,
+    AssignNextQueuedTicketCommand,
     ClientTicketMessageCommand,
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,

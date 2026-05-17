@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
-
 from application.ai.summaries import (
     AIPredictionConfidence,
     TicketAssistSnapshot,
@@ -17,6 +15,7 @@ from backend.grpc.contracts import HelpdeskBackendClientFactory
 from mini_app.api import MiniAppAIRateLimiter, MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.serializers import serialize_ticket_ai_snapshot, serialize_ticket_reply_draft
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
 class StubBackendClient(FakeHelpdeskBackendClient):

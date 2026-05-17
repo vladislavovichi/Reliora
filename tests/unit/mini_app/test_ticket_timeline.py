@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
-
 from application.ai.summaries import TicketAssistSnapshot, TicketSummaryStatus
 from application.contracts.actors import RequestActor
 from application.use_cases.tickets.summaries import (
@@ -21,6 +19,7 @@ from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 from mini_app.api import MiniAppGateway
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.serializers import serialize_ticket_timeline
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
 class TimelineBackendClient(FakeHelpdeskBackendClient):

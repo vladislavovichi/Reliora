@@ -6,13 +6,13 @@ from typing import NoReturn
 from unittest.mock import AsyncMock
 
 from aiogram.types import CallbackQuery, Message
-from tests.support.aiogram import build_callback_harness, build_message_harness
 
 from application.services.authorization import AuthorizationService, AuthorizationServiceFactory
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.middlewares.authorization import AuthorizationMiddleware
 from bot.texts.buttons import OPERATORS_BUTTON_TEXT, QUEUE_BUTTON_TEXT
 from domain.enums.roles import UserRole
+from tests.support.aiogram import build_callback_harness, build_message_harness
 
 
 class FakeOperatorRepository:

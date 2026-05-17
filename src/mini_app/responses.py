@@ -64,11 +64,16 @@ def binary_response(payload: BinaryPayload) -> Response:
     )
 
 
+_IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
+_NO_STORE_CACHE = "no-store"
+
+
 def static_file_response(
     path: Path,
     *,
     static_dir: Path,
     content_type: str | None = None,
+    immutable: bool = False,
 ) -> Response:
     resolved_base = static_dir.resolve()
     resolved_path = path.resolve()
@@ -82,7 +87,7 @@ def static_file_response(
         content=resolved_path.read_bytes(),
         headers={
             "Content-Type": guessed_type or "application/octet-stream",
-            "Cache-Control": "no-store",
+            "Cache-Control": _IMMUTABLE_CACHE if immutable else _NO_STORE_CACHE,
             "X-Content-Type-Options": "nosniff",
         },
     )

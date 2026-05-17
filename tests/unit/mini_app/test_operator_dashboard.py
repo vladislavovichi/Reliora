@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
-from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.contracts.actors import RequestActor
 from application.services.stats import AnalyticsWindow, HelpdeskAnalyticsSnapshot
@@ -29,6 +28,7 @@ from mini_app.context import MiniAppAuthenticatedContext, load_mini_app_session
 from mini_app.http import create_mini_app
 from mini_app.launch import ResolvedMiniAppLaunch
 from mini_app.serializers import serialize_dashboard_bucket, serialize_dashboard_ticket_preview
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
 async def test_operator_dashboard_bucket_counts_use_available_ticket_data() -> None:

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 # ruff: noqa: B008
 import logging
+import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
-
-import time
 
 import uvicorn
 from fastapi import Depends, FastAPI
@@ -148,7 +147,11 @@ def _register_public_routes(app: FastAPI) -> None:
     @app.get("/assets/{asset_path:path}")
     async def asset(asset_path: str, request: Request) -> Response:
         static_dir: Path = request.app.state.mini_app_static_dir
-        return static_file_response(static_dir / "assets" / asset_path, static_dir=static_dir)
+        return static_file_response(
+            static_dir / "assets" / asset_path,
+            static_dir=static_dir,
+            immutable=True,
+        )
 
 
 def _register_route_fallback(app: FastAPI) -> None:

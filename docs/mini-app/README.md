@@ -82,13 +82,18 @@ make full-cloudflared
 
 ## Карта frontend-файлов
 
-- `src/mini_app/static/index.html` - HTML shell.
-- `src/mini_app/static/assets/app.js` - state, routing, event handling.
-- `src/mini_app/static/assets/api.js` - HTTP client.
-- `src/mini_app/static/assets/renderers.js` - screens markup.
-- `src/mini_app/static/assets/render-utils.js` - helpers.
-- `src/mini_app/static/assets/telegram.js` - launch context.
-- `src/mini_app/static/assets/styles.css` - стили.
+Исходные файлы находятся в `src/mini_app/frontend/`, сборка выводится в `src/mini_app/static/`.
+
+- `index.html` - HTML shell.
+- `assets/app/state.js` - состояние приложения.
+- `assets/app/router.js` - маршрутизация и обработка событий.
+- `assets/app/notices.js` - уведомления.
+- `assets/api.js` - HTTP client.
+- `assets/renderers/` - рендереры экранов по секциям.
+- `assets/render-utils.js` - утилиты рендеринга.
+- `assets/telegram.js` - контекст запуска Telegram.
+- `assets/styles.css` - стили.
+- `tests/` - unit-тесты frontend (vitest).
 
 Backend-side Mini App:
 

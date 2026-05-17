@@ -18,7 +18,10 @@ from application.services.authorization import (
     AuthorizationServiceFactory,
 )
 from application.services.diagnostics import DiagnosticsService
-from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
+from application.services.helpdesk.components import (
+    HelpdeskExportRenderers,
+    HelpdeskRepositoryBundle,
+)
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.ai.settings import AISettingsProvider, InMemoryAISettingsRepository
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory

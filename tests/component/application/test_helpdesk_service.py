@@ -19,7 +19,10 @@ from application.contracts.tickets import (
 )
 from application.errors import InternalApplicationError
 from application.services.authorization import AuthorizationError
-from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
+from application.services.helpdesk.components import (
+    HelpdeskExportRenderers,
+    HelpdeskRepositoryBundle,
+)
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase

@@ -46,7 +46,7 @@ define port_is_available
 $(PYTHON) ops/scripts/port_available.py "$(1)"
 endef
 
-.PHONY: help install lint format typecheck test coverage test-unit test-component test-integration repo-hygiene architecture-boundaries proto proto-check check ci ensure-env-file health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test coverage test-unit test-component test-integration repo-hygiene architecture-boundaries proto proto-check check ci ensure-env-file health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run frontend-install frontend-build frontend-test frontend-typecheck
 
 COMPOSE_CMD = $(COMPOSE) --env-file $(COMPOSE_ENV_FILE) $(COMPOSE_FILES)
 
@@ -99,6 +99,24 @@ help:
 	@printf "  pre-commit-run     Run pre-commit on all files\n"
 	@printf "  backup-db          Create a PostgreSQL logical backup from the running stack\n"
 	@printf "  restore-db         Restore PostgreSQL from BACKUP_PATH=/path/to/file.dump\n"
+	@printf "  frontend-install   Install Node.js dependencies\n"
+	@printf "  frontend-build     Build the Mini App frontend with Vite\n"
+	@printf "  frontend-test      Run frontend unit tests with Vitest\n"
+	@printf "  frontend-typecheck Run TypeScript type-check on frontend sources\n"
+
+FRONTEND_DIR := src/mini_app/frontend
+
+frontend-install:
+	npm --prefix $(FRONTEND_DIR) install
+
+frontend-build: frontend-install
+	npm --prefix $(FRONTEND_DIR) run build
+
+frontend-test: frontend-install
+	npm --prefix $(FRONTEND_DIR) test
+
+frontend-typecheck: frontend-install
+	npm --prefix $(FRONTEND_DIR) run typecheck
 
 install:
 	$(call ensure_poetry_env)

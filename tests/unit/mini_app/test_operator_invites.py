@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.contracts.actors import RequestActor
 from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
@@ -20,6 +19,7 @@ from mini_app.context import MiniAppAuthenticatedContext, load_mini_app_session
 from mini_app.http import create_mini_app
 from mini_app.launch import ResolvedMiniAppLaunch
 from mini_app.serializers import serialize_operator_invite
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
 def test_serialize_operator_invite_includes_telegram_deep_link() -> None:

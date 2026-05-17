@@ -32,7 +32,10 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
 )
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
-from application.services.helpdesk.components import HelpdeskExportRenderers, HelpdeskRepositoryBundle
+from application.services.helpdesk.components import (
+    HelpdeskExportRenderers,
+    HelpdeskRepositoryBundle,
+)
 from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
     AuditLogRepository,

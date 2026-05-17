@@ -29,14 +29,13 @@ from application.use_cases.tickets.summaries import (
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from backend.grpc.server import build_helpdesk_backend_server
+from bot.handlers.common.ticket_attachments import IncomingTicketContent
 from bot.handlers.operator.workflow_reply import _handle_operator_message
 from bot.handlers.user.intake_context import TicketRuntimeContext
 from bot.handlers.user.workflow import process_client_ticket_command
-from bot.handlers.common.ticket_attachments import IncomingTicketContent
 from domain.enums.tickets import TicketStatus
 from infrastructure.config.settings import BackendAuthConfig, BackendServiceConfig, ResilienceConfig
-from tests.support.aiogram import MessageHarness, build_message_harness
-
+from tests.support.aiogram import build_message_harness
 
 _AUTH_TOKEN = "integration-bot-test-token"
 

@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
-from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 from application.ai.summaries import TicketAssistSnapshot, TicketReplyDraft, TicketSummaryStatus
 from application.contracts.actors import RequestActor
@@ -21,6 +20,7 @@ from mini_app.auth import TelegramMiniAppUser
 from mini_app.context import MiniAppAuthenticatedContext, load_mini_app_session
 from mini_app.http import create_mini_app
 from mini_app.launch import ResolvedMiniAppLaunch
+from tests.support.backend import FakeHelpdeskBackendClient, build_backend_client_factory
 
 
 def test_ai_settings_routes_are_super_admin_only(tmp_path: Path) -> None:
