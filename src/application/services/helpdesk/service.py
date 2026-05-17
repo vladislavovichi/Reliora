@@ -252,6 +252,17 @@ class HelpdeskService:
             actor=actor,
         )
 
+    async def close_ticket_as_client(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None:
+        return await self._ticket_ops.close_ticket_as_client(
+            ticket_public_id=ticket_public_id,
+            actor=actor,
+        )
+
     async def get_next_queued_ticket(
         self,
         *,

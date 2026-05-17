@@ -235,7 +235,7 @@ async def handle_finish_ticket_confirm(
                 return
 
             try:
-                closed_ticket = await helpdesk_backend.close_ticket(
+                closed_ticket = await helpdesk_backend.close_ticket_as_client(
                     ticket_public_id=ticket_public_id,
                     actor=build_request_actor(callback.from_user),
                 )

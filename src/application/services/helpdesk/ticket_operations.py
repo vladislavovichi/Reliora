@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
+from application.errors import ForbiddenError
 from application.contracts.tickets import (
     AddInternalNoteCommand,
     AssignNextQueuedTicketCommand,
@@ -203,6 +204,34 @@ class HelpdeskTicketOperations:
             telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self.close_ticket(ticket_public_id=ticket_public_id, actor=actor)
+
+    async def close_ticket_as_client(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None:
+        await self._ctx.ensure_permission(
+            permission=Permission.CLOSE_TICKET,
+            telegram_user_id=actor_telegram_user_id(actor),
+        )
+        ticket = await self._ctx.components.tickets.get_details(ticket_public_id=ticket_public_id)
+        if ticket is None:
+            return None
+        if actor is None or ticket.client_chat_id != actor.telegram_user_id:
+            raise ForbiddenError("Закрыть обращение может только его автор.")
+        result = await self._ctx.components.tickets.close_ticket(ticket_public_id=ticket_public_id)
+        if result is not None:
+            await self._ctx.sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._ctx.audit.write(
+                action="ticket.close",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={"ticket_public_number": result.public_number},
+            )
+        return result
 
     async def get_next_queued_ticket(
         self,

@@ -433,6 +433,11 @@ message CloseTicketAsOperatorRequest {
   RequestActor actor = 2;
 }
 
+message CloseTicketAsClientRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
 message ReplyToTicketAsOperatorRequest {
   OperatorTicketReplyCommand command = 1;
   RequestActor actor = 2;
@@ -619,6 +624,7 @@ service HelpdeskBackendService {
   rpc AssignTicketToOperator(AssignTicketToOperatorRequest) returns (TicketSummary);
   rpc CloseTicket(CloseTicketRequest) returns (TicketSummary);
   rpc CloseTicketAsOperator(CloseTicketAsOperatorRequest) returns (TicketSummary);
+  rpc CloseTicketAsClient(CloseTicketAsClientRequest) returns (TicketSummary);
   rpc EscalateTicketAsOperator(EscalateTicketAsOperatorRequest) returns (TicketSummary);
   rpc ReplyToTicketAsOperator(ReplyToTicketAsOperatorRequest) returns (OperatorReplyResult);
   rpc AddInternalNoteToTicket(AddInternalNoteToTicketRequest) returns (TicketSummary);

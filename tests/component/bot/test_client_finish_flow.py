@@ -59,7 +59,7 @@ class FinishTicketBackendClient(FakeHelpdeskBackendClient):
             return self._ticket_details.pop(0)
         return self._ticket_details
 
-    async def close_ticket(
+    async def close_ticket_as_client(
         self,
         *,
         ticket_public_id: UUID,

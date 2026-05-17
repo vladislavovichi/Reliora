@@ -104,6 +104,11 @@ class HelpdeskBackendServiceStub(object):
                 request_serializer=helpdesk__pb2.CloseTicketAsOperatorRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.TicketSummary.FromString,
                 _registered_method=True)
+        self.CloseTicketAsClient = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/CloseTicketAsClient',
+                request_serializer=helpdesk__pb2.CloseTicketAsClientRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketSummary.FromString,
+                _registered_method=True)
         self.EscalateTicketAsOperator = channel.unary_unary(
                 '/helpdesk.backend.v1.HelpdeskBackendService/EscalateTicketAsOperator',
                 request_serializer=helpdesk__pb2.EscalateTicketAsOperatorRequest.SerializeToString,
@@ -358,6 +363,12 @@ class HelpdeskBackendServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def CloseTicketAsOperator(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CloseTicketAsClient(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -638,6 +649,11 @@ def add_HelpdeskBackendServiceServicer_to_server(servicer, server):
             'CloseTicketAsOperator': grpc.unary_unary_rpc_method_handler(
                     servicer.CloseTicketAsOperator,
                     request_deserializer=helpdesk__pb2.CloseTicketAsOperatorRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketSummary.SerializeToString,
+            ),
+            'CloseTicketAsClient': grpc.unary_unary_rpc_method_handler(
+                    servicer.CloseTicketAsClient,
+                    request_deserializer=helpdesk__pb2.CloseTicketAsClientRequest.FromString,
                     response_serializer=helpdesk__pb2.TicketSummary.SerializeToString,
             ),
             'EscalateTicketAsOperator': grpc.unary_unary_rpc_method_handler(
@@ -1188,6 +1204,33 @@ class HelpdeskBackendService(object):
             target,
             '/helpdesk.backend.v1.HelpdeskBackendService/CloseTicketAsOperator',
             helpdesk__pb2.CloseTicketAsOperatorRequest.SerializeToString,
+            helpdesk__pb2.TicketSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CloseTicketAsClient(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/CloseTicketAsClient',
+            helpdesk__pb2.CloseTicketAsClientRequest.SerializeToString,
             helpdesk__pb2.TicketSummary.FromString,
             options,
             channel_credentials,

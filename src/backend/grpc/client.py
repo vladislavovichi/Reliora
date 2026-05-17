@@ -344,6 +344,25 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             return None
         return deserialize_ticket_summary(result)
 
+    async def close_ticket_as_client(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None:
+        request = helpdesk_pb2.CloseTicketAsClientRequest(ticket_public_id=str(ticket_public_id))
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.CloseTicketAsClient,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
+
     async def escalate_ticket_as_operator(
         self,
         *,

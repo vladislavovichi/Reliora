@@ -128,6 +128,13 @@ class HelpdeskBackendClient(Protocol):
         actor: RequestActor | None,
     ) -> TicketSummary | None: ...
 
+    async def close_ticket_as_client(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None: ...
+
     async def escalate_ticket_as_operator(
         self,
         *,

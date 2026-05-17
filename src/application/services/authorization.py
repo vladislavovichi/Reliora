@@ -36,6 +36,7 @@ CLIENT_PERMISSIONS = frozenset(
         Permission.VIEW_TICKET,
         Permission.CREATE_TICKET,
         Permission.CLIENT_REPLY,
+        Permission.CLOSE_TICKET,
         Permission.ACCEPT_OPERATOR_INVITES,
     }
 )
