@@ -90,7 +90,7 @@ async def test_operator_dashboard_bucket_counts_use_available_ticket_data() -> N
     assert buckets["tickets_without_operator_reply"]["count"] == 1
     assert buckets["tickets_without_category"]["count"] == 1
     assert buckets["sla_breached_tickets"]["count"] == 0
-    assert buckets["sla_breached_tickets"]["unavailable_reason"]
+    assert buckets["sla_breached_tickets"]["unavailable_reason"] is None
 
 
 async def test_operator_dashboard_is_scoped_to_current_operator() -> None:
